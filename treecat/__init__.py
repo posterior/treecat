@@ -82,6 +82,7 @@ class Model(object):
     def sample(self):
         '''Sample the entire model using subsample annealed Gibbs sampling.'''
         self._assignments = {}  # Reset assignments.
+        TODO('reset sufficient statistics')
         num_rows = self._dataframe.shape[0]
         for action, arg in get_annealing_schedule(num_rows, self._config):
             if action is _ACTION_ADD:

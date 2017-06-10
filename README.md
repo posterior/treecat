@@ -1,2 +1,3 @@
-# treetree
-A tree-of-trees nonparametric Bayesian model
+# TreeCat
+
+A tree-of-categoricals nonparametric Bayesian model.

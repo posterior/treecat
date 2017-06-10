@@ -1,6 +1,6 @@
 .PHONY: all format lint test FORCE
 
-PY_FILES := *.py $(shell find treetree -name '*.py')
+PY_FILES := *.py $(shell find treecat -name '*.py')
 
 all: lint
 
