@@ -70,8 +70,7 @@ class Model(object):
         assert row_id not in self._assignments
         feed_dict = {}  # TODO populate this with observation data.
         self._assignments[row_id] = self._adding_session.run(
-                self._adding_assignments,
-                feed_dict)
+            self._adding_assignments, feed_dict)
 
     def remove_row(self, row_id):
         assert row_id in self._assignments

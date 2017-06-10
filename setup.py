@@ -13,9 +13,10 @@ setup(
     author_email='fritz.obermeyer@gmail.com',
     packages=['treetree'],
     install_requires=['pandas', 'numpy', 'six'],
-    extras_require={'tensorflow': ['tensorflow>=1.1.0'],
-                    'tensorflow with gpu': ['tensorflow-gpu>=1.1.0']},
+    extras_require={
+        'tensorflow': ['tensorflow>=1.1.0'],
+        'tensorflow with gpu': ['tensorflow-gpu>=1.1.0']
+    },
     tests_require=['pytest', 'pytest-pep8', 'flake8'],
     license='Apache License 2.0',
-    entry_points=parsable.find_entry_points('treetree'),
-)
+    entry_points=parsable.find_entry_points('treetree'))
