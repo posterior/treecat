@@ -1,3 +1,3 @@
 # TreeCat
 
-A tree-of-categoricals nonparametric Bayesian model.
+A tree-of-mixtures nonparametric Bayesian model.

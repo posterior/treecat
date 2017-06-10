@@ -1,6 +1,8 @@
 flake8
 isort
+jupyter
+numpy
+#pandas
 pytest
 tensorflow
 yapf
-parsable
