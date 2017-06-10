@@ -1,0 +1,6 @@
+flake8
+isort
+pytest
+tensorflow
+yapf
+parsable
