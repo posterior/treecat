@@ -2,7 +2,7 @@
 
 PY_FILES := *.py $(shell find treetree -name '*.py')
 
-all:
+all: lint
 
 format:
 	yapf -i $(PY_FILES)
