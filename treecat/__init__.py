@@ -1,12 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
-import numpy as np
-import pandas as pd
 import tensorflow as tf
 
 from six.moves import intern
-
-assert np and pd and tf  # Pacify flake8.
 
 DEFAULT_CONFIG = {
     'num_components': 32,
@@ -23,31 +19,13 @@ _ACTION_ADD = intern('ACTION_ADD')
 _ACTION_REMOVE = intern('ACTION_REMOVE')
 _ACTION_STRUCTURE = intern('ACTION_STRUCTURE')
 
-
-class Variable(object):
-    pass
-
-
 # Component distributions are Dirichlet-categorical.
-
-
-def suffstats_init(num_vertices, config):
-    return np.zeros((num_vertices, config['num_components'],
-                     config['num_categories']))
-
-
-def suffstats_update(suffstats, assignments, row_data, weight=1):
-    for v, value in enumerate(row_data):
-        if value is not None:
-            suffstats[v, assignments[v], value] += weight
 
 
 class FeatureTree(object):
     def __init__(self, num_vertices, config):
         self._num_vertices = num_vertices
         self._num_components = config['num_components']
-
-        self._suffstats = suffstats_init(num_vertices, config)
 
     def _sort_vertices(self):
         '''Root-first depth-first topological sort.'''
@@ -86,11 +64,10 @@ def build_graph(tree, config):
       row_mask: Tensor of presence/absence values for data.
       assignments: Latent mixture class assignments for a single row.
       update/add_row: Target op for adding a row of data.
-      update/remove_row: Target op for removing a row of data.
       learn/edge_likelihood: Likelihoods of edges, used to learn structure.
 
     Returns:
-      op to init global variables.
+      An op to initialize global variables.
     '''
     V = tree.num_vertices
     E = tree.num_edges
@@ -100,47 +77,46 @@ def build_graph(tree, config):
     row_mask = tf.Placeholder(dtype=tf.int32, shape=[V], name='row_mask')
     prior = tf.constant(0.5, dtype=tf.float32, name='prior')
 
-    vertex_suffstats = tf.Variable(
-        tf.zeros([V, M], tf.int32), dtype=tf.int32, name='vertex_suffstats')
-    edge_suffstats = tf.Variable(
-        tf.zeros([E, M, M], tf.int32), dtype=tf.int32, name='edge_suffstats')
-    feature_suffstats = tf.Variable(
-        tf.zeros([V, C, M], tf.int32),
-        tdype=tf.int32,
-        name='feature_suffstats')
+    # Sufficient statistics.
+    vert_ss = tf.Variable(tf.zeros([V, M], tf.int32), name='vert_ss')
+    edge_ss = tf.Variable(tf.zeros([E, M, M], tf.int32), name='edge_ss')
+    feat_ss = tf.Variable(tf.zeros([V, C, M], tf.int32), name='feat_ss')
 
     # These are not normalized.
-    vertex_probs = tf.Variable(
-        tf.cast(vertex_suffstats.initial_value(), tf.float32) + prior,
-        dtype=tf.float32)
+    vert_probs = tf.Variable(
+        tf.cast(vert_ss.initial_value(), tf.float32) + prior)
     edge_probs = tf.Variable(
-        tf.cast(edge_suffstats.initial_value(), tf.float32) + prior,
-        dtype=tf.float32)
+        tf.cast(edge_ss.initial_value(), tf.float32) + prior)
+
+    with tf.name_scope('learn'):
+        one = tf.constant(1.0, dtype=tf.float32, name='one')
+        weights = tf.cast(tf.float32, edge_ss)
+        logits = tf.lgamma(weights + prior) - tf.lgamma(weights + one)
+        tf.reduce_sum(logits, [1, 2], name='edge_likelihood')
 
     with tf.name_scope('propagate'):
         messages = [None] * V
         samples = [None] * V
         with tf.name_scope('feature'):
-            counts = tf.gather_nd(feature_suffstats,
-                                  tf.stack([tf.range(V), row_data]))
+            counts = tf.gather_nd(feat_ss, tf.stack([tf.range(V), row_data]))
             likelihood = tf.cast(tf.float32, counts) + prior
         with tf.name_scope('inbound'):
             for v_in, inbound, _ in reversed(tree.schedule):
-                prior_v = vertex_probs[v_in, :]
+                prior_v = vert_probs[v_in, :]
                 message = tf.cond(row_mask[v_in], likelihood[v_in] * prior_v,
                                   prior_v)
-                # TODO tf.cond based on mask.
                 for e, v_out in inbound:
-                    message *= (tf.reduce_sum(edge_probs[e, :, :] * messages[
-                        v_out, :, tf.newaxis]) / prior_v)
+                    mat = edge_probs[e, :, :]
+                    vec = messages[v_out, :, tf.newaxis]
+                    message *= tf.reduce_sum(mat * vec) / prior_v
                 messages[v_in] = message / tf.reduce_max(message)
         with tf.name_scope('outbound'):
             for v_out, _, outbound in tree.schedule:
                 message = messages[v_out]
                 for e, v_in in outbound:
-                    message *= (tf.transpose(
-                        tf.reduce_sum(edge_probs[e, :, :], [1, 0]) * messages[
-                            v_out, :, tf.newaxis]) / prior_v)
+                    mat = tf.transpose(edge_probs[e, :, :], [1, 0])
+                    vec = messages[v_out, :, tf.newaxis]
+                    message *= tf.reduce_sum(mat * vec) / prior_v
                 sample = tf.squeeze(tf.multinomial(tf.log(message), 1), 1)
                 message = tf.one_hot(sample, [M], 1.0, 0.0, dtype=tf.float32)
                 messages[v_out] = message
@@ -148,37 +124,32 @@ def build_graph(tree, config):
     assignments = tf.parallel_stack(samples, name='assignments')
 
     with tf.name_scope('update'):
-        vertex_indices = tf.stack([assignments, row_data])
-        edge_indices = TODO('stack tuples of the form [v1, v2, m1, m2]')
-        feature_indices = tf.stack([tf.range(V), row_data, assignments])
-        row_mask_float = tf.cast(row_mask, tf.float32)
+        grid = []
+        for v1 in range(V):
+            for v2 in range(v1 + 1, V):
+                e = len(grid)
+                grid.append([e, v1, v2])
+        grid = tf.transpose(tf.constant(grid, dtype=tf.int32), [1, 0])
+        vert_indices = tf.stack([assignments, row_data])
+        edge_indices = tf.stack([
+            grid[0, :],
+            tf.gather(assignments, grid[1, :]),
+            tf.gather(assignments, grid[2, :]),
+        ])
+        feat_indices = tf.stack([tf.range(V), row_data, assignments])
+        vert_ss = tf.scatter_add(vert_ss, vert_indices, row_mask, True)
+        edge_ss = tf.scatter_add(edge_ss, edge_indices, row_mask, True)
+        feat_ss = tf.scatter_add(feat_ss, feat_indices, row_mask, True)
+        block = tf.cast(
+            tf.gather_nd(vert_probs, vert_indices), dtype=tf.float32) + prior
+        vert_probs = tf.scatter_update(vert_probs, vert_indices, block, True)
+        block = tf.cast(
+            tf.gather_nd(edge_probs, edge_indices), dtype=tf.float32) + prior
+        edge_probs = tf.scatter_update(edge_probs, edge_indices, block, True)
         tf.group(
-            tf.scatter_add(vertex_suffstats, vertex_indices, row_mask, True),
-            tf.scatter_add(edge_suffstats, edge_indices, row_mask, True),
-            tf.scatter_add(feature_suffstats, feature_indices, row_mask, True),
-            tf.scatter_add(vertex_probs, vertex_indices, row_mask_float, True),
-            tf.scatter_add(edge_probs, edge_indices, row_mask_float, True),
-            name='add_row')
-        tf.group(
-            tf.scatter_sub(vertex_suffstats, vertex_indices, row_mask, True),
-            tf.scatter_sub(edge_suffstats, edge_indices, row_mask, True),
-            tf.scatter_sub(feature_suffstats, feature_indices, row_mask, True),
-            tf.scatter_sub(vertex_probs, vertex_indices, row_mask_float, True),
-            tf.scatter_sub(edge_probs, edge_indices, row_mask_float, True),
-            name='remove_row')
-    with tf.name_scope('learn'):
-        one = tf.constant(1.0, dtype=tf.float32, name='one')
-        weights = tf.cast(tf.float32, edge_suffstats)
-        logits = tf.lgamma(weights + prior) - tf.lgamma(weights + one)
-        tf.reduce_sum(logits, [2, 3], name='edge_likelihood')
+            vert_ss, edge_ss, feat_ss, vert_probs, edge_probs, name='add_row')
 
     return tf.global_variables_initializer()
-
-
-def matvecmul(numer_mat, denom_vec, arg_vec):
-    with tf.name_scope('matvecmul'):
-        return tf.reduce_sum(
-            tf.multiply(numer_mat, tf.expand_dims(arg_vec, 1))) / denom_vec
 
 
 class Model(object):
@@ -212,11 +183,11 @@ class Model(object):
     def remove_row(self, row_id):
         assert row_id in self._assignments
         self._session.run(
-            'update/remove_row',
+            'update/add_row',
             feed_dict={
                 'assignments': self._assignments[row_id],
                 'row_data': self._data[row_id],
-                'row_mask': self._data[row_id],
+                'row_mask': -self._data[row_id],
             })
 
     def sample_structure(self):
