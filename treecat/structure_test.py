@@ -85,11 +85,9 @@ def test_find_center_of_tree(expected_vertex, edges):
     assert v == expected_vertex
 
 
-EXAMPLE_ROOTED_TREES = [
-    (edges, root)
-    for edges in EXAMPLE_TREES
-    for root in [None] + list(range(1 + len(edges)))
-]
+EXAMPLE_ROOTED_TREES = [(edges, root)
+                        for edges in EXAMPLE_TREES
+                        for root in [None] + list(range(1 + len(edges)))]
 
 
 @pytest.mark.parametrize('edges,root', EXAMPLE_ROOTED_TREES)

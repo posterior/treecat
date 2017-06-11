@@ -24,7 +24,17 @@ class FeatureTree(object):
         V, E, grid = make_tree(init_edges)
         self._num_vertices = V
         self._num_edges = E
+        self.update_grid(grid)
+
+    def update_grid(self, grid):
+        assert grid.shape == (3, self._num_edges)
         self._grid = grid
+        self._tree_edges = {}
+        self._tree_to_complete = np.zeros([self.num_edges], dtype=np.int32)
+        for e, v1, v2 in self._grid.T:
+            self._tree_edges[v1, v2] = e
+            self._tree_edges[v2, v1] = e
+            self._tree_to_complete[e] = v1 + v2 * (v2 + 1) // 2
 
     @property
     def num_vertices(self):
@@ -36,38 +46,20 @@ class FeatureTree(object):
 
     @property
     def grid(self):
+        '''Array of (edge, vertex, vertex) triples defining the tree grahp.'''
         return self._grid
 
-    def _sort_vertices(self):
-        '''Root-first depth-first topological sort.'''
-        # TODO This is more parallelizable when the root is central.
-        V = self._num_vertices
-        neighbors = [set() for _ in range(V)]
-        for v1, v2 in self._edges:
-            neighbors[v1].add(v2)
-            neighbors[v2].add(v1)
-        order = []
-        pending = set([0])
-        done = set()
-        while pending:
-            v = min(pending)
-            order.append(v)
-            pending.remove(v)
-            done.add(v)
-            pending |= neighbors[v] - done
-        TODO('create self._schedule for propagation')
+    @property
+    def tree_to_complete(self):
+        '''Index from tree edge ids e to complete edge ids k.'''
+        return self._tree_to_complete
 
-    def init_topology(self):
-        # Topological structure is initialized arbitrarily.
-        # TODO Add confusion matrices to edges.
-        self._edges = [(i, i + 1) for i in range(self._num_vertices - 1)]
-        self._neighbors = TODO()
-
-    def sample_topology(self):
-        TODO()
+    @property
+    def find_edge(self, v1, v2):
+        return self._tree_edges[v1, v2]
 
 
-def build_graph(tree, config):
+def build_graph(tree, variables, config):
     '''Builds a tf graph for sampling assignments via message passing.
 
     Component distributions are Dirichlet-categorical.
@@ -80,41 +72,54 @@ def build_graph(tree, config):
       learn/edge_likelihood: Likelihoods of edges, used to learn structure.
 
     Returns:
-      An op to initialize global variables.
+      A dictionary of actions whose values can be input to Session.run().
     '''
     V = tree.num_vertices
     E = V - 1  # Number of edges in the tree.
     K = V * (V - 1) // 2  # Number of edges in the complete graph.
     M = config['num_components']
     C = config['num_categories']
-    all_edges = np.zeros([V, V], dtype=np.int32)
-    for k, v1, v2 in tree.complete_graph.T:
-        all_edges[v1, v2] = k
-        all_edges[v2, v1] = k
-    active_edges = np.zeros([E], dtype=np.int32)
-    for e, v1, v2 in tree.grid.T:
-        active_edges[e] = all_edges[v1, v2]
+
+    tree_to_complete = tf.constant(tree.tree_to_complete)
+    assert tree_to_complete.shape == [E]
 
     row_data = tf.placeholder(dtype=tf.int32, shape=[V], name='row_data')
     row_mask = tf.placeholder(dtype=tf.int32, shape=[V], name='row_mask')
     prior = tf.constant(0.5, dtype=tf.float32, name='prior')
 
-    # Sufficient statistics are maintained over the complete graph.
-    vert_ss = tf.Variable(tf.zeros([V, M], tf.int32), name='vert_ss')
-    edge_ss = tf.Variable(tf.zeros([K, M, M], tf.int32), name='edge_ss')
-    feat_ss = tf.Variable(tf.zeros([V, C, M], tf.int32), name='feat_ss')
+    if not variables:
+        variables = {
+            'vert_ss': tf.zeros([V, M], tf.int32),
+            'edge_ss': tf.zeros([K, M, M], tf.int32),
+            'feat_ss': tf.zeros([V, C, M], tf.int32),
+        }
 
-    # Non-normalized probabilities are maintained over the tree.
+    # Sufficient statistics are maintained over the larger complete graph.
+    vert_ss = tf.Variable(variables['vert_ss'], name='vert_ss')
+    edge_ss = tf.Variable(variables['edge_ss'], name='edge_ss')
+    feat_ss = tf.Variable(variables['feat_ss'], name='feat_ss')
+
+    # Non-normalized probabilities are maintained over smaller the tree.
     vert_probs = tf.Variable(
-        tf.cast(vert_ss.initial_value, tf.float32) + prior)
+        prior + tf.cast(vert_ss.initial_value, tf.float32), name='vert_probs')
     edge_probs = tf.Variable(
-        tf.cast(
-            tf.gather(tf.constant(active_edges), edge_ss.initial_value),
-            tf.float32) + prior)
+        prior + tf.cast(
+            tf.gather(tree_to_complete, edge_ss.initial_value),
+            tf.float32),
+        name='edge_probs')
+
+    actions = {
+        'load': tf.global_variables_initializer(),
+        'save': {
+            'vert_ss': vert_ss,
+            'edge_ss': edge_ss,
+            'feat_ss': feat_ss
+        },
+    }
 
     with tf.name_scope('learn'):
         one = tf.constant(1.0, dtype=tf.float32, name='one')
-        weights = tf.cast(tf.float32, edge_ss)
+        weights = tf.cast(edge_ss, tf.float32)
         logits = tf.lgamma(weights + prior) - tf.lgamma(weights + one)
         tf.reduce_sum(logits, [1, 2], name='edge_likelihood')
 
@@ -124,21 +129,21 @@ def build_graph(tree, config):
         samples = [None] * V
         with tf.name_scope('feature'):
             counts = tf.gather_nd(feat_ss, tf.stack([tf.range(V), row_data]))
-            likelihood = tf.cast(tf.float32, counts) + prior
+            likelihood = prior + tf.cast(counts, tf.float32)
         with tf.name_scope('inbound'):
             for v, parent, children in reversed(schedule):
                 prior_v = vert_probs[v, :]
                 message = tf.cond(row_mask[v], likelihood[v] * prior_v,
                                   prior_v)
                 for child in children:
-                    e = TODO()
+                    e = tree.find_edge(v, child)
                     mat = edge_probs[e, :, :]
                     vec = messages[child, :, tf.newaxis]
                     message *= tf.reduce_sum(mat * vec) / prior_v
                 messages[v] = message / tf.reduce_max(message)
         with tf.name_scope('outbound'):
             for v, parent, children in schedule:
-                e = TODO()
+                e = tree.find_edge(v, child)
                 message = messages[v]
                 if parent is not None:
                     prior_v = vert_probs[v, :]
@@ -160,16 +165,16 @@ def build_graph(tree, config):
         vert_ss = tf.scatter_add(vert_ss, vert_indices, row_mask, True)
         edge_ss = tf.scatter_add(edge_ss, edge_indices, row_mask, True)
         feat_ss = tf.scatter_add(feat_ss, feat_indices, row_mask, True)
-        block = tf.cast(
-            tf.gather_nd(vert_probs, vert_indices), dtype=tf.float32) + prior
+        block = prior + tf.cast(
+            tf.gather_nd(vert_ss, vert_indices), dtype=tf.float32)
         vert_probs = tf.scatter_update(vert_probs, vert_indices, block, True)
-        block = tf.cast(
-            tf.gather_nd(edge_probs, edge_indices), dtype=tf.float32) + prior
+        block = prior + tf.cast(
+            tf.gather_nd(edge_ss, edge_indices), dtype=tf.float32)
         edge_probs = tf.scatter_update(edge_probs, edge_indices, block, True)
         tf.group(
             vert_ss, edge_ss, feat_ss, vert_probs, edge_probs, name='add_row')
 
-    return tf.global_variables_initializer()
+    return actions
 
 
 class Model(object):
@@ -184,27 +189,32 @@ class Model(object):
         self._mask = mask
         self._structure = FeatureTree(num_features, config)
         self._assignments = {}  # This maps id -> numpy array.
-        self._session = tf.Session()
         self._seed = config['seed']
+        self._variables = {}
+        self._session = None
+        self.update_session()
 
     def update_session(self):
-        self._session.close()
-        graph = tf.Graph()
-        with graph.as_default():
+        if self._session is not None:
+            self._variables = self._session.run(self._actions['save'])
+            self._session.close()
+        with tf.Graph().as_default():
             tf.set_random_seed(self._seed)
             self._seed += 1
-            self._init = build_graph(self._structure, self._config)
-        self._session = tf.Session(graph=graph)
+            self._actions = build_graph(self._structure, self._variables,
+                                        self._config)
+            self._session = tf.Session()
+        self._session.run(self._actions['load'])
 
     def add_row(self, row_id):
         assert row_id not in self._assignments
-        fetches = self._session.run(
+        assignments, _ = self._session.run(
             ['assignments', 'update/add_row'],
             feed_dict={
                 'row_data': self.data[row_id],
                 'row_mask': self.mask[row_id],
             })
-        self._assignments[row_id] = fetches[0]
+        self._assignments[row_id] = assignments
 
     def remove_row(self, row_id):
         assert row_id in self._assignments

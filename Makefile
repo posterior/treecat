@@ -11,7 +11,7 @@ lint: FORCE
 	flake8 $(PY_FILES)
 
 test: lint FORCE
-	cd treecat ; py.test -v --fulltrace
+	cd treecat ; py.test -v
 
 FORCE:
 
