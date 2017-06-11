@@ -77,82 +77,108 @@ class FeatureTree(object):
     def sample_topology(self):
         TODO()
 
-    def build_graph(self):
-        '''Builds a tf graph for sampling assignments via message passing.
 
-        Tensors:
-          row_data: tf.Tensor of categorical values.
-          row_mask: tf.Tensor of presence/absence values for data.
-          assignments: Latent mixture class assignments.
-          add_row: Target op for adding a row of data.
-          remove_row: Target op for removing a row of data.
-        '''
-        V = self._num_vertices
-        M = self._config['num_components']
-        C = self._config['num_categories']
-        vertex_suffstats = tf.Variable(
-            tdype=tf.int32, shape=[V, M, C], name='vertex_suffstats')
-        edge_suffstats = tf.Variable(
-            dtype=tf.int32, shape=[V, V, M, M], name='edge_suffstats')
-        row_data = tf.Placeholder(dtype=tf.int32, shape=[V], name='row_data')
-        row_mask = tf.Placeholder(dtype=tf.int32, shape=[V], name='row_mask')
-        with tf.name_scope('couple'):
-            prior_weights = tf.constant(
-                0.5, dtype=tf.float32, name='prior_weights')
-            couplings = {}
-            for v1, v2 in self._edges:
-                counts = tf.slice(edge_suffstats, [v1, v2, 0, 0],
-                                  [v1, v2, M, M])
-                counts = tf.reshape(counts, [M, M])
-                weights = tf.cast(tf.float32, counts) + prior_weights
-                couplings[v1, v2] = normalize_rows(weights)
-                couplings[v2, v1] = normalize_rows(
-                    tf.transpose(weights), [1, 0])
-        messages = {}
-        samples = {}
-        with tf.name_scope('propagate_inbound'):
-            for v_in, inbound, _ in reversed(self._schedule):
-                counts = tf.slice(vertex_suffstats, [v_in, 0, 0], [v_in, M, C])
-                counts = tf.reshape(counts, [M, C])
-                weights = tf.cast(tf.float32, counts) + prior_weights
-                assert weights and row_data and row_mask  # Pacify flake8.
-                probs = TODO('Dirichlet-multinomial')
-                for v_out in inbound:
-                    probs *= tf.matmul(couplings[v_in, v_out], messages[v_out])
-                probs *= tf.reciprocal(tf.reduce_max(probs))
-                messages[v_in] = probs
-        with tf.name_scope('propagate_outbound'):
-            for v_out, _, outbound in self._schedule:
-                probs = messages[v_out]
-                for v_out in inbound:
-                    probs *= tf.matmul(couplings[v_out, v_in], messages[v_in])
-                sample = tf.squeeze(tf.multinomial(tf.log(probs), 1), 1)
-                probs = tf.one_hot(sample, [M], 1.0, 0.0, dtype=tf.float32)
-                messages[v_out] = probs
+def build_graph(tree, config):
+    '''Builds a tf graph for sampling assignments via message passing.
+
+    Names:
+      row_data: Tensor of categorical values.
+      row_mask: Tensor of presence/absence values for data.
+      assignments: Latent mixture class assignments for a single row.
+      update/add_row: Target op for adding a row of data.
+      update/remove_row: Target op for removing a row of data.
+      learn/edge_likelihood: Likelihoods of edges, used to learn structure.
+
+    Returns:
+      op to init global variables.
+    '''
+    V = tree.num_vertices
+    E = tree.num_edges
+    M = config['num_components']
+    C = config['num_categories']
+    row_data = tf.Placeholder(dtype=tf.int32, shape=[V], name='row_data')
+    row_mask = tf.Placeholder(dtype=tf.int32, shape=[V], name='row_mask')
+    prior = tf.constant(0.5, dtype=tf.float32, name='prior')
+
+    vertex_suffstats = tf.Variable(
+        tf.zeros([V, M], tf.int32), dtype=tf.int32, name='vertex_suffstats')
+    edge_suffstats = tf.Variable(
+        tf.zeros([E, M, M], tf.int32), dtype=tf.int32, name='edge_suffstats')
+    feature_suffstats = tf.Variable(
+        tf.zeros([V, C, M], tf.int32),
+        tdype=tf.int32,
+        name='feature_suffstats')
+
+    # These are not normalized.
+    vertex_probs = tf.Variable(
+        tf.cast(vertex_suffstats.initial_value(), tf.float32) + prior,
+        dtype=tf.float32)
+    edge_probs = tf.Variable(
+        tf.cast(edge_suffstats.initial_value(), tf.float32) + prior,
+        dtype=tf.float32)
+
+    with tf.name_scope('propagate'):
+        messages = [None] * V
+        samples = [None] * V
+        with tf.name_scope('feature'):
+            counts = tf.gather_nd(feature_suffstats,
+                                  tf.stack([tf.range(V), row_data]))
+            likelihood = tf.cast(tf.float32, counts) + prior
+        with tf.name_scope('inbound'):
+            for v_in, inbound, _ in reversed(tree.schedule):
+                prior_v = vertex_probs[v_in, :]
+                message = tf.cond(row_mask[v_in], likelihood[v_in] * prior_v,
+                                  prior_v)
+                # TODO tf.cond based on mask.
+                for e, v_out in inbound:
+                    message *= (tf.reduce_sum(edge_probs[e, :, :] * messages[
+                        v_out, :, tf.newaxis]) / prior_v)
+                messages[v_in] = message / tf.reduce_max(message)
+        with tf.name_scope('outbound'):
+            for v_out, _, outbound in tree.schedule:
+                message = messages[v_out]
+                for e, v_in in outbound:
+                    message *= (tf.transpose(
+                        tf.reduce_sum(edge_probs[e, :, :], [1, 0]) * messages[
+                            v_out, :, tf.newaxis]) / prior_v)
+                sample = tf.squeeze(tf.multinomial(tf.log(message), 1), 1)
+                message = tf.one_hot(sample, [M], 1.0, 0.0, dtype=tf.float32)
+                messages[v_out] = message
                 samples[v_out] = sample
-        samples = [samples[v] for v in range(V)]
-        assignments = tf.stack(samples, name='assignments')
-        with tf.name_scope('update'):
-            vertex_indices = tf.stack([assignments, row_data])
-            edge_indices = TODO('stack tuples of the form [v1, v2, m1, m2]')
-            add_row_v = tf.scatter_add(vertex_suffstats, edge_indices,
-                                       row_mask, True)
-            add_row_e = tf.scatter_add(edge_suffstats, vertex_indices,
-                                       row_mask, True)
-            remove_row_v = tf.scatter_sub(vertex_suffstats, edge_indices,
-                                          row_mask, True)
-            remove_row_e = tf.scatter_sub(edge_suffstats, vertex_indices,
-                                          row_mask, True)
-        tf.group(add_row_v, add_row_e, name='add_row')
-        tf.group(remove_row_v, remove_row_e, name='remove_row')
+    assignments = tf.parallel_stack(samples, name='assignments')
+
+    with tf.name_scope('update'):
+        vertex_indices = tf.stack([assignments, row_data])
+        edge_indices = TODO('stack tuples of the form [v1, v2, m1, m2]')
+        feature_indices = tf.stack([tf.range(V), row_data, assignments])
+        row_mask_float = tf.cast(row_mask, tf.float32)
+        tf.group(
+            tf.scatter_add(vertex_suffstats, vertex_indices, row_mask, True),
+            tf.scatter_add(edge_suffstats, edge_indices, row_mask, True),
+            tf.scatter_add(feature_suffstats, feature_indices, row_mask, True),
+            tf.scatter_add(vertex_probs, vertex_indices, row_mask_float, True),
+            tf.scatter_add(edge_probs, edge_indices, row_mask_float, True),
+            name='add_row')
+        tf.group(
+            tf.scatter_sub(vertex_suffstats, vertex_indices, row_mask, True),
+            tf.scatter_sub(edge_suffstats, edge_indices, row_mask, True),
+            tf.scatter_sub(feature_suffstats, feature_indices, row_mask, True),
+            tf.scatter_sub(vertex_probs, vertex_indices, row_mask_float, True),
+            tf.scatter_sub(edge_probs, edge_indices, row_mask_float, True),
+            name='remove_row')
+    with tf.name_scope('learn'):
+        one = tf.constant(1.0, dtype=tf.float32, name='one')
+        weights = tf.cast(tf.float32, edge_suffstats)
+        logits = tf.lgamma(weights + prior) - tf.lgamma(weights + one)
+        tf.reduce_sum(logits, [2, 3], name='edge_likelihood')
+
+    return tf.global_variables_initializer()
 
 
-def normalize_rows(weights):
-    assert len(weights.shape) == 2
-    assert weights.shape[0] == weights.shape[1]
-    with tf.name_scope('normalize_rows'):
-        norms = tf.reshape(tf.reduce_sum(weights, 1), [weights.shape[0], 1])
-        return weights * tf.reciprocal(norms)
+def matvecmul(numer_mat, denom_vec, arg_vec):
+    with tf.name_scope('matvecmul'):
+        return tf.reduce_sum(
+            tf.multiply(numer_mat, tf.expand_dims(arg_vec, 1))) / denom_vec
 
 
 class Model(object):
@@ -161,46 +187,46 @@ class Model(object):
         self._dataframe = dataframe
         self._structure = FeatureTree(config)
         self._assignments = {}  # This maps id -> numpy array.
-        self._adding_session = tf.Session()
+        self._session = tf.Session()
         self._seed = config['seed']
 
-    def _update_adding_session(self):
-        self._adding_session.close()
+    def _update_session(self):
+        self._session.close()
         graph = tf.Graph()
         with graph.as_default():
             tf.set_random_seed(self._seed)
             self._seed += 1
-            self._structure().build_graph()
+            self._init = build_graph(self._structure, self._config)
         self._session = tf.Session(graph=graph)
 
     def add_row(self, row_id):
         assert row_id not in self._assignments
         fetches = self._session.run(
-            ['assignments', 'add_row'],
+            ['assignments', 'update/add_row'],
             feed_dict={
                 'row_data': self.data[row_id],
-                'row_mask': self.mask[row_id]
+                'row_mask': self.mask[row_id],
             })
         self._assignments[row_id] = fetches[0]
 
     def remove_row(self, row_id):
         assert row_id in self._assignments
         self._session.run(
-            'add_row',
+            'update/remove_row',
             feed_dict={
+                'assignments': self._assignments[row_id],
                 'row_data': self._data[row_id],
                 'row_mask': self._data[row_id],
-                'assignments': self._assignments[row_id]
             })
 
     def sample_structure(self):
         TODO()
-        self._update_adding_session()
+        self._update_session()
 
     def sample(self):
         '''Sample the entire model using subsample annealed Gibbs sampling.'''
         self._assignments = {}  # Reset assignments.
-        TODO('reset sufficient statistics')
+        self._session.run('initialize')
         num_rows = self._dataframe.shape[0]
         for action, arg in get_annealing_schedule(num_rows, self._config):
             if action is _ACTION_ADD:
