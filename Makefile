@@ -4,15 +4,14 @@ PY_FILES := *.py $(shell find treecat -name '*.py')
 
 all: lint
 
-format:
+format: FORCE
 	yapf -i $(PY_FILES)
 
-lint:
+lint: FORCE
 	flake8 $(PY_FILES)
 
 test: lint FORCE
-	py.test -v treecat
-
+	cd treecat ; py.test -v --fulltrace
 
 FORCE:
 

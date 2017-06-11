@@ -4,22 +4,16 @@ from collections import deque
 
 import numpy as np
 
-DEFAULT_CONFIG = {
-    'num_components': 32,
-    'num_categories': 3,  # E.g. CSE-IT data.
-    'seed': 0,
-}
-
 
 def make_complete_graph(num_vertices):
     '''Constructs a complete graph.
 
     Args:
-      num_vertices: number of vertices
+      num_vertices: Number of vertices.
 
-    Returns: a tuple with elements:
-      V: number of vertices
-      E: number of edges
+    Returns: A tuple with elements:
+      V: Number of vertices.
+      E: Number of edges.
       grid: a 3 x E grid of (edge, vertex, vertex) triples.
     '''
     V = num_vertices
@@ -65,29 +59,30 @@ def find_center_of_tree(grid):
         Vertex id of a maximally central vertex.
     '''
     E = grid.shape[1]
-    V = E - 1
+    V = E + 1
     neighbors = [set() for _ in range(V)]
     for e, v1, v2 in grid.T:
         neighbors[v1].add(v2)
         neighbors[v2].add(v1)
     queue = deque()
-    for v in range(V):
-        if len(neighbors[v]) == 1:
+    for v in reversed(range(V)):
+        if len(neighbors[v]) <= 1:
             queue.append(v)
     while queue:
         v = queue.popleft()
-        for v2 in neighbors[v]:
+        for v2 in sorted(neighbors[v], reverse=True):
             neighbors[v2].remove(v)
             if len(neighbors[v2]) == 1:
                 queue.append(v2)
     return v
 
 
-def make_propagation_schedule(grid):
+def make_propagation_schedule(grid, root=None):
     '''Makes an efficient schedule for message passing on a tree.
 
     Args:
       grid: A tree graph as returned by make_tree().
+      root: Optional root vertex, defaults to find_center_of_tree(grid).
 
     Returns:
       A list of (vertex, parent, children) tuples, where
@@ -96,9 +91,10 @@ def make_propagation_schedule(grid):
         children: List of neighbors deeper in the tree.
         outbound: List of neighbors shallower in the tree (at most one).
     '''
+    if root is None:
+        root = find_center_of_tree(grid)
     E = grid.shape[1]
-    V = E - 1
-    root = find_center_of_tree(V, E, grid)
+    V = E + 1
     neighbors = [set() for _ in range(V)]
     for e, v1, v2 in grid.T:
         neighbors[v1].add(v2)
@@ -107,10 +103,11 @@ def make_propagation_schedule(grid):
     queue = deque()
     queue.append((root, None))
     while queue:
-        v, parent = queue.pop()
+        v, parent = queue.popleft()
         schedule.append((v, parent, []))
         for v2 in sorted(neighbors[v]):
-            queue.append((v2, v))
+            if v2 != parent:
+                queue.append((v2, v))
     for v, parent, children in schedule:
         for v2 in neighbors[v]:
             if v2 != parent:

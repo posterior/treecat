@@ -1,8 +1,9 @@
+# Development requirements.
 flake8
 isort
 jupyter
 numpy
-#pandas
 pytest
+pytest-flake8
 tensorflow
 yapf
