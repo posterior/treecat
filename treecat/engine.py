@@ -1,5 +1,8 @@
 from __future__ import absolute_import, division, print_function
 
+from collections import deque
+
+import numpy as np
 import tensorflow as tf
 
 from six.moves import intern
@@ -19,13 +22,121 @@ _ACTION_ADD = intern('ACTION_ADD')
 _ACTION_REMOVE = intern('ACTION_REMOVE')
 _ACTION_STRUCTURE = intern('ACTION_STRUCTURE')
 
-# Component distributions are Dirichlet-categorical.
+
+def make_complete_graph(num_vertices):
+    '''Constructs a complete graph.
+
+    Args:
+      num_vertices: number of vertices
+
+    Returns: a tuple with elements:
+      V: number of vertices
+      E: number of edges
+      grid: a 3 x E grid of (edge, vertex, vertex) triples.
+    '''
+    V = num_vertices
+    E = V * (V - 1) // 2
+    grid = np.zeros([3, E], np.int32)
+    e = 0
+    for v1 in range(V):
+        for v2 in range(v1 + 1, V):
+            grid[:, e] = [e, v1, v2]
+            e += 1
+    return V, E, grid
+
+
+def make_tree(edges):
+    '''Constructs a tree graph from a set of (vertex,vertex) pairs.
+
+    Args:
+      edges: A list or set of unordered (vertex, vertex) pairs.
+
+    Returns: A tuple with elements:
+      V: Number of vertices.
+      E: Number of edges.
+      grid: a 3 x E grid of (edge, vertex, vertex) triples.
+    '''
+    assert all(isinstance(edge, tuple) for edge in edges)
+    edges = [tuple(sorted(edge)) for edge in edges]
+    edges.sort()
+    E = len(edges)
+    V = E + 1
+    grid = np.zeros([3, E], np.int32)
+    for e, (v1, v2) in enumerate(edges):
+        grid[:, e] = [e, v1, v2]
+    return V, E, grid
+
+
+def find_center_of_tree(grid):
+    '''Finds a maximally central vertex in a tree graph.
+
+    Args:
+        grid: A tree graph as returned by make_tree().
+
+    Returns:
+        Vertex id of a maximally central vertex.
+    '''
+    E = grid.shape[1]
+    V = E - 1
+    neighbors = [set() for _ in range(V)]
+    for e, v1, v2 in grid.T:
+        neighbors[v1].add(v2)
+        neighbors[v2].add(v1)
+    queue = deque()
+    for v in range(V):
+        if len(neighbors[v]) == 1:
+            queue.append(v)
+    while queue:
+        v = queue.popleft()
+        for v2 in neighbors[v]:
+            neighbors[v2].remove(v)
+            if len(neighbors[v2]) == 1:
+                queue.append(v2)
+    return v
+
+
+def make_propagation_schedule(grid):
+    '''Makes an efficient schedule for message passing on a tree.
+
+    Args:
+      grid: A tree graph as returned by make_tree().
+
+    Returns:
+      A list of (vertex, parent, children) tuples, where
+        vertex: A vertex id.
+        parent: Either this vertex's parent node, or None at the root.
+        children: List of neighbors deeper in the tree.
+        outbound: List of neighbors shallower in the tree (at most one).
+    '''
+    E = grid.shape[1]
+    V = E - 1
+    root = find_center_of_tree(V, E, grid)
+    neighbors = [set() for _ in range(V)]
+    for e, v1, v2 in grid.T:
+        neighbors[v1].add(v2)
+        neighbors[v2].add(v1)
+    schedule = []
+    queue = deque()
+    queue.append((root, None))
+    while queue:
+        v, parent = queue.pop()
+        schedule.append((v, parent, []))
+        for v2 in sorted(neighbors[v]):
+            queue.append((v2, v))
+    for v, parent, children in schedule:
+        for v2 in neighbors[v]:
+            if v2 != parent:
+                children.append(v2)
+    return schedule
 
 
 class FeatureTree(object):
     def __init__(self, num_vertices, config):
-        self._num_vertices = num_vertices
-        self._num_components = config['num_components']
+        init_edges = [(v, v + 1) for v in range(num_vertices - 1)]
+        V, E, grid = make_tree(init_edges)
+        self._num_vertices = V
+        self._num_edges = E
+        self._grid = grid
 
     @property
     def num_vertices(self):
@@ -33,8 +144,11 @@ class FeatureTree(object):
 
     @property
     def num_edges(self):
-        V = self._num_vertices
-        return V * (V - 1) // 2
+        return self._num_edges
+
+    @property
+    def grid(self):
+        return self._grid
 
     def _sort_vertices(self):
         '''Root-first depth-first topological sort.'''
@@ -68,6 +182,8 @@ class FeatureTree(object):
 def build_graph(tree, config):
     '''Builds a tf graph for sampling assignments via message passing.
 
+    Component distributions are Dirichlet-categorical.
+
     Names:
       row_data: Tensor of categorical values.
       row_mask: Tensor of presence/absence values for data.
@@ -79,23 +195,34 @@ def build_graph(tree, config):
       An op to initialize global variables.
     '''
     V = tree.num_vertices
-    E = tree.num_edges
+    E = V - 1  # Number of edges in the tree.
+    K = V * (V - 1) // 2  # Number of edges in the complete graph.
     M = config['num_components']
     C = config['num_categories']
+    all_edges = np.zeros([V, V], dtype=np.int32)
+    for k, v1, v2 in tree.complete_graph.T:
+        all_edges[v1, v2] = k
+        all_edges[v2, v1] = k
+    active_edges = np.zeros([E], dtype=np.int32)
+    for e, v1, v2 in tree.grid.T:
+        active_edges[e] = all_edges[v1, v2]
+
     row_data = tf.placeholder(dtype=tf.int32, shape=[V], name='row_data')
     row_mask = tf.placeholder(dtype=tf.int32, shape=[V], name='row_mask')
     prior = tf.constant(0.5, dtype=tf.float32, name='prior')
 
-    # Sufficient statistics.
+    # Sufficient statistics are maintained over the complete graph.
     vert_ss = tf.Variable(tf.zeros([V, M], tf.int32), name='vert_ss')
-    edge_ss = tf.Variable(tf.zeros([E, M, M], tf.int32), name='edge_ss')
+    edge_ss = tf.Variable(tf.zeros([K, M, M], tf.int32), name='edge_ss')
     feat_ss = tf.Variable(tf.zeros([V, C, M], tf.int32), name='feat_ss')
 
-    # These are not normalized.
+    # Non-normalized probabilities are maintained over the tree.
     vert_probs = tf.Variable(
         tf.cast(vert_ss.initial_value, tf.float32) + prior)
     edge_probs = tf.Variable(
-        tf.cast(edge_ss.initial_value, tf.float32) + prior)
+        tf.cast(
+            tf.gather(tf.constant(active_edges), edge_ss.initial_value),
+            tf.float32) + prior)
 
     with tf.name_scope('learn'):
         one = tf.constant(1.0, dtype=tf.float32, name='one')
@@ -104,44 +231,40 @@ def build_graph(tree, config):
         tf.reduce_sum(logits, [1, 2], name='edge_likelihood')
 
     with tf.name_scope('propagate'):
+        schedule = make_propagation_schedule(tree.grid)
         messages = [None] * V
         samples = [None] * V
         with tf.name_scope('feature'):
             counts = tf.gather_nd(feat_ss, tf.stack([tf.range(V), row_data]))
             likelihood = tf.cast(tf.float32, counts) + prior
         with tf.name_scope('inbound'):
-            for v_in, inbound, _ in reversed(tree.schedule):
-                prior_v = vert_probs[v_in, :]
-                message = tf.cond(row_mask[v_in], likelihood[v_in] * prior_v,
+            for v, parent, children in reversed(schedule):
+                prior_v = vert_probs[v, :]
+                message = tf.cond(row_mask[v], likelihood[v] * prior_v,
                                   prior_v)
-                for e, v_out in inbound:
+                for child in children:
+                    e = TODO()
                     mat = edge_probs[e, :, :]
-                    vec = messages[v_out, :, tf.newaxis]
+                    vec = messages[child, :, tf.newaxis]
                     message *= tf.reduce_sum(mat * vec) / prior_v
-                messages[v_in] = message / tf.reduce_max(message)
+                messages[v] = message / tf.reduce_max(message)
         with tf.name_scope('outbound'):
-            for v_out, _, outbound in tree.schedule:
-                message = messages[v_out]
-                for e, v_in in outbound:
+            for v, parent, children in schedule:
+                e = TODO()
+                message = messages[v]
+                if parent is not None:
+                    prior_v = vert_probs[v, :]
                     mat = tf.transpose(edge_probs[e, :, :], [1, 0])
-                    vec = messages[v_out, :, tf.newaxis]
-                    message *= tf.reduce_sum(mat * vec) / prior_v
+                    message *= tf.gather(samples[parent], mat) / prior_v
                 sample = tf.squeeze(tf.multinomial(tf.log(message), 1), 1)
-                message = tf.one_hot(sample, [M], 1.0, 0.0, dtype=tf.float32)
-                messages[v_out] = message
-                samples[v_out] = sample
+                samples[v] = sample
     assignments = tf.parallel_stack(samples, name='assignments')
 
     with tf.name_scope('update'):
-        grid = []
-        for v1 in range(V):
-            for v2 in range(v1 + 1, V):
-                e = len(grid)
-                grid.append([e, v1, v2])
-        grid = tf.transpose(tf.constant(grid, dtype=tf.int32), [1, 0])
+        grid = tf.constant(tree.grid)
         vert_indices = tf.stack([assignments, row_data])
         edge_indices = tf.stack([
-            grid[0, :],
+            grid[0, :, 0],
             tf.gather(assignments, grid[1, :]),
             tf.gather(assignments, grid[2, :]),
         ])
