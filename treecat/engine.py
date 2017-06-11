@@ -4,7 +4,8 @@ import numpy as np
 import tensorflow as tf
 
 from six.moves import intern
-from treecat.structure import make_propagation_schedule, make_tree
+from treecat.structure import (make_complete_graph, make_propagation_schedule,
+                               make_tree)
 from treecat.util import TODO
 
 DEFAULT_CONFIG = {
@@ -21,17 +22,19 @@ _ACTION_STRUCTURE = intern('ACTION_STRUCTURE')
 class FeatureTree(object):
     def __init__(self, num_vertices, config):
         init_edges = [(v, v + 1) for v in range(num_vertices - 1)]
-        V, E, grid = make_tree(init_edges)
+        V, E, tree_grid = make_tree(init_edges)
+        V, K, complete_grid = make_complete_graph(V)
         self._num_vertices = V
         self._num_edges = E
-        self.update_grid(grid)
+        self._complete_grid = complete_grid
+        self.update_grid(tree_grid)
 
-    def update_grid(self, grid):
-        assert grid.shape == (3, self._num_edges)
-        self._grid = grid
+    def update_grid(self, tree_grid):
+        assert tree_grid.shape == (3, self._num_edges)
+        self._tree_grid = tree_grid
         self._tree_edges = {}
         self._tree_to_complete = np.zeros([self.num_edges], dtype=np.int32)
-        for e, v1, v2 in self._grid.T:
+        for e, v1, v2 in self._tree_grid.T:
             self._tree_edges[v1, v2] = e
             self._tree_edges[v2, v1] = e
             self._tree_to_complete[e] = v1 + v2 * (v2 + 1) // 2
@@ -45,16 +48,20 @@ class FeatureTree(object):
         return self._num_edges
 
     @property
-    def grid(self):
-        '''Array of (edge, vertex, vertex) triples defining the tree grahp.'''
-        return self._grid
+    def tree_grid(self):
+        '''Array of (edge, vertex, vertex) triples defining the tree graph.'''
+        return self._tree_grid
+
+    @property
+    def complete_grid(self):
+        '''Array of (edge,vertex,vertex) triples defining a complete graph.'''
+        return self._complete_grid
 
     @property
     def tree_to_complete(self):
         '''Index from tree edge ids e to complete edge ids k.'''
         return self._tree_to_complete
 
-    @property
     def find_edge(self, v1, v2):
         return self._tree_edges[v1, v2]
 
@@ -67,6 +74,7 @@ def build_graph(tree, variables, config):
     Names:
       row_data: Tensor of categorical values.
       row_mask: Tensor of presence/absence values for data.
+        Should be positive to add a row and negative to remove a row.
       assignments: Latent mixture class assignments for a single row.
       update/add_row: Target op for adding a row of data.
       learn/edge_likelihood: Likelihoods of edges, used to learn structure.
@@ -104,10 +112,10 @@ def build_graph(tree, variables, config):
         prior + tf.cast(vert_ss.initial_value, tf.float32), name='vert_probs')
     edge_probs = tf.Variable(
         prior + tf.cast(
-            tf.gather(tree_to_complete, edge_ss.initial_value),
-            tf.float32),
+            tf.gather(tree_to_complete, edge_ss.initial_value), tf.float32),
         name='edge_probs')
 
+    # These actions allow saving and loading variables when the graph changes.
     actions = {
         'load': tf.global_variables_initializer(),
         'save': {
@@ -117,62 +125,78 @@ def build_graph(tree, variables, config):
         },
     }
 
+    # This is run to compute edge logprobs before learning the tree structure.
     with tf.name_scope('learn'):
         one = tf.constant(1.0, dtype=tf.float32, name='one')
         weights = tf.cast(edge_ss, tf.float32)
         logits = tf.lgamma(weights + prior) - tf.lgamma(weights + one)
         tf.reduce_sum(logits, [1, 2], name='edge_likelihood')
 
+    # This is run only during add_row().
     with tf.name_scope('propagate'):
-        schedule = make_propagation_schedule(tree.grid)
+        schedule = make_propagation_schedule(tree.tree_grid)
         messages = [None] * V
         samples = [None] * V
         with tf.name_scope('feature'):
-            counts = tf.gather_nd(feat_ss, tf.stack([tf.range(V), row_data]))
+            indices = tf.stack([tf.range(V), row_data], 1)
+            counts = tf.gather_nd(feat_ss, indices)
             likelihood = prior + tf.cast(counts, tf.float32)
         with tf.name_scope('inbound'):
             for v, parent, children in reversed(schedule):
                 prior_v = vert_probs[v, :]
-                message = tf.cond(row_mask[v], likelihood[v] * prior_v,
-                                  prior_v)
+                message = tf.cond(
+                    tf.equal(row_mask[v], 0), lambda: prior_v,
+                    lambda: likelihood[v] * prior_v)
                 for child in children:
                     e = tree.find_edge(v, child)
                     mat = edge_probs[e, :, :]
-                    vec = messages[child, :, tf.newaxis]
+                    vec = messages[child][:, tf.newaxis]
                     message *= tf.reduce_sum(mat * vec) / prior_v
                 messages[v] = message / tf.reduce_max(message)
         with tf.name_scope('outbound'):
             for v, parent, children in schedule:
-                e = tree.find_edge(v, child)
                 message = messages[v]
                 if parent is not None:
+                    e = tree.find_edge(v, parent)
                     prior_v = vert_probs[v, :]
                     mat = tf.transpose(edge_probs[e, :, :], [1, 0])
-                    message *= tf.gather(samples[parent], mat) / prior_v
-                sample = tf.squeeze(tf.multinomial(tf.log(message), 1), 1)
+                    message *= tf.gather(mat, samples[parent])[0, :] / prior_v
+                    assert len(message.shape) == 1
+                sample = tf.cast(
+                    tf.squeeze(
+                        tf.multinomial(tf.log(message)[tf.newaxis, :], 1), 1),
+                    tf.int32)
                 samples[v] = sample
-    assignments = tf.parallel_stack(samples, name='assignments')
+    assignments = tf.squeeze(tf.parallel_stack(samples, name='assignments'))
 
+    # This is run during add_row() and remove_row().
     with tf.name_scope('update'):
-        grid = tf.constant(tree.grid)
-        vert_indices = tf.stack([assignments, row_data])
-        edge_indices = tf.stack([
-            grid[0, :, 0],
-            tf.gather(assignments, grid[1, :]),
-            tf.gather(assignments, grid[2, :]),
+        # TODO Fix this incorrect use of tf.scatter_add().
+        vertices = tf.range(V)
+        tree_grid = tf.constant(tree.tree_grid)
+        complete_grid = tf.constant(tree.complete_grid)
+        feat_indices = tf.stack([vertices, row_data, assignments])
+        vert_indices = tf.stack([vertices, assignments], 1)
+        tree_indices = tf.stack([
+            tree_grid[0, :],
+            tf.gather(assignments, tree_grid[1, :]),
+            tf.gather(assignments, tree_grid[2, :]),
         ])
-        feat_indices = tf.stack([tf.range(V), row_data, assignments])
-        vert_ss = tf.scatter_add(vert_ss, vert_indices, row_mask, True)
-        edge_ss = tf.scatter_add(edge_ss, edge_indices, row_mask, True)
-        feat_ss = tf.scatter_add(feat_ss, feat_indices, row_mask, True)
-        block = prior + tf.cast(
-            tf.gather_nd(vert_ss, vert_indices), dtype=tf.float32)
-        vert_probs = tf.scatter_update(vert_probs, vert_indices, block, True)
-        block = prior + tf.cast(
-            tf.gather_nd(edge_ss, edge_indices), dtype=tf.float32)
-        edge_probs = tf.scatter_update(edge_probs, edge_indices, block, True)
-        tf.group(
-            vert_ss, edge_ss, feat_ss, vert_probs, edge_probs, name='add_row')
+        complete_indices = tf.stack([
+            complete_grid[0, :],
+            tf.gather(assignments, complete_grid[1, :]),
+            tf.gather(assignments, complete_grid[2, :]),
+        ])
+        delta = row_mask[:, tf.newaxis]
+        update_ss = tf.group(
+            tf.scatter_add(feat_ss, feat_indices, delta, True),
+            tf.scatter_add(vert_ss, vert_indices, delta, True),
+            tf.scatter_add(edge_ss, complete_indices, delta, True))
+        delta = tf.cast(delta, tf.float32)
+        update_probs = tf.group(
+            tf.scatter_add(vert_probs, vert_indices, delta, True),
+            tf.scatter_add(edge_probs, tree_indices, delta, True))
+        tf.group(update_ss, update_probs, name='add_row')
 
     return actions
 
@@ -232,8 +256,7 @@ class Model(object):
 
     def sample(self):
         '''Sample the entire model using subsample annealed Gibbs sampling.'''
-        self._assignments = {}  # Reset assignments.
-        self._session.run('initialize')
+        assert not self._assignments, 'assignments have already been sampled'
         num_rows = self._dataframe.shape[0]
         for action, arg in get_annealing_schedule(num_rows, self._config):
             if action is _ACTION_ADD:
