@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 
 from treecat.engine import Model
+from treecat.testutil import xfail_if_not_implemented
 
 TINY_DATA = np.array(
     [
@@ -23,5 +24,11 @@ TINY_MASK = np.array(
     dtype=np.int32)
 
 
-def test_create_model():
+def test_model_init():
     Model(TINY_DATA, TINY_MASK)
+
+
+def test_model_fit():
+    model = Model(TINY_DATA, TINY_MASK)
+    with xfail_if_not_implemented():
+        model.fit()

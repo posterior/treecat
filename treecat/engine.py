@@ -162,7 +162,7 @@ def build_graph(tree, inits, config):
                         tf.multinomial(tf.log(message)[tf.newaxis, :], 1), 1),
                     tf.int32)
                 samples[v] = sample
-    assignments = tf.squeeze(tf.parallel_stack(samples, name='assignments'))
+    assignments = tf.squeeze(tf.parallel_stack(samples), name='assignments')
 
     # This is run during add_row() and remove_row().
     with tf.name_scope('update'):
@@ -262,8 +262,8 @@ class Model(object):
         assignments, _ = self._session.run(
             ['assignments', 'update/add_row'],
             feed_dict={
-                'row_data': self.data[row_id],
-                'row_mask': self.mask[row_id],
+                'row_data:0': self._data[row_id],
+                'row_mask:0': self._mask[row_id],
             })
         self._assignments[row_id] = assignments
 
@@ -272,9 +272,9 @@ class Model(object):
         self._session.run(
             'update/add_row',
             feed_dict={
-                'assignments': self._assignments[row_id],
-                'row_data': self._data[row_id],
-                'row_mask': self._data[row_id],
+                'assignments:0': self._assignments[row_id],
+                'row_data:0': self._data[row_id],
+                'row_mask:0': self._mask[row_id],
             })
 
     def _sample_structure(self):
@@ -288,7 +288,7 @@ class Model(object):
     def fit(self):
         '''Sample the entire model using subsample-annealed MCMC.'''
         assert not self._assignments, 'assignments have already been sampled'
-        num_rows = self.data.shape[0]
+        num_rows = self._data.shape[0]
         for action, row_id in get_annealing_schedule(num_rows, self._config):
             if action == 'add_row':
                 self._add_row(row_id)
