@@ -4,6 +4,8 @@ from collections import deque
 
 import numpy as np
 
+from treecat.util import TODO
+
 
 def make_complete_graph(num_vertices):
     '''Constructs a complete graph.
@@ -113,3 +115,7 @@ def make_propagation_schedule(grid, root=None):
             if v2 != parent:
                 children.append(v2)
     return schedule
+
+
+def sample_tree(edge_logprob, seed):
+    TODO()

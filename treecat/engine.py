@@ -1,25 +1,27 @@
 from __future__ import absolute_import, division, print_function
 
+import itertools
+
 import numpy as np
 import tensorflow as tf
 
-from six.moves import intern
 from treecat.structure import (make_complete_graph, make_propagation_schedule,
-                               make_tree)
-from treecat.util import TODO
+                               make_tree, sample_tree)
 
 DEFAULT_CONFIG = {
-    'num_components': 32,
-    'num_categories': 3,  # E.g. CSE-IT data.
     'seed': 0,
+    'num_categories': 3,  # E.g. CSE-IT data.
+    'num_components': 32,
+    'annealing': {
+        'init_rows': 2,
+        'extra_passes': 100.0,
+    },
 }
-
-_ACTION_ADD = intern('ACTION_ADD')
-_ACTION_REMOVE = intern('ACTION_REMOVE')
-_ACTION_STRUCTURE = intern('ACTION_STRUCTURE')
 
 
 class FeatureTree(object):
+    '''Topological data representing a tree on features.'''
+
     def __init__(self, num_vertices, config):
         init_edges = [(v, v + 1) for v in range(num_vertices - 1)]
         V, E, tree_grid = make_tree(init_edges)
@@ -66,73 +68,71 @@ class FeatureTree(object):
         return self._tree_edges[v1, v2]
 
 
-def build_graph(tree, variables, config):
+def build_graph(tree, inits, config):
     '''Builds a tf graph for sampling assignments via message passing.
 
     Component distributions are Dirichlet-categorical.
+
+    Args:
+      tree: A FeatureTree object.
+      inits: An dict of optional saved tensor values.
+      config: A global config dict.
 
     Names:
       row_data: Tensor of categorical values.
       row_mask: Tensor of presence/absence values for data.
         Should be positive to add a row and negative to remove a row.
       assignments: Latent mixture class assignments for a single row.
-      update/add_row: Target op for adding a row of data.
-      learn/edge_likelihood: Likelihoods of edges, used to learn structure.
+      assign/add_row: Target op for adding a row of data.
+      assign/remove_row: Target op for removing a row of data.
+      learn/edge_logprob: Log probabilities of edges, used to learn structure.
 
     Returns:
-      A dictionary of actions whose values can be input to Session.run().
+      A dictionary of actions whose values can be input to Session.run():
+        load: Initialize global variables.
+        save: Eval global variables.
     '''
+    assert isinstance(tree, FeatureTree)
+    assert isinstance(inits, dict)
+    assert isinstance(config, dict)
     V = tree.num_vertices
     E = V - 1  # Number of edges in the tree.
     K = V * (V - 1) // 2  # Number of edges in the complete graph.
-    M = config['num_components']
+    M = config['num_components']  # Components of the mixture model.
     C = config['num_categories']
-
+    feat_prior = tf.constant(0.5, dtype=tf.float32)  # Jeffreys prior.
+    vert_prior = tf.constant(1.0 / M, dtype=tf.float32)  # Nonparametric.
+    edge_prior = tf.constant(1.0 / M**2, dtype=tf.float32)  # Nonparametric.
     tree_to_complete = tf.constant(tree.tree_to_complete)
     assert tree_to_complete.shape == [E]
 
-    row_data = tf.placeholder(dtype=tf.int32, shape=[V], name='row_data')
-    row_mask = tf.placeholder(dtype=tf.int32, shape=[V], name='row_mask')
-    prior = tf.constant(0.5, dtype=tf.float32, name='prior')
+    # Sufficient statistics are maintained always (across and within batches).
+    vert_ss = tf.Variable(inits.get('vert_ss', tf.zeros([V, M], tf.int32)))
+    edge_ss = tf.Variable(inits.get('edge_ss', tf.zeros([E, M, M], tf.int32)))
+    feat_ss = tf.Variable(inits.get('feat_ss', tf.zeros([V, C, M], tf.int32)))
 
-    if not variables:
-        variables = {
-            'vert_ss': tf.zeros([V, M], tf.int32),
-            'edge_ss': tf.zeros([K, M, M], tf.int32),
-            'feat_ss': tf.zeros([V, C, M], tf.int32),
-        }
+    # Sufficient statistics for tree learning are maintained within each batch.
+    # This is the most expensive data structure, costing O(V^2 M^2) space.
+    tree_ss = tf.Variable(tf.zeros([K, M, M], tf.int32), name='tree_ss')
 
-    # Sufficient statistics are maintained over the larger complete graph.
-    vert_ss = tf.Variable(variables['vert_ss'], name='vert_ss')
-    edge_ss = tf.Variable(variables['edge_ss'], name='edge_ss')
-    feat_ss = tf.Variable(variables['feat_ss'], name='feat_ss')
-
-    # Non-normalized probabilities are maintained over smaller the tree.
+    # Non-normalized probabilities are maintained within each batch.
     vert_probs = tf.Variable(
-        prior + tf.cast(vert_ss.initial_value, tf.float32), name='vert_probs')
+        vert_prior + tf.cast(vert_ss.initial_value, tf.float32),
+        name='vert_probs')
     edge_probs = tf.Variable(
-        prior + tf.cast(
-            tf.gather(tree_to_complete, edge_ss.initial_value), tf.float32),
+        edge_prior + tf.cast(edge_ss.initial_value, tf.float32),
         name='edge_probs')
 
-    # These actions allow saving and loading variables when the graph changes.
-    actions = {
-        'load': tf.global_variables_initializer(),
-        'save': {
-            'vert_ss': vert_ss,
-            'edge_ss': edge_ss,
-            'feat_ss': feat_ss
-        },
-    }
-
     # This is run to compute edge logprobs before learning the tree structure.
-    with tf.name_scope('learn'):
+    with tf.name_scope('structure'):
         one = tf.constant(1.0, dtype=tf.float32, name='one')
-        weights = tf.cast(edge_ss, tf.float32)
-        logits = tf.lgamma(weights + prior) - tf.lgamma(weights + one)
-        tf.reduce_sum(logits, [1, 2], name='edge_likelihood')
+        weights = tf.cast(tree_ss, tf.float32)
+        logits = tf.lgamma(weights + edge_prior) - tf.lgamma(weights + one)
+        tf.reduce_sum(logits, [1, 2], name='edge_logprob')
 
     # This is run only during add_row().
+    row_data = tf.placeholder(dtype=tf.int32, shape=[V], name='row_data')
+    row_mask = tf.placeholder(dtype=tf.int32, shape=[V], name='row_mask')
     with tf.name_scope('propagate'):
         schedule = make_propagation_schedule(tree.tree_grid)
         messages = [None] * V
@@ -140,13 +140,12 @@ def build_graph(tree, variables, config):
         with tf.name_scope('feature'):
             indices = tf.stack([tf.range(V), row_data], 1)
             counts = tf.gather_nd(feat_ss, indices)
-            likelihood = prior + tf.cast(counts, tf.float32)
+            likelihood = feat_prior + tf.cast(counts, tf.float32)
         with tf.name_scope('inbound'):
             for v, parent, children in reversed(schedule):
                 prior_v = vert_probs[v, :]
-                message = tf.cond(
-                    tf.equal(row_mask[v], 0), lambda: prior_v,
-                    lambda: likelihood[v] * prior_v)
+                message = tf.cond(row_mask[v] > 0, lambda: prior_v,
+                                  lambda: likelihood[v] * prior_v)
                 for child in children:
                     e = tree.find_edge(v, child)
                     mat = edge_probs[e, :, :]
@@ -177,33 +176,59 @@ def build_graph(tree, variables, config):
         complete_grid = tf.constant(tree.complete_grid)
         feat_indices = tf.stack([vertices, row_data, assignments])
         vert_indices = tf.stack([vertices, assignments], 1)
-        tree_indices = tf.stack([
+        edge_indices = tf.stack([
             tree_grid[0, :],
             tf.gather(assignments, tree_grid[1, :]),
             tf.gather(assignments, tree_grid[2, :]),
         ])
-        complete_indices = tf.stack([
+        tree_indices = tf.stack([
             complete_grid[0, :],
             tf.gather(assignments, complete_grid[1, :]),
             tf.gather(assignments, complete_grid[2, :]),
         ])
-        delta = row_mask[:, tf.newaxis]
-        update_ss = tf.group(
-            tf.scatter_add(feat_ss, feat_indices, delta, True),
-            tf.scatter_add(vert_ss, vert_indices, delta, True),
-            tf.scatter_add(edge_ss, complete_indices, delta, True))
-        delta = tf.cast(delta, tf.float32)
-        update_probs = tf.group(
-            tf.scatter_add(vert_probs, vert_indices, delta, True),
-            tf.scatter_add(edge_probs, tree_indices, delta, True))
-        tf.group(update_ss, update_probs, name='add_row')
+        delta_int = row_mask[:, tf.newaxis]
+        delta_float = tf.cast(delta_int, tf.float32)
+        tf.group(
+            tf.scatter_add(feat_ss, feat_indices, delta_int, True),
+            tf.scatter_add(vert_ss, vert_indices, delta_int, True),
+            tf.scatter_add(edge_ss, edge_indices, delta_int, True),
+            tf.scatter_add(tree_ss, tree_indices, delta_int, True),
+            tf.scatter_add(vert_probs, vert_indices, delta_float, True),
+            tf.scatter_add(edge_probs, edge_indices, delta_float, True),
+            name='add_row')
+        tf.group(
+            tf.scatter_sub(feat_ss, feat_indices, delta_int, True),
+            tf.scatter_sub(vert_ss, vert_indices, delta_int, True),
+            tf.scatter_sub(edge_ss, edge_indices, delta_int, True),
+            # Note that tree_ss is not updated during remove_row.
+            tf.scatter_sub(vert_probs, vert_indices, delta_float, True),
+            tf.scatter_sub(edge_probs, edge_indices, delta_float, True),
+            name='remove_row')
 
-    return actions
+    # These actions allow saving and loading variables when the graph changes.
+    return {
+        'load': tf.global_variables_initializer(),
+        'save': {
+            'feat_ss': feat_ss,
+            'vert_ss': vert_ss,
+            'edge_ss': edge_ss,
+        },
+    }
 
 
 class Model(object):
+    '''Main TreeCat model class.'''
+
     def __init__(self, data, mask, config=None):
-        assert len(data.shape) == 2
+        '''Initialize a model in an unassigned state.
+
+        Args:
+            data: A 2D array of categorical data.
+            mask: A 2D array of presence/absence (1 = present, 0 = absent).
+            config: A global config dict.
+        '''
+        data = np.asarray(data, np.int32)
+        mask = np.asarray(mask, np.int32)
         assert data.shape == mask.shape
         if config is None:
             config = DEFAULT_CONFIG
@@ -216,9 +241,9 @@ class Model(object):
         self._seed = config['seed']
         self._variables = {}
         self._session = None
-        self.update_session()
+        self._update_session()
 
-    def update_session(self):
+    def _update_session(self):
         if self._session is not None:
             self._variables = self._session.run(self._actions['save'])
             self._session.close()
@@ -230,7 +255,7 @@ class Model(object):
             self._session = tf.Session()
         self._session.run(self._actions['load'])
 
-    def add_row(self, row_id):
+    def _add_row(self, row_id):
         assert row_id not in self._assignments
         assignments, _ = self._session.run(
             ['assignments', 'update/add_row'],
@@ -240,32 +265,64 @@ class Model(object):
             })
         self._assignments[row_id] = assignments
 
-    def remove_row(self, row_id):
+    def _remove_row(self, row_id):
         assert row_id in self._assignments
         self._session.run(
             'update/add_row',
             feed_dict={
                 'assignments': self._assignments[row_id],
                 'row_data': self._data[row_id],
-                'row_mask': -self._data[row_id],
+                'row_mask': self._data[row_id],
             })
 
-    def sample_structure(self):
-        TODO()
-        self.update_session()
+    def _sample_structure(self):
+        edge_logprob = self._session.run('structure/edge_logprob')
+        edges = sample_tree(edge_logprob, self._seed)
+        self._seed += 1
+        V, E, grid = make_tree(edges)
+        self._structure.update_grid(grid)
+        self._update_session()
 
-    def sample(self):
-        '''Sample the entire model using subsample annealed Gibbs sampling.'''
+    def fit(self):
+        '''Sample the entire model using subsample-annealed MCMC.'''
         assert not self._assignments, 'assignments have already been sampled'
-        num_rows = self._dataframe.shape[0]
-        for action, arg in get_annealing_schedule(num_rows, self._config):
-            if action is _ACTION_ADD:
-                self.add_row(arg)
-            elif action is _ACTION_REMOVE:
-                self.remove_row(arg)
+        num_rows = self.data.shape[0]
+        for action, row_id in get_annealing_schedule(num_rows, self._config):
+            if action == 'add_row':
+                self._add_row(row_id)
+            elif action == 'remove_row':
+                self._remove_row(row_id)
             else:
-                self.sample_structure()
+                self._sample_structure()
 
 
 def get_annealing_schedule(num_rows, config):
-    TODO()
+    '''Iterator for subsample annealing yielding (action, arg) pairs.'''
+    # Randomly shuffle rows.
+    row_ids = list(range(num_rows))
+    np.random.seed(config['seed'])
+    np.random.shuffle(row_ids)
+    row_to_add = itertools.cycle(row_ids)
+    row_to_remove = itertools.cycle(row_ids)
+
+    # Use a linear annealing schedule.
+    add_rate = 1.0 + config['annealing']['extra_passes']
+    remove_rate = config['annealing']['extra_passes']
+    state = config['annealing']['init_rows']
+
+    # Perform batch operations between batches.
+    num_fresh = 0
+    num_stale = 0
+    while num_stale != num_rows:
+        if state >= 0:
+            yield 'add_row', next(row_to_add)
+            state -= remove_rate
+            num_fresh += 1
+        else:
+            yield 'remove_row', next(row_to_remove)
+            state += add_rate
+            num_stale -= 1
+        if num_stale == 0 and num_fresh > 0:
+            yield 'batch', None
+            num_stale = num_fresh
+            num_fresh = 0
