@@ -35,11 +35,9 @@ class FeatureTree(object):
         assert tree_grid.shape == (3, self._num_edges)
         self._tree_grid = tree_grid
         self._tree_edges = {}
-        self._tree_to_complete = np.zeros([self.num_edges], dtype=np.int32)
         for e, v1, v2 in self._tree_grid.T:
             self._tree_edges[v1, v2] = e
             self._tree_edges[v2, v1] = e
-            self._tree_to_complete[e] = v1 + v2 * (v2 + 1) // 2
 
     @property
     def num_vertices(self):
@@ -58,11 +56,6 @@ class FeatureTree(object):
     def complete_grid(self):
         '''Array of (edge,vertex,vertex) triples defining a complete graph.'''
         return self._complete_grid
-
-    @property
-    def tree_to_complete(self):
-        '''Index from tree edge ids e to complete edge ids k.'''
-        return self._tree_to_complete
 
     def find_edge(self, v1, v2):
         return self._tree_edges[v1, v2]
@@ -100,11 +93,14 @@ def build_graph(tree, inits, config):
     K = V * (V - 1) // 2  # Number of edges in the complete graph.
     M = config['num_components']  # Components of the mixture model.
     C = config['num_categories']
+    vertices = tf.range(V, dtype=tf.int32)
+    tree_grid = tf.constant(tree.tree_grid)
+    complete_grid = tf.constant(tree.complete_grid)
+
+    # Hard-code these hyperparameters.
     feat_prior = tf.constant(0.5, dtype=tf.float32)  # Jeffreys prior.
     vert_prior = tf.constant(1.0 / M, dtype=tf.float32)  # Nonparametric.
     edge_prior = tf.constant(1.0 / M**2, dtype=tf.float32)  # Nonparametric.
-    tree_to_complete = tf.constant(tree.tree_to_complete)
-    assert tree_to_complete.shape == [E]
 
     # Sufficient statistics are maintained always (across and within batches).
     vert_ss = tf.Variable(inits.get('vert_ss', tf.zeros([V, M], tf.int32)))
@@ -132,19 +128,19 @@ def build_graph(tree, inits, config):
 
     # This is run only during add_row().
     row_data = tf.placeholder(dtype=tf.int32, shape=[V], name='row_data')
-    row_mask = tf.placeholder(dtype=tf.int32, shape=[V], name='row_mask')
+    row_mask = tf.placeholder(dtype=tf.bool, shape=[V], name='row_mask')
     with tf.name_scope('propagate'):
         schedule = make_propagation_schedule(tree.tree_grid)
         messages = [None] * V
         samples = [None] * V
         with tf.name_scope('feature'):
-            indices = tf.stack([tf.range(V), row_data], 1)
+            indices = tf.stack([vertices, row_data], 1)
             counts = tf.gather_nd(feat_ss, indices)
             likelihood = feat_prior + tf.cast(counts, tf.float32)
         with tf.name_scope('inbound'):
             for v, parent, children in reversed(schedule):
                 prior_v = vert_probs[v, :]
-                message = tf.cond(row_mask[v] > 0, lambda: prior_v,
+                message = tf.cond(row_mask[v], lambda: prior_v,
                                   lambda: likelihood[v] * prior_v)
                 for child in children:
                     e = tree.find_edge(v, child)
@@ -170,39 +166,45 @@ def build_graph(tree, inits, config):
 
     # This is run during add_row() and remove_row().
     with tf.name_scope('update'):
-        # TODO Fix this incorrect use of tf.scatter_add().
-        vertices = tf.range(V)
-        tree_grid = tf.constant(tree.tree_grid)
-        complete_grid = tf.constant(tree.complete_grid)
-        feat_indices = tf.stack([vertices, row_data, assignments])
+        # This is optimized for the dense case, i.e. row_mask is mostly True.
+        feat_indices = tf.stack([vertices, row_data, assignments], 1)
         vert_indices = tf.stack([vertices, assignments], 1)
         edge_indices = tf.stack([
             tree_grid[0, :],
             tf.gather(assignments, tree_grid[1, :]),
             tf.gather(assignments, tree_grid[2, :]),
-        ])
+        ], 1)
         tree_indices = tf.stack([
             complete_grid[0, :],
             tf.gather(assignments, complete_grid[1, :]),
             tf.gather(assignments, complete_grid[2, :]),
-        ])
-        delta_int = row_mask[:, tf.newaxis]
-        delta_float = tf.cast(delta_int, tf.float32)
+        ], 1)
+        delta_v_int = tf.cast(row_mask, tf.int32)
+        delta_v_float = tf.cast(row_mask, tf.float32)
+        delta_e_int = tf.cast(
+            tf.logical_and(
+                tf.gather(row_mask, tree_grid[1, :]),
+                tf.gather(row_mask, tree_grid[2, :])), tf.int32)
+        delta_e_float = tf.cast(delta_e_int, tf.float32)
+        delta_k_int = tf.cast(
+            tf.logical_and(
+                tf.gather(row_mask, complete_grid[1, :]),
+                tf.gather(row_mask, complete_grid[2, :])), tf.int32)
         tf.group(
-            tf.scatter_add(feat_ss, feat_indices, delta_int, True),
-            tf.scatter_add(vert_ss, vert_indices, delta_int, True),
-            tf.scatter_add(edge_ss, edge_indices, delta_int, True),
-            tf.scatter_add(tree_ss, tree_indices, delta_int, True),
-            tf.scatter_add(vert_probs, vert_indices, delta_float, True),
-            tf.scatter_add(edge_probs, edge_indices, delta_float, True),
+            tf.scatter_nd_add(feat_ss, feat_indices, delta_v_int, True),
+            tf.scatter_nd_add(vert_ss, vert_indices, delta_v_int, True),
+            tf.scatter_nd_add(edge_ss, edge_indices, delta_e_int, True),
+            tf.scatter_nd_add(tree_ss, tree_indices, delta_k_int, True),
+            tf.scatter_nd_add(vert_probs, vert_indices, delta_v_float, True),
+            tf.scatter_nd_add(edge_probs, edge_indices, delta_e_float, True),
             name='add_row')
         tf.group(
-            tf.scatter_sub(feat_ss, feat_indices, delta_int, True),
-            tf.scatter_sub(vert_ss, vert_indices, delta_int, True),
-            tf.scatter_sub(edge_ss, edge_indices, delta_int, True),
+            tf.scatter_nd_sub(feat_ss, feat_indices, delta_v_int, True),
+            tf.scatter_nd_sub(vert_ss, vert_indices, delta_v_int, True),
+            tf.scatter_nd_sub(edge_ss, edge_indices, delta_e_int, True),
             # Note that tree_ss is not updated during remove_row.
-            tf.scatter_sub(vert_probs, vert_indices, delta_float, True),
-            tf.scatter_sub(edge_probs, edge_indices, delta_float, True),
+            tf.scatter_nd_sub(vert_probs, vert_indices, delta_v_float, True),
+            tf.scatter_nd_sub(edge_probs, edge_indices, delta_e_float, True),
             name='remove_row')
 
     # These actions allow saving and loading variables when the graph changes.
@@ -224,11 +226,11 @@ class Model(object):
 
         Args:
             data: A 2D array of categorical data.
-            mask: A 2D array of presence/absence (1 = present, 0 = absent).
+            mask: A 2D array of presence/absence, where present = True.
             config: A global config dict.
         '''
         data = np.asarray(data, np.int32)
-        mask = np.asarray(mask, np.int32)
+        mask = np.asarray(mask, np.bool_)
         assert data.shape == mask.shape
         if config is None:
             config = DEFAULT_CONFIG

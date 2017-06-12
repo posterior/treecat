@@ -1,7 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
-import pytest
 
 from treecat.engine import Model
 
@@ -24,6 +23,5 @@ TINY_MASK = np.array(
     dtype=np.int32)
 
 
-@pytest.mark.xfail
 def test_create_model():
     Model(TINY_DATA, TINY_MASK)
