@@ -140,7 +140,7 @@ def sample_tree(grid, edge_prob, edges, seed=0):
     '''Sample a random spanning tree of a weighted complete graph using MCMC.
 
     Args:
-      grid: A 3 x E array as returned by make_complete_grid().
+      grid: A 3 x E array as returned by make_complete_graph().
       edge_prob: A length-E array of nonnormalized edge probabilities.
       edges: A list of initial edges in the form of (vertex,vertex) pairs.
       seed: Seed for random number generation.
@@ -158,7 +158,7 @@ def sample_tree(grid, edge_prob, edges, seed=0):
         neighbors[v2].add(v1)
 
     # Remove and resample each initial edge.
-    for v1, v2 in list(edges):
+    for v1, v2 in edges:
         # Remove this edge.
         neighbors[v1].remove(v2)
         neighbors[v2].remove(v1)
@@ -171,12 +171,13 @@ def sample_tree(grid, edge_prob, edges, seed=0):
             component_ids[grid[1, :]] != component_ids[grid[2, :]])[0]
         valid_probs = edge_prob[valid_edges]
         valid_probs /= valid_probs.sum()
-        e = np.random.choice(valid_edges, p=valid_probs())
-        _, v1, v2 = grid[:, e]
+        k = np.random.choice(valid_edges, p=valid_probs)
+        _, v1, v2 = grid[:, k]
         assert component_ids[v1] != component_ids[v2]
         neighbors[v1].add(v2)
         neighbors[v2].add(v1)
 
     edges = [(v1, v2) for v1 in range(V) for v2 in neighbors[v1] if v1 < v2]
+    assert len(edges) == E
     edges.sort()
     return edges

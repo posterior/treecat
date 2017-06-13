@@ -1,11 +1,14 @@
 from __future__ import absolute_import, division, print_function
 
+from collections import defaultdict
+
 import numpy as np
 import pytest
+from goftests import multinomial_goodness_of_fit
 
 from treecat.structure import (find_center_of_tree, find_connected_component,
                                make_complete_graph, make_propagation_schedule,
-                               make_tree)
+                               make_tree, sample_tree)
 
 EXAMPLE_TREES = [
     [],
@@ -130,3 +133,39 @@ def test_find_connected_component(V, edges, v, expected_component):
 
     component = find_connected_component(neighbors, v)
     assert component == expected_component
+
+
+# https://oeis.org/A000272
+NUM_SPANNING_TREES = [1, 1, 1, 3, 16, 125, 1296, 16807, 262144, 4782969]
+
+
+@pytest.mark.parametrize('edges', [
+    [(0, 1)],
+    pytest.mark.xfail([(0, 1), (1, 2)]),
+    pytest.mark.xfail([(0, 1), (1, 2), (2, 3)]),
+    pytest.mark.xfail([(0, 1), (1, 2), (2, 3), (3, 4)]),
+])
+def test_sample_tree(edges):
+    np.random.seed(0)
+    E = len(edges)
+    V = 1 + E
+    V, E, grid = make_complete_graph(V)
+    K = grid.shape[1]
+    edge_prob = np.exp(-np.random.random([K]))
+    edge_prob_dict = {(v1, v2): edge_prob[k] for k, v1, v2 in grid.T}
+
+    # Generate many samples via MCMC.
+    total_count = 2000
+    counts = defaultdict(lambda: 0)
+    for seed in range(total_count):
+        edges = sample_tree(grid, edge_prob, edges, seed)
+        counts[tuple(edges)] += 1
+    assert len(counts) == NUM_SPANNING_TREES[V]
+
+    # Check accuracy using Pearson's chi-squared test.
+    keys = counts.keys()
+    counts = np.array([counts[key] for key in keys])
+    probs = np.array(
+        [np.prod([edge_prob_dict[edge] for edge in key]) for key in keys])
+    probs /= probs.sum()
+    assert 1e-2 < multinomial_goodness_of_fit(probs, counts, total_count)
