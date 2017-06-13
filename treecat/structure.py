@@ -115,27 +115,6 @@ def make_propagation_schedule(grid, root=None):
     return schedule
 
 
-def find_connected_component(neighbors, v):
-    '''Find the connected component of a vertex.
-
-    Args:
-      neighbors: A list of adjacency sets.
-      v: A vertex.
-
-    Returns:
-      A set of vertices.
-    '''
-    result = set()
-    stack = [v]
-    while stack:
-        v = stack.pop()
-        for v2 in neighbors[v]:
-            if v2 not in result:
-                stack.append(v2)
-        result.add(v)
-    return result
-
-
 def sample_tree(grid, edge_prob, edges, seed=0):
     '''Sample a random spanning tree of a weighted complete graph using MCMC.
 
@@ -151,31 +130,36 @@ def sample_tree(grid, edge_prob, edges, seed=0):
     np.random.seed(seed)
     E = len(edges)
     V = 1 + E
-    component_ids = np.zeros([V], dtype=np.bool_)
     neighbors = [set() for _ in range(V)]
     for v1, v2 in edges:
         neighbors[v1].add(v2)
         neighbors[v2].add(v1)
+    components = np.zeros([V], dtype=np.bool_)
 
     # Remove and resample each initial edge.
     for v1, v2 in edges:
         # Remove this edge.
         neighbors[v1].remove(v2)
         neighbors[v2].remove(v1)
-        component = find_connected_component(neighbors, v2)
-        component_ids[:] = False
-        component_ids[list(component)] = True
+        stack = [v1]
+        while stack:
+            v1 = stack.pop()
+            components[v1] = True
+            for v2 in neighbors[v1]:
+                if not components[v2]:
+                    stack.append(v2)
 
         # Sample a new edge between the two components.
         valid_edges = np.where(
-            component_ids[grid[1, :]] != component_ids[grid[2, :]])[0]
+            components[grid[1, :]] != components[grid[2, :]])[0]
         valid_probs = edge_prob[valid_edges]
         valid_probs /= valid_probs.sum()
         k = np.random.choice(valid_edges, p=valid_probs)
         _, v1, v2 = grid[:, k]
-        assert component_ids[v1] != component_ids[v2]
+        assert components[v1] != components[v2]
         neighbors[v1].add(v2)
         neighbors[v2].add(v1)
+        components[:] = False
 
     edges = [(v1, v2) for v1 in range(V) for v2 in neighbors[v1] if v1 < v2]
     assert len(edges) == E
