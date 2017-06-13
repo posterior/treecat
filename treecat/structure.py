@@ -4,8 +4,6 @@ from collections import deque
 
 import numpy as np
 
-from treecat.util import TODO
-
 
 def make_complete_graph(num_vertices):
     '''Constructs a complete graph.
@@ -44,7 +42,7 @@ def make_tree(edges):
     edges = [tuple(sorted(edge)) for edge in edges]
     edges.sort()
     E = len(edges)
-    V = E + 1
+    V = 1 + E
     grid = np.zeros([3, E], np.int32)
     for e, (v1, v2) in enumerate(edges):
         grid[:, e] = [e, v1, v2]
@@ -61,7 +59,7 @@ def find_center_of_tree(grid):
         Vertex id of a maximally central vertex.
     '''
     E = grid.shape[1]
-    V = E + 1
+    V = 1 + E
     neighbors = [set() for _ in range(V)]
     for e, v1, v2 in grid.T:
         neighbors[v1].add(v2)
@@ -96,7 +94,7 @@ def make_propagation_schedule(grid, root=None):
     if root is None:
         root = find_center_of_tree(grid)
     E = grid.shape[1]
-    V = E + 1
+    V = 1 + E
     neighbors = [set() for _ in range(V)]
     for e, v1, v2 in grid.T:
         neighbors[v1].add(v2)
@@ -117,5 +115,68 @@ def make_propagation_schedule(grid, root=None):
     return schedule
 
 
-def sample_tree(edge_logprob, seed):
-    TODO()
+def find_connected_component(neighbors, v):
+    '''Find the connected component of a vertex.
+
+    Args:
+      neighbors: A list of adjacency sets.
+      v: A vertex.
+
+    Returns:
+      A set of vertices.
+    '''
+    result = set()
+    stack = [v]
+    while stack:
+        v = stack.pop()
+        for v2 in neighbors[v]:
+            if v2 not in result:
+                stack.append(v2)
+        result.add(v)
+    return result
+
+
+def sample_tree(grid, edge_prob, edges, seed=0):
+    '''Sample a random spanning tree of a weighted complete graph using MCMC.
+
+    Args:
+      grid: A 3 x E array as returned by make_complete_grid().
+      edge_prob: A length-E array of nonnormalized edge probabilities.
+      edges: A list of initial edges in the form of (vertex,vertex) pairs.
+      seed: Seed for random number generation.
+
+    Returns:
+      A list of (vertex, vertex) pairs.
+    '''
+    np.random.seed(seed)
+    E = len(edges)
+    V = 1 + E
+    component_ids = np.zeros([V], dtype=np.bool_)
+    neighbors = [set() for _ in range(V)]
+    for v1, v2 in edges:
+        neighbors[v1].add(v2)
+        neighbors[v2].add(v1)
+
+    # Remove and resample each initial edge.
+    for v1, v2 in list(edges):
+        # Remove this edge.
+        neighbors[v1].remove(v2)
+        neighbors[v2].remove(v1)
+        component = find_connected_component(neighbors, v2)
+        component_ids[:] = False
+        component_ids[list(component)] = True
+
+        # Sample a new edge between the two components.
+        valid_edges = np.where(
+            component_ids[grid[1, :]] != component_ids[grid[2, :]])[0]
+        valid_probs = edge_prob[valid_edges]
+        valid_probs /= valid_probs.sum()
+        e = np.random.choice(valid_edges, p=valid_probs())
+        _, v1, v2 = grid[:, e]
+        assert component_ids[v1] != component_ids[v2]
+        neighbors[v1].add(v2)
+        neighbors[v2].add(v1)
+
+    edges = [(v1, v2) for v1 in range(V) for v2 in neighbors[v1] if v1 < v2]
+    edges.sort()
+    return edges

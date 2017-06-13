@@ -3,8 +3,9 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 import pytest
 
-from treecat.structure import (find_center_of_tree, make_complete_graph,
-                               make_propagation_schedule, make_tree)
+from treecat.structure import (find_center_of_tree, find_connected_component,
+                               make_complete_graph, make_propagation_schedule,
+                               make_tree)
 
 EXAMPLE_TREES = [
     [],
@@ -109,3 +110,23 @@ def test_make_propagation_schedule(edges, root):
         if parent is not None:
             actual_neighbors.add(parent)
         assert actual_neighbors == neighbors[v]
+
+
+@pytest.mark.parametrize('V,edges,v,expected_component', [
+    (4, [(0, 3), (1, 2)], 0, set([0, 3])),
+    (4, [(0, 3), (1, 2)], 1, set([1, 2])),
+    (4, [(0, 3), (1, 2)], 2, set([1, 2])),
+    (4, [(0, 3), (1, 2)], 3, set([0, 3])),
+    (4, [(1, 2), (2, 3)], 0, set([0])),
+    (4, [(1, 2), (2, 3)], 1, set([1, 2, 3])),
+    (4, [(1, 2), (2, 3)], 2, set([1, 2, 3])),
+    (4, [(1, 2), (2, 3)], 3, set([1, 2, 3])),
+])
+def test_find_connected_component(V, edges, v, expected_component):
+    neighbors = [set() for _ in range(V)]
+    for v1, v2 in edges:
+        neighbors[v1].add(v2)
+        neighbors[v2].add(v1)
+
+    component = find_connected_component(neighbors, v)
+    assert component == expected_component

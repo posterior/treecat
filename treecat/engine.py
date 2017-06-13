@@ -7,6 +7,7 @@ import tensorflow as tf
 
 from treecat.structure import (make_complete_graph, make_propagation_schedule,
                                make_tree, sample_tree)
+from treecat.util import TODO
 
 DEFAULT_CONFIG = {
     'seed': 0,
@@ -78,7 +79,7 @@ def build_graph(tree, inits, config):
       assignments: Latent mixture class assignments for a single row.
       assign/add_row: Target op for adding a row of data.
       assign/remove_row: Target op for removing a row of data.
-      learn/edge_logprob: Log probabilities of edges, used to learn structure.
+      structure/edge_prob: Non-normalized probabilities of edges.
 
     Returns:
       A dictionary of actions whose values can be input to Session.run():
@@ -124,7 +125,9 @@ def build_graph(tree, inits, config):
         one = tf.constant(1.0, dtype=tf.float32, name='one')
         weights = tf.cast(tree_ss, tf.float32)
         logits = tf.lgamma(weights + edge_prior) - tf.lgamma(weights + one)
-        tf.reduce_sum(logits, [1, 2], name='edge_logprob')
+        edge_logprob = tf.reduce_sum(logits, [1, 2])
+        edge_logprob -= tf.reduce_max(edge_logprob)
+        tf.exp(edge_logprob, name='edge_prob')
 
     # This is run only during add_row().
     row_data = tf.placeholder(dtype=tf.int32, shape=[V], name='row_data')
@@ -278,8 +281,13 @@ class Model(object):
             })
 
     def _sample_structure(self):
-        edge_logprob = self._session.run('structure/edge_logprob')
-        edges = sample_tree(edge_logprob, self._seed)
+        edge_prob = self._session.run('structure/edge_prob')
+        if edge_prob is None:
+            TODO('Fix None returned by tf.Session')
+        complete_grid = self._structure.complete_grid
+        assert edge_prob.shape[0] == complete_grid.shape[1]
+        edges = self._structure.tree_grid[1:3, :].T
+        edges = sample_tree(complete_grid, edge_prob, edges, self._seed)
         self._seed += 1
         V, E, grid = make_tree(edges)
         self._structure.update_grid(grid)
