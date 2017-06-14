@@ -1,9 +1,13 @@
 from __future__ import absolute_import, division, print_function
 
+from copy import deepcopy
+
 import numpy as np
 
-from treecat.engine import Model
-from treecat.testutil import xfail_if_not_implemented
+from treecat.engine import DEFAULT_CONFIG, Model
+
+TINY_CONFIG = deepcopy(DEFAULT_CONFIG)
+TINY_CONFIG['annealing']['epochs'] = 4
 
 TINY_DATA = np.array(
     [
@@ -29,6 +33,5 @@ def test_model_init():
 
 
 def test_model_fit():
-    model = Model(TINY_DATA, TINY_MASK)
-    with xfail_if_not_implemented():
-        model.fit()
+    model = Model(TINY_DATA, TINY_MASK, TINY_CONFIG)
+    model.fit()

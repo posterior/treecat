@@ -8,7 +8,6 @@ import tensorflow as tf
 
 from treecat.structure import (make_complete_graph, make_propagation_schedule,
                                make_tree, sample_tree)
-from treecat.util import TODO
 
 DEFAULT_CONFIG = {
     'seed': 0,
@@ -266,31 +265,30 @@ class Model(object):
 
     def _add_row(self, row_id):
         logger.debug('add_row %d', row_id)
-        assert row_id not in self._assignments
+        assert row_id not in self._assignments, row_id
         assignments, _ = self._session.run(
-            ['assignments', 'update/add_row'],
+            ['assignments:0', 'update/add_row'],
             feed_dict={
                 'row_data:0': self._data[row_id],
                 'row_mask:0': self._mask[row_id],
             })
+        assert assignments.shape == (self._data.shape[1], )
         self._assignments[row_id] = assignments
 
     def _remove_row(self, row_id):
         logger.debug('remove_row %d', row_id)
-        assert row_id in self._assignments
+        assert row_id in self._assignments, row_id
         self._session.run(
             'update/add_row',
             feed_dict={
-                'assignments:0': self._assignments[row_id],
+                'assignments:0': self._assignments.pop(row_id),
                 'row_data:0': self._data[row_id],
                 'row_mask:0': self._mask[row_id],
             })
 
     def _sample_structure(self):
-        logger.debug('sample_structure')
-        edge_prob = self._session.run('structure/edge_prob')
-        if edge_prob is None:
-            TODO('Fix None returned by tf.Session')
+        logger.debug('sample_structure given %d rows', len(self._assignments))
+        edge_prob = self._session.run('structure/edge_prob:0')
         complete_grid = self._structure.complete_grid
         assert edge_prob.shape[0] == complete_grid.shape[1]
         edges = self._structure.tree_grid[1:3, :].T
@@ -326,13 +324,13 @@ def get_annealing_schedule(num_rows, config):
     # Use a linear annealing schedule.
     add_rate = config['annealing']['epochs']
     remove_rate = config['annealing']['epochs'] - 1.0
-    state = config['annealing']['init_rows']
+    state = float(config['annealing']['init_rows'])
 
     # Perform batch operations between batches.
     num_fresh = 0
     num_stale = 0
-    while num_stale != num_rows:
-        if state >= 0:
+    while num_fresh + num_stale != num_rows:
+        if state >= 0.0:
             yield 'add_row', next(row_to_add)
             state -= remove_rate
             num_fresh += 1
