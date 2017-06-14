@@ -161,7 +161,7 @@ def sample_tree(grid, edge_prob, edges, seed=0):
         neighbors[v2].add(v1)
         components[:] = False
 
-    edges = [(v1, v2) for v1 in range(V) for v2 in neighbors[v1] if v1 < v2]
+    edges = [(u1, u2) for u1 in range(V) for u2 in neighbors[u1] if u1 < u2]
     assert len(edges) == E
     edges.sort()
     return edges
