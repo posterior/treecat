@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import itertools
+import logging
 
 import numpy as np
 import tensorflow as tf
@@ -18,6 +19,8 @@ DEFAULT_CONFIG = {
         'epochs': 100.0,
     },
 }
+
+logger = logging.getLogger(__name__)
 
 
 class FeatureTree(object):
@@ -232,6 +235,7 @@ class Model(object):
             mask: A 2D array of presence/absence, where present = True.
             config: A global config dict.
         '''
+        logger.info('Creating Model of %d x %d data', len(data), len(data[0]))
         data = np.asarray(data, np.int32)
         mask = np.asarray(mask, np.bool_)
         assert data.shape == mask.shape
@@ -261,6 +265,7 @@ class Model(object):
         self._session.run(self._actions['load'])
 
     def _add_row(self, row_id):
+        logger.debug('add_row %d', row_id)
         assert row_id not in self._assignments
         assignments, _ = self._session.run(
             ['assignments', 'update/add_row'],
@@ -271,6 +276,7 @@ class Model(object):
         self._assignments[row_id] = assignments
 
     def _remove_row(self, row_id):
+        logger.debug('remove_row %d', row_id)
         assert row_id in self._assignments
         self._session.run(
             'update/add_row',
@@ -281,6 +287,7 @@ class Model(object):
             })
 
     def _sample_structure(self):
+        logger.debug('sample_structure')
         edge_prob = self._session.run('structure/edge_prob')
         if edge_prob is None:
             TODO('Fix None returned by tf.Session')
@@ -295,6 +302,7 @@ class Model(object):
 
     def fit(self):
         '''Sample the entire model using subsample-annealed MCMC.'''
+        logger.info('Fitting Model')
         assert not self._assignments, 'assignments have already been sampled'
         num_rows = self._data.shape[0]
         for action, row_id in get_annealing_schedule(num_rows, self._config):
