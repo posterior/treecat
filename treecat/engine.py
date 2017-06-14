@@ -15,7 +15,7 @@ DEFAULT_CONFIG = {
     'num_components': 32,
     'annealing': {
         'init_rows': 2,
-        'extra_passes': 100.0,
+        'epochs': 100.0,
     },
 }
 
@@ -316,8 +316,8 @@ def get_annealing_schedule(num_rows, config):
     row_to_remove = itertools.cycle(row_ids)
 
     # Use a linear annealing schedule.
-    add_rate = 1.0 + config['annealing']['extra_passes']
-    remove_rate = config['annealing']['extra_passes']
+    add_rate = config['annealing']['epochs']
+    remove_rate = config['annealing']['epochs'] - 1.0
     state = config['annealing']['init_rows']
 
     # Perform batch operations between batches.
