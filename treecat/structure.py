@@ -13,18 +13,18 @@ def make_complete_graph(num_vertices):
 
     Returns: A tuple with elements:
       V: Number of vertices.
-      E: Number of edges.
-      grid: a 3 x E grid of (edge, vertex, vertex) triples.
+      K: Number of edges.
+      grid: a 3 x K grid of (edge, vertex, vertex) triples.
     '''
     V = num_vertices
-    E = V * (V - 1) // 2
-    grid = np.zeros([3, E], np.int32)
+    K = V * (V - 1) // 2
+    grid = np.zeros([3, K], np.int32)
     e = 0
     for v1 in range(V):
         for v2 in range(v1 + 1, V):
             grid[:, e] = [e, v1, v2]
             e += 1
-    return V, E, grid
+    return V, K, grid
 
 
 def make_tree(edges):
@@ -119,9 +119,9 @@ def sample_tree(grid, edge_prob, edges, seed=0):
     '''Sample a random spanning tree of a weighted complete graph using MCMC.
 
     Args:
-      grid: A 3 x E array as returned by make_complete_graph().
-      edge_prob: A length-E array of nonnormalized edge probabilities.
-      edges: A list of initial edges in the form of (vertex,vertex) pairs.
+      grid: A 3 x K array as returned by make_complete_graph().
+      edge_prob: A length-K array of nonnormalized edge probabilities.
+      edges: A list of E initial edges in the form of (vertex,vertex) pairs.
       seed: Seed for random number generation.
 
     Returns:
@@ -130,6 +130,8 @@ def sample_tree(grid, edge_prob, edges, seed=0):
     np.random.seed(seed)
     E = len(edges)
     V = 1 + E
+    K = V * (V - 1) // 2
+    assert grid.shape == (3, K)
     neighbors = [set() for _ in range(V)]
     for v1, v2 in edges:
         neighbors[v1].add(v2)

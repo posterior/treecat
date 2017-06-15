@@ -11,3 +11,7 @@ logging.basicConfig(format=LOG_FORMAT, level=LOG_LEVEL, filename=LOG_FILENAME)
 
 def TODO(message=''):
     raise NotImplementedError('TODO {}'.format(message))
+
+
+# https://oeis.org/A000272
+NUM_SPANNING_TREES = [1, 1, 1, 3, 16, 125, 1296, 16807, 262144, 4782969]

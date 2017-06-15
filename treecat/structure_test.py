@@ -9,6 +9,7 @@ from goftests import multinomial_goodness_of_fit
 from treecat.structure import (find_center_of_tree, make_complete_graph,
                                make_propagation_schedule, make_tree,
                                sample_tree)
+from treecat.util import NUM_SPANNING_TREES
 
 EXAMPLE_TREES = [
     [],
@@ -35,9 +36,9 @@ def test_make_complete_graph(num_vertices, expected_grid):
     expected_grid = np.array(expected_grid, dtype=np.int32)
     expected_grid.shape = (3, num_edges)
 
-    V, E, grid = make_complete_graph(num_vertices)
+    V, K, grid = make_complete_graph(num_vertices)
     assert V == num_vertices
-    assert E == num_edges
+    assert K == num_edges
     assert grid.shape == expected_grid.shape
     assert (grid == expected_grid).all()
 
@@ -115,10 +116,6 @@ def test_make_propagation_schedule(edges, root):
         assert actual_neighbors == neighbors[v]
 
 
-# https://oeis.org/A000272
-NUM_SPANNING_TREES = [1, 1, 1, 3, 16, 125, 1296, 16807, 262144, 4782969]
-
-
 @pytest.mark.parametrize('edges', [
     [(0, 1)],
     pytest.mark.xfail([(0, 1), (1, 2)]),
@@ -129,8 +126,7 @@ def test_sample_tree(edges):
     np.random.seed(0)
     E = len(edges)
     V = 1 + E
-    V, E, grid = make_complete_graph(V)
-    K = grid.shape[1]
+    V, K, grid = make_complete_graph(V)
     edge_prob = np.exp(-np.random.random([K]))
     edge_prob_dict = {(v1, v2): edge_prob[k] for k, v1, v2 in grid.T}
 
