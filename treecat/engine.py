@@ -242,15 +242,18 @@ class Model(object):
         assert data.shape == mask.shape
         if config is None:
             config = DEFAULT_CONFIG
-        num_rows, num_features = data.shape
-        self._config = config
         self._data = data
         self._mask = mask
-        self._structure = FeatureTree(num_features, config)
-        self._assignments = {}  # This maps id -> numpy array.
+        self._config = config
         self._seed = config['seed']
+        self._assignments = {}  # This maps id -> numpy array.
         self._variables = {}
+        self._initialize()
+
+    def _initialize(self):
         self._session = None
+        num_rows, num_features = self._data.shape
+        self._structure = FeatureTree(num_features, self._config)
         self._update_session()
 
     def _update_session(self):
@@ -259,7 +262,6 @@ class Model(object):
             self._session.close()
         with tf.Graph().as_default():
             tf.set_random_seed(self._seed)
-            self._seed += 1
             self._actions = build_graph(self._structure, self._variables,
                                         self._config)
             self._session = tf.Session()
@@ -313,6 +315,26 @@ class Model(object):
                 self._remove_row(row_id)
             else:
                 self._sample_structure()
+
+    _pickle_attrs = [
+        '_data',
+        '_mask',
+        '_config',
+        '_seed',
+        '_assignments',
+        '_variables',
+    ]
+
+    def __getstate__(self):
+        logger.info('Model.__getstate__')
+        if self._session is not None:
+            self._variables = self._session.run(self._actions['save'])
+        return {key: getattr(self, key) for key in self._pickle_attrs}
+
+    def __setstate__(self, state):
+        logger.info('Model.__setstate__')
+        self.__dict__.update(state)
+        self._initialize()
 
 
 def get_annealing_schedule(num_rows, config):
