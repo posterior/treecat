@@ -26,6 +26,7 @@ class FeatureTree(object):
     '''Topological data representing a tree on features.'''
 
     def __init__(self, num_vertices, config):
+        logger.debug('FeatureTree with %d vertices', num_vertices)
         init_edges = [(v, v + 1) for v in range(num_vertices - 1)]
         V, E, tree_grid = make_tree(init_edges)
         V, K, complete_grid = make_complete_graph(V)
@@ -88,6 +89,7 @@ def build_graph(tree, inits, config):
         load: Initialize global variables.
         save: Eval global variables.
     '''
+    logger.debug('build_graph of tree with %d vertices' % tree.num_vertices)
     assert isinstance(tree, FeatureTree)
     assert isinstance(inits, dict)
     assert isinstance(config, dict)
@@ -234,7 +236,7 @@ class Model(object):
             mask: A 2D array of presence/absence, where present = True.
             config: A global config dict.
         '''
-        logger.info('Creating Model of %d x %d data', len(data), len(data[0]))
+        logger.info('Model of %d x %d data', len(data), len(data[0]))
         data = np.asarray(data, np.int32)
         mask = np.asarray(mask, np.bool_)
         assert data.shape == mask.shape
@@ -264,7 +266,7 @@ class Model(object):
         self._session.run(self._actions['load'])
 
     def _add_row(self, row_id):
-        logger.debug('add_row %d', row_id)
+        logger.debug('Model.add_row %d', row_id)
         assert row_id not in self._assignments, row_id
         assignments, _ = self._session.run(
             ['assignments:0', 'update/add_row'],
@@ -276,7 +278,7 @@ class Model(object):
         self._assignments[row_id] = assignments
 
     def _remove_row(self, row_id):
-        logger.debug('remove_row %d', row_id)
+        logger.debug('Model.remove_row %d', row_id)
         assert row_id in self._assignments, row_id
         self._session.run(
             'update/add_row',
@@ -287,7 +289,8 @@ class Model(object):
             })
 
     def _sample_structure(self):
-        logger.debug('sample_structure given %d rows', len(self._assignments))
+        logger.debug('Model._sample_structure given %d rows',
+                     len(self._assignments))
         edge_prob = self._session.run('structure/edge_prob:0')
         complete_grid = self._structure.complete_grid
         assert edge_prob.shape[0] == complete_grid.shape[1]
@@ -300,7 +303,7 @@ class Model(object):
 
     def fit(self):
         '''Sample the entire model using subsample-annealed MCMC.'''
-        logger.info('Fitting Model')
+        logger.info('Model.fit')
         assert not self._assignments, 'assignments have already been sampled'
         num_rows = self._data.shape[0]
         for action, row_id in get_annealing_schedule(num_rows, self._config):
