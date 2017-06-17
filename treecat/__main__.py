@@ -11,12 +11,9 @@ from subprocess import check_call
 
 from parsable import parsable
 
+from treecat.persist import pickle_dump
+from treecat.persist import pickle_load
 from treecat.testutil import tempdir
-
-try:
-    import cPickle as pickle
-except ImportError:
-    import pickle
 
 PYTHON = sys.executable
 
@@ -26,14 +23,12 @@ def fit(model_in, model_out=None):
     '''Fit a pickled model and optionally save it.'''
     from treecat.training import Model
     assert Model  # Pacify linter.
-    with open(model_in, 'rb') as f:
-        model = pickle.load(f)
+    model = pickle_load(model_in)
     print('Fitting model')
     model.fit()
     print('Done fitting model')
     if model_out is not None:
-        with open(model_out, 'wb') as f:
-            pickle.dump(model, f)
+        pickle_dump(model, model_out)
 
 
 @parsable
@@ -50,10 +45,9 @@ def profile_fit(rows=100, cols=10, cats=4, epochs=5, tool='timers'):
     data, mask = generate_dataset(rows, cols, config=config)
     model = Model(data, mask, config)
     with tempdir() as dirname:
-        model_path = os.path.join(dirname, 'profile_fit.model.pkl')
+        model_path = os.path.join(dirname, 'profile_fit.model.pkl.gz')
         profile_path = os.path.join(dirname, 'profile_fit.prof')
-        with open(model_path, 'wb') as f:
-            pickle.dump(model, f)
+        pickle_dump(model, model_path)
         cmd = [os.path.abspath(__file__), 'fit', model_path]
         if tool == 'time':
             if platform.platform().startswith('Darwin'):

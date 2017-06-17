@@ -7,15 +7,12 @@ from copy import deepcopy
 
 import numpy as np
 
+from treecat.persist import pickle_dump
+from treecat.persist import pickle_load
 from treecat.testutil import assert_equal
 from treecat.testutil import tempdir
 from treecat.training import DEFAULT_CONFIG
 from treecat.training import Model
-
-try:
-    import cPickle as pickle
-except ImportError:
-    import pickle
 
 TINY_CONFIG = deepcopy(DEFAULT_CONFIG)
 TINY_CONFIG['annealing']['epochs'] = 2
@@ -52,11 +49,9 @@ def test_model_save_load():
     model = Model(TINY_DATA, TINY_MASK, TINY_CONFIG)
     model.fit()
     with tempdir() as dirname:
-        filename = os.path.join(dirname, 'model.pkl')
-        with open(filename, 'wb') as f:
-            pickle.dump(model, f)
-        with open(filename, 'rb') as f:
-            model2 = pickle.load(f)
+        filename = os.path.join(dirname, 'model.pkl.gz')
+        pickle_dump(model, filename)
+        model2 = pickle_load(filename)
 
     assert_equal(model2._data, model._data)
     assert_equal(model2._mask, model._mask)

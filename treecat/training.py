@@ -83,6 +83,7 @@ def build_graph(tree, inits, config):
     '''Builds a tf graph for sampling assignments via message passing.
 
     Component distributions are Dirichlet-categorical.
+    TODO Switch to Dirichlet-binomial.
 
     Args:
       tree: A TreeStructure object.
