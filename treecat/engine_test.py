@@ -2,7 +2,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import cPickle as pickle
 import os
 from copy import deepcopy
 
@@ -12,6 +11,11 @@ from treecat.engine import DEFAULT_CONFIG
 from treecat.engine import Model
 from treecat.testutil import assert_equal
 from treecat.testutil import tempdir
+
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle
 
 TINY_CONFIG = deepcopy(DEFAULT_CONFIG)
 TINY_CONFIG['annealing']['epochs'] = 2

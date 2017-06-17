@@ -2,7 +2,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import cPickle as pickle
 import os
 import platform
 import sys
@@ -13,6 +12,11 @@ from subprocess import check_call
 from parsable import parsable
 
 from treecat.testutil import tempdir
+
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle
 
 PYTHON = sys.executable
 
