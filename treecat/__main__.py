@@ -38,7 +38,7 @@ def fit(model_in, model_out=None):
 @parsable
 def profile_fit(rows=100, cols=10, cats=4, epochs=5, tool='timers'):
     '''Profile Model.fit() on a random dataset.
-    Available tools: timers, time, snakeviz
+    Available tools: timers, time, snakeviz, line_profiler
     '''
     from treecat.engine import DEFAULT_CONFIG
     from treecat.engine import Model
@@ -50,6 +50,7 @@ def profile_fit(rows=100, cols=10, cats=4, epochs=5, tool='timers'):
     model = Model(data, mask, config)
     with tempdir() as dirname:
         model_path = os.path.join(dirname, 'profile_fit.model.pkl')
+        profile_path = os.path.join(dirname, 'profile_fit.prof')
         with open(model_path, 'wb') as f:
             pickle.dump(model, f)
         cmd = [os.path.abspath(__file__), 'fit', model_path]
@@ -60,13 +61,15 @@ def profile_fit(rows=100, cols=10, cats=4, epochs=5, tool='timers'):
                 gnu_time = '/usr/bin/time'
             check_call([gnu_time, '-v', PYTHON, '-O'] + cmd)
         elif tool == 'snakeviz':
-            profile_path = os.path.join(dirname, 'profile_fit.prof')
             check_call([PYTHON, '-m', 'cProfile', '-o', profile_path] + cmd)
             check_call(['snakeviz', profile_path])
         elif tool == 'timers':
             env = os.environ.copy()
             env['TREECAT_PROFILE_TIME'] = '1'
             Popen([PYTHON, '-O'] + cmd, env=env).wait()
+
+        elif tool == 'line_profiler':
+            check_call(['kernprof', '-l', '-v', '-o', profile_path] + cmd)
         else:
             raise ValueError('Unknown tool: {}'.format(tool))
 

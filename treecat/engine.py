@@ -26,6 +26,9 @@ DEFAULT_CONFIG = {
 
 logger = logging.getLogger(__name__)
 
+# line_profiler defines profile in the __builtins__ module.
+profile = getattr(__builtins__, 'profile', lambda fun: fun)
+
 
 class FeatureTree(object):
     '''Topological data representing a tree on features.'''
