@@ -1,4 +1,6 @@
-from __future__ import absolute_import, division, print_function
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 
 import itertools
 import logging
@@ -6,8 +8,10 @@ import logging
 import numpy as np
 import tensorflow as tf
 
-from treecat.structure import (make_complete_graph, make_propagation_schedule,
-                               make_tree, sample_tree)
+from treecat.structure import make_complete_graph
+from treecat.structure import make_propagation_schedule
+from treecat.structure import make_tree
+from treecat.structure import sample_tree
 
 DEFAULT_CONFIG = {
     'seed': 0,

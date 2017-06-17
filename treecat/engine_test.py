@@ -1,4 +1,6 @@
-from __future__ import absolute_import, division, print_function
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 
 import cPickle as pickle
 import os
@@ -6,7 +8,8 @@ from copy import deepcopy
 
 import numpy as np
 
-from treecat.engine import DEFAULT_CONFIG, Model
+from treecat.engine import DEFAULT_CONFIG
+from treecat.engine import Model
 from treecat.testutil import assert_equal
 from treecat.util import tempdir
 

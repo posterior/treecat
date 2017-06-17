@@ -6,6 +6,7 @@ all: lint
 
 format: FORCE
 	yapf -i $(PY_FILES)
+	isort -i $(PY_FILES)
 
 lint: FORCE
 	flake8 $(PY_FILES)

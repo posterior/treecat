@@ -1,4 +1,6 @@
-from __future__ import absolute_import, division, print_function
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 
 from collections import defaultdict
 
@@ -6,9 +8,12 @@ import numpy as np
 import pytest
 from goftests import multinomial_goodness_of_fit
 
-from treecat.structure import (MutableTree, find_center_of_tree,
-                               make_complete_graph, make_propagation_schedule,
-                               make_tree, sample_tree)
+from treecat.structure import MutableTree
+from treecat.structure import find_center_of_tree
+from treecat.structure import make_complete_graph
+from treecat.structure import make_propagation_schedule
+from treecat.structure import make_tree
+from treecat.structure import sample_tree
 from treecat.util import NUM_SPANNING_TREES
 
 EXAMPLE_TREES = [
