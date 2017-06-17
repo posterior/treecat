@@ -9,9 +9,8 @@ from copy import deepcopy
 import numpy as np
 import tensorflow as tf
 
-from treecat.structure import make_complete_graph
+from treecat.structure import TreeStructure
 from treecat.structure import make_propagation_schedule
-from treecat.structure import make_tree
 from treecat.structure import sample_tree
 from treecat.util import profile_timed
 
@@ -29,53 +28,6 @@ logger = logging.getLogger(__name__)
 
 # line_profiler defines profile in the __builtins__ module.
 profile = getattr(__builtins__, 'profile', lambda fun: fun)
-
-
-class TreeStructure(object):
-    '''Topological data representing a tree on features.'''
-
-    def __init__(self, num_vertices):
-        logger.debug('TreeStructure with %d vertices', num_vertices)
-        init_edges = [(v, v + 1) for v in range(num_vertices - 1)]
-        V, E, tree_grid = make_tree(init_edges)
-        V, K, complete_grid = make_complete_graph(V)
-        self._num_vertices = V
-        self._num_edges = E
-        self._complete_grid = complete_grid
-        self.update_grid(tree_grid)
-
-    def __eq__(self, other):
-        return (self._num_vertices == other._num_vertices and
-                (self._tree_grid == other._tree_grid).all())
-
-    def update_grid(self, tree_grid):
-        assert tree_grid.shape == (3, self._num_edges)
-        self._tree_grid = tree_grid
-        self._tree_edges = {}
-        for e, v1, v2 in self._tree_grid.T:
-            self._tree_edges[v1, v2] = e
-            self._tree_edges[v2, v1] = e
-
-    @property
-    def num_vertices(self):
-        return self._num_vertices
-
-    @property
-    def num_edges(self):
-        return self._num_edges
-
-    @property
-    def tree_grid(self):
-        '''Array of (edge, vertex, vertex) triples defining the tree graph.'''
-        return self._tree_grid
-
-    @property
-    def complete_grid(self):
-        '''Array of (edge,vertex,vertex) triples defining a complete graph.'''
-        return self._complete_grid
-
-    def find_edge(self, v1, v2):
-        return self._tree_edges[v1, v2]
 
 
 @profile_timed
@@ -321,8 +273,7 @@ class Model(object):
         edges = self._structure.tree_grid[1:3, :].T
         edges = sample_tree(complete_grid, edge_prob, edges, self._seed)
         self._seed += 1
-        V, E, grid = make_tree(edges)
-        self._structure.update_grid(grid)
+        self._structure.set_edges(edges)
         self._update_session()
 
     def fit(self):

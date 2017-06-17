@@ -12,6 +12,58 @@ from treecat.util import profile_timed
 logger = logging.getLogger(__name__)
 
 
+class TreeStructure(object):
+    '''Topological data representing a tree on features.'''
+
+    def __init__(self, num_vertices):
+        logger.debug('TreeStructure with %d vertices', num_vertices)
+        self._num_vertices = num_vertices
+        self._num_edges = num_vertices - 1
+        self.set_edges([(v, v + 1) for v in range(num_vertices - 1)])
+        self._complete_grid = None  # Lazily constructed.
+
+    def __eq__(self, other):
+        return (self._num_vertices == other._num_vertices and
+                (self._tree_grid == other._tree_grid).all())
+
+    def set_edges(self, edges):
+        '''Sets the edges of this tree.
+
+        Args:
+          edges: A list of (vertex, vertex) pairs.
+        '''
+        assert len(edges) == self._num_edges
+        self._tree_grid = make_tree(edges)
+        self._tree_edges = {}
+        for e, v1, v2 in self._tree_grid.T:
+            self._tree_edges[v1, v2] = e
+            self._tree_edges[v2, v1] = e
+
+    @property
+    def num_vertices(self):
+        return self._num_vertices
+
+    @property
+    def num_edges(self):
+        return self._num_edges
+
+    @property
+    def tree_grid(self):
+        '''Array of (edge, vertex, vertex) triples defining the tree graph.'''
+        return self._tree_grid
+
+    @property
+    def complete_grid(self):
+        '''Array of (edge,vertex,vertex) triples defining a complete graph.'''
+        if self._complete_grid is None:
+            self._complete_grid = make_complete_graph(self._num_vertices)
+        return self._complete_grid
+
+    def find_edge(self, v1, v2):
+        '''Find the edge index e of an unsorted pair of vertices (v1, v2).'''
+        return self._tree_edges[v1, v2]
+
+
 def make_complete_graph(num_vertices):
     '''Constructs a complete graph.
 
@@ -33,7 +85,7 @@ def make_complete_graph(num_vertices):
         for v1 in range(v2):
             grid[:, k] = [k, v1, v2]
             k += 1
-    return V, K, grid
+    return grid
 
 
 def make_tree(edges):
@@ -51,11 +103,10 @@ def make_tree(edges):
     edges = [tuple(sorted(edge)) for edge in edges]
     edges.sort()
     E = len(edges)
-    V = 1 + E
     grid = np.zeros([3, E], np.int32)
     for e, (v1, v2) in enumerate(edges):
         grid[:, e] = [e, v1, v2]
-    return V, E, grid
+    return grid
 
 
 def find_center_of_tree(grid):

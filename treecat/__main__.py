@@ -10,7 +10,6 @@ from subprocess import Popen
 from subprocess import check_call
 
 from parsable import parsable
-
 from treecat.persist import pickle_dump
 from treecat.persist import pickle_load
 from treecat.testutil import tempdir

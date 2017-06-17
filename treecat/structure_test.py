@@ -40,15 +40,12 @@ EXAMPLE_TREES = [
     (4, [[0, 1, 2, 3, 4, 5], [0, 0, 1, 0, 1, 2], [1, 2, 2, 3, 3, 3]]),
 ])
 def test_make_complete_graph(num_vertices, expected_grid):
-    num_edges = num_vertices * (num_vertices - 1) // 2
-    expected_grid = np.array(expected_grid, dtype=np.int32)
-    expected_grid.shape = (3, num_edges)
+    V = num_vertices
+    K = V * (V - 1) // 2
+    expected_grid = np.array(expected_grid, dtype=np.int32).reshape([3, K])
 
-    V, K, grid = make_complete_graph(num_vertices)
-    assert V == num_vertices
-    assert K == num_edges
-    assert grid.shape == expected_grid.shape
-    assert (grid == expected_grid).all()
+    grid = make_complete_graph(V)
+    np.testing.assert_array_equal(grid, expected_grid)
 
 
 @pytest.mark.parametrize('edges,expected_grid', [
@@ -59,23 +56,22 @@ def test_make_complete_graph(num_vertices, expected_grid):
     ([(2, 1), (1, 0)], [[0, 1], [0, 1], [1, 2]]),
 ])
 def test_make_tree(edges, expected_grid):
-    num_edges = len(edges)
-    num_vertices = 1 + num_edges
+    E = len(edges)
     expected_grid = np.array(expected_grid, dtype=np.int32)
-    expected_grid.shape = (3, num_edges)
+    expected_grid.shape = (3, E)
 
-    V, E, grid = make_tree(edges)
-    assert V == num_vertices
-    assert E == num_edges
+    grid = make_tree(edges)
     assert grid.shape == expected_grid.shape
     assert (grid == expected_grid).all()
 
 
 @pytest.mark.parametrize('edges', EXAMPLE_TREES)
 def test_make_tree_runs(edges):
-    V, E, grid = make_tree(edges)
-    assert grid.shape == (3, E)
-    if E > 0:
+    E = len(edges)
+    V = E + 1
+    grid = make_tree(edges)
+    assert grid.shape == (3, len(edges))
+    if edges:
         assert set(grid[0, :]) == set(range(E))
         assert set(grid[1, :]) | set(grid[2, :]) == set(range(V))
 
@@ -92,7 +88,7 @@ def test_make_tree_runs(edges):
     (2, [(0, 2), (1, 2), (2, 3), (2, 4)]),
 ])
 def test_find_center_of_tree(expected_vertex, edges):
-    V, E, grid = make_tree(edges)
+    grid = make_tree(edges)
 
     v = find_center_of_tree(grid)
     assert v == expected_vertex
@@ -105,7 +101,8 @@ EXAMPLE_ROOTED_TREES = [(edges, root)
 
 @pytest.mark.parametrize('edges,root', EXAMPLE_ROOTED_TREES)
 def test_make_propagation_schedule(edges, root):
-    V, E, grid = make_tree(edges)
+    V = len(edges) + 1
+    grid = make_tree(edges)
     neighbors = {v: set() for v in range(V)}
     for e, v1, v2 in grid.T:
         neighbors[v1].add(v2)
@@ -133,7 +130,7 @@ def test_make_propagation_schedule(edges, root):
 def test_mutable_tree_find_tour(edges):
     E = len(edges)
     V = 1 + E
-    V, K, grid = make_complete_graph(V)
+    grid = make_complete_graph(V)
     tree = MutableTree(grid, edges)
     for k, v1, v2 in grid.T:
         if (v1, v2) in edges:
@@ -157,7 +154,8 @@ def test_sample_tree(edges):
     np.random.seed(0)
     E = len(edges)
     V = 1 + E
-    V, K, grid = make_complete_graph(V)
+    grid = make_complete_graph(V)
+    K = grid.shape[1]
     edge_prob = np.exp(-np.random.random([K]))
     edge_prob_dict = {(v1, v2): edge_prob[k] for k, v1, v2 in grid.T}
 
