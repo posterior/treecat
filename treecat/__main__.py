@@ -10,7 +10,6 @@ from subprocess import Popen
 from subprocess import check_call
 
 from parsable import parsable
-
 from treecat.testutil import tempdir
 
 try:
@@ -59,7 +58,7 @@ def profile_fit(rows=100, cols=10, cats=4, epochs=5, tool='timers'):
                 gnu_time = 'gtime'
             else:
                 gnu_time = '/usr/bin/time'
-            check_call([gnu_time, '-v', PYTHON] + cmd)
+            check_call([gnu_time, '-v', PYTHON, '-O'] + cmd)
         elif tool == 'snakeviz':
             profile_path = os.path.join(dirname, 'profile_fit.prof')
             check_call([PYTHON, '-m', 'cProfile', '-o', profile_path] + cmd)
@@ -67,7 +66,7 @@ def profile_fit(rows=100, cols=10, cats=4, epochs=5, tool='timers'):
         elif tool == 'timers':
             env = os.environ.copy()
             env['TREECAT_PROFILE_TIME'] = '1'
-            Popen([PYTHON] + cmd, env=env).wait()
+            Popen([PYTHON, '-O'] + cmd, env=env).wait()
         else:
             raise ValueError('Unknown tool: {}'.format(tool))
 

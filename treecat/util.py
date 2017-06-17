@@ -23,16 +23,18 @@ def TODO(message=''):
 
 
 class ProfileTimer(object):
-    __slots__ = ['elapsed']
+    __slots__ = ['elapsed', 'count']
 
     def __init__(self):
         self.elapsed = 0.0
+        self.count = 0
 
     def __enter__(self):
         self.elapsed -= default_timer()
 
     def __exit__(self, type, value, traceback):
         self.elapsed += default_timer()
+        self.count += 1
 
 
 PROFILE_TIMERS = defaultdict(ProfileTimer)
@@ -52,14 +54,15 @@ def profile_timed(fun):
 
 
 def print_profile_timers():
-    times = [(t.elapsed, f) for (f, t) in PROFILE_TIMERS.items()]
+    times = [(t.elapsed, t.count, f) for (f, t) in PROFILE_TIMERS.items()]
     times.sort(reverse=True)
-    sys.stderr.write('{: >10} {}\n'.format('Time (sec)', 'Function'))
+    sys.stderr.write(
+        '{: >10} {: >10} {}\n'.format('Seconds', 'Calls', 'Function'))
     sys.stderr.write('-' * 32 + '\n')
-    for time, fun in times:
-        if time > 0:
-            sys.stderr.write('{: >10.3f} {}.{}\n'.format(
-                time, fun.__module__, fun.__name__))
+    for time, count, fun in times:
+        if count > 0:
+            sys.stderr.write('{: >10.3f} {: >10} {}.{}\n'.format(
+                time, count, fun.__module__, fun.__name__))
 
 
 if PROFILE_TIME:

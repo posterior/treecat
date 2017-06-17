@@ -58,7 +58,6 @@ def make_tree(edges):
     return V, E, grid
 
 
-@profile_timed
 def find_center_of_tree(grid):
     '''Finds a maximally central vertex in a tree graph.
 

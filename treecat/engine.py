@@ -70,6 +70,7 @@ class FeatureTree(object):
         return self._tree_edges[v1, v2]
 
 
+@profile_timed
 def build_graph(tree, inits, config):
     '''Builds a tf graph for sampling assignments via message passing.
 
@@ -300,8 +301,8 @@ class Model(object):
 
     @profile_timed
     def _sample_structure(self):
-        logger.debug('Model._sample_structure given %d rows',
-                     len(self._assignments))
+        logger.info('Model._sample_structure given %d rows',
+                    len(self._assignments))
         edge_prob = self._session.run('structure/edge_prob:0')
         complete_grid = self._structure.complete_grid
         assert edge_prob.shape[0] == complete_grid.shape[1]
@@ -356,9 +357,10 @@ def get_annealing_schedule(num_rows, config):
     row_to_remove = itertools.cycle(row_ids)
 
     # Use a linear annealing schedule.
-    add_rate = config['annealing']['epochs']
-    remove_rate = config['annealing']['epochs'] - 1.0
-    state = float(config['annealing']['init_rows'])
+    epochs = float(config['annealing']['epochs'])
+    add_rate = epochs
+    remove_rate = epochs - 1.0
+    state = epochs * config['annealing']['init_rows']
 
     # Perform batch operations between batches.
     num_fresh = 0
