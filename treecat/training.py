@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import itertools
 import logging
+from copy import deepcopy
 
 import numpy as np
 import tensorflow as tf
@@ -231,7 +232,7 @@ def build_graph(tree, inits, config):
 
 
 class Model(object):
-    '''Main TreeCat model class.'''
+    '''Class for training TreeCat models.'''
 
     def __init__(self, data, mask, config=None):
         '''Initialize a model in an unassigned state.
@@ -246,12 +247,13 @@ class Model(object):
         mask = np.asarray(mask, np.bool_)
         assert data.shape == mask.shape
         if config is None:
-            config = DEFAULT_CONFIG
+            config = deepcopy(DEFAULT_CONFIG)
         self._data = data
         self._mask = mask
         self._config = config
         self._seed = config['seed']
-        self._assignments = {}  # This maps id -> numpy array.
+        self._assigned_rows = set()
+        self._assignments = np.zeros(data.shape, dtype=np.int32)
         self._variables = {}
         self._initialize()
 
@@ -276,7 +278,8 @@ class Model(object):
     @profile_timed
     def _add_row(self, row_id):
         logger.debug('Model.add_row %d', row_id)
-        assert row_id not in self._assignments, row_id
+        assert row_id not in self._assigned_rows, row_id
+        self._assigned_rows.add(row_id)
         assignments, _ = self._session.run(
             ['assignments:0', 'update/add_row'],
             feed_dict={
@@ -284,16 +287,17 @@ class Model(object):
                 'row_mask:0': self._mask[row_id],
             })
         assert assignments.shape == (self._data.shape[1], )
-        self._assignments[row_id] = assignments
+        self._assignments[row_id, :] = assignments
 
     @profile_timed
     def _remove_row(self, row_id):
         logger.debug('Model.remove_row %d', row_id)
-        assert row_id in self._assignments, row_id
+        assert row_id in self._assigned_rows, row_id
+        self._assigned_rows.remove(row_id)
         self._session.run(
             'update/add_row',
             feed_dict={
-                'assignments:0': self._assignments.pop(row_id),
+                'assignments:0': self._assignments[row_id],
                 'row_data:0': self._data[row_id],
                 'row_mask:0': self._mask[row_id],
             })
@@ -301,7 +305,7 @@ class Model(object):
     @profile_timed
     def _sample_structure(self):
         logger.debug('Model._sample_structure given %d rows',
-                     len(self._assignments))
+                     len(self._assigned_rows))
         edge_prob = self._session.run('structure/edge_prob:0')
         complete_grid = self._structure.complete_grid
         assert edge_prob.shape[0] == complete_grid.shape[1]
@@ -315,7 +319,7 @@ class Model(object):
     def fit(self):
         '''Sample the entire model using subsample-annealed MCMC.'''
         logger.info('Model.fit')
-        assert not self._assignments, 'assignments have already been sampled'
+        assert not self._assigned_rows, 'assignments have already been sampled'
         num_rows = self._data.shape[0]
         for action, row_id in get_annealing_schedule(num_rows, self._config):
             if action == 'add_row':
@@ -330,6 +334,7 @@ class Model(object):
         '_mask',
         '_config',
         '_seed',
+        '_assigned_rows',
         '_assignments',
         '_variables',
     ]
