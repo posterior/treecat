@@ -1,3 +1,4 @@
+from parsable import parsable
 from setuptools import setup
 
 with open('README.md') as f:
@@ -11,7 +12,8 @@ setup(
     author='Fritz Obermeyer',
     author_email='fritz.obermeyer@gmail.com',
     packages=['treecat'],
-    install_requires=['numpy', 'six'],
+    entry_points=parsable.find_entry_points('treecat'),
+    install_requires=['numpy', 'six', 'parsable'],
     extras_require={
         'tensorflow': ['tensorflow>=1.1.0'],
         'tensorflow with gpu': ['tensorflow-gpu>=1.1.0']
