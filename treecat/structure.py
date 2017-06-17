@@ -7,6 +7,8 @@ from collections import deque
 
 import numpy as np
 
+from treecat.util import profile_timed
+
 logger = logging.getLogger(__name__)
 
 
@@ -56,6 +58,7 @@ def make_tree(edges):
     return V, E, grid
 
 
+@profile_timed
 def find_center_of_tree(grid):
     '''Finds a maximally central vertex in a tree graph.
 
@@ -84,6 +87,7 @@ def find_center_of_tree(grid):
     return v
 
 
+@profile_timed
 def make_propagation_schedule(grid, root=None):
     '''Makes an efficient schedule for message passing on a tree.
 
@@ -204,6 +208,7 @@ class MutableTree(object):
             tour.pop()
 
 
+@profile_timed
 def sample_tree(grid, edge_prob, edges, seed=0, steps=None):
     '''Sample a random spanning tree of a weighted complete graph using MCMC.
 

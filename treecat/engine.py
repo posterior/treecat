@@ -12,6 +12,7 @@ from treecat.structure import make_complete_graph
 from treecat.structure import make_propagation_schedule
 from treecat.structure import make_tree
 from treecat.structure import sample_tree
+from treecat.util import profile_timed
 
 DEFAULT_CONFIG = {
     'seed': 0,
@@ -260,6 +261,7 @@ class Model(object):
         self._structure = FeatureTree(num_features, self._config)
         self._update_session()
 
+    @profile_timed
     def _update_session(self):
         if self._session is not None:
             self._variables = self._session.run(self._actions['save'])
@@ -271,6 +273,7 @@ class Model(object):
             self._session = tf.Session()
         self._session.run(self._actions['load'])
 
+    @profile_timed
     def _add_row(self, row_id):
         logger.debug('Model.add_row %d', row_id)
         assert row_id not in self._assignments, row_id
@@ -283,6 +286,7 @@ class Model(object):
         assert assignments.shape == (self._data.shape[1], )
         self._assignments[row_id] = assignments
 
+    @profile_timed
     def _remove_row(self, row_id):
         logger.debug('Model.remove_row %d', row_id)
         assert row_id in self._assignments, row_id
@@ -294,6 +298,7 @@ class Model(object):
                 'row_mask:0': self._mask[row_id],
             })
 
+    @profile_timed
     def _sample_structure(self):
         logger.debug('Model._sample_structure given %d rows',
                      len(self._assignments))

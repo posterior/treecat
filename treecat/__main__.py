@@ -7,6 +7,7 @@ import os
 import platform
 import sys
 from copy import deepcopy
+from subprocess import Popen
 from subprocess import check_call
 
 from parsable import parsable
@@ -32,9 +33,9 @@ def fit(model_in, model_out=None):
 
 
 @parsable
-def profile_fit(rows=100, cols=10, cats=4, epochs=5, tool='time'):
+def profile_fit(rows=100, cols=10, cats=4, epochs=5, tool='timers'):
     '''Profile Model.fit() on a random dataset.
-    Available tools: time, snakeviz
+    Available tools: timers, time, snakeviz
     '''
     from treecat.engine import DEFAULT_CONFIG
     from treecat.engine import Model
@@ -59,6 +60,10 @@ def profile_fit(rows=100, cols=10, cats=4, epochs=5, tool='time'):
             profile_path = os.path.join(dirname, 'profile_fit.prof')
             check_call([PYTHON, '-m', 'cProfile', '-o', profile_path] + cmd)
             check_call(['snakeviz', profile_path])
+        elif tool == 'timers':
+            env = os.environ.copy()
+            env['TREECAT_PROFILE_TIME'] = '1'
+            Popen([PYTHON] + cmd, env=env).wait()
         else:
             raise ValueError('Unknown tool: {}'.format(tool))
 
