@@ -247,6 +247,7 @@ def sample_tree(grid, edge_prob, edges, seed=0, steps=None):
                 k34 = v3 + v4 * (v4 - 1) // 2
                 assert all(grid[:, k34] == (k34, v3, v4))
                 valid_edges[i] = k34
+            # TODO Apply exp() here rather than in tf, to improve stability.
             valid_probs = 1.0 / edge_prob[valid_edges]  # Pick an edge to omit.
             valid_probs /= valid_probs.sum()
             k34 = np.random.choice(valid_edges, p=valid_probs)

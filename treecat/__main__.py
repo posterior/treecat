@@ -4,12 +4,16 @@ from __future__ import print_function
 
 import cPickle as pickle
 import os
-import subprocess
+import platform
+import sys
 from copy import deepcopy
+from subprocess import check_call
 
 from parsable import parsable
 
 from treecat.testutil import tempdir
+
+PYTHON = sys.executable
 
 
 @parsable
@@ -28,32 +32,35 @@ def fit(model_in, model_out=None):
 
 
 @parsable
-def profile_fit_py(rows=100, cols=10, cats=4, density=0.9, epochs=5):
-    '''Profile python part of Model.fit() on a random dataset.'''
+def profile_fit(rows=100, cols=10, cats=4, epochs=5, tool='time'):
+    '''Profile Model.fit() on a random dataset.
+    Available tools: time, snakeviz
+    '''
     from treecat.engine import DEFAULT_CONFIG
     from treecat.engine import Model
     from treecat.generate import generate_dataset
     config = deepcopy(DEFAULT_CONFIG)
     config['num_categories'] = cats
     config['annealing']['epochs'] = epochs
-    data, mask = generate_dataset(rows, cols, density, config)
+    data, mask = generate_dataset(rows, cols, config=config)
     model = Model(data, mask, config)
     with tempdir() as dirname:
         model_path = os.path.join(dirname, 'profile_fit.model.pkl')
-        profile_path = os.path.join(dirname, 'profile_fit.prof')
         with open(model_path, 'wb') as f:
             pickle.dump(model, f)
-        subprocess.check_call([
-            'python',
-            '-m',
-            'cProfile',
-            '-o',
-            profile_path,
-            os.path.abspath(__file__),
-            'fit',
-            model_path,
-        ])
-        subprocess.check_call(['snakeviz', profile_path])
+        cmd = [os.path.abspath(__file__), 'fit', model_path]
+        if tool == 'time':
+            if platform.platform().startswith('Darwin'):
+                gnu_time = 'gtime'
+            else:
+                gnu_time = '/usr/bin/time'
+            check_call([gnu_time, '-v', PYTHON] + cmd)
+        elif tool == 'snakeviz':
+            profile_path = os.path.join(dirname, 'profile_fit.prof')
+            check_call([PYTHON, '-m', 'cProfile', '-o', profile_path] + cmd)
+            check_call(['snakeviz', profile_path])
+        else:
+            raise ValueError('Unknown tool: {}'.format(tool))
 
 
 # TODO Add a profile_fit_tf c
