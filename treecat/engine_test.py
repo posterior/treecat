@@ -64,3 +64,4 @@ def test_model_save_load():
     assert_equal(model2._seed, model._seed)
     assert_equal(model2._assignments, model._assignments)
     assert_equal(model2._variables, model._variables)
+    assert_equal(model2._structure, model._structure)

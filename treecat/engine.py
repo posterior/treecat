@@ -33,7 +33,7 @@ profile = getattr(__builtins__, 'profile', lambda fun: fun)
 class FeatureTree(object):
     '''Topological data representing a tree on features.'''
 
-    def __init__(self, num_vertices, config):
+    def __init__(self, num_vertices):
         logger.debug('FeatureTree with %d vertices', num_vertices)
         init_edges = [(v, v + 1) for v in range(num_vertices - 1)]
         V, E, tree_grid = make_tree(init_edges)
@@ -42,6 +42,10 @@ class FeatureTree(object):
         self._num_edges = E
         self._complete_grid = complete_grid
         self.update_grid(tree_grid)
+
+    def __eq__(self, other):
+        return (self._num_vertices == other._num_vertices and
+                (self._tree_grid == other._tree_grid).all())
 
     def update_grid(self, tree_grid):
         assert tree_grid.shape == (3, self._num_edges)
@@ -248,6 +252,7 @@ class Model(object):
         logger.info('Model of %d x %d data', len(data), len(data[0]))
         data = np.asarray(data, np.int32)
         mask = np.asarray(mask, np.bool_)
+        num_rows, num_features = data.shape
         assert data.shape == mask.shape
         if config is None:
             config = DEFAULT_CONFIG
@@ -257,12 +262,11 @@ class Model(object):
         self._seed = config['seed']
         self._assignments = {}  # This maps id -> numpy array.
         self._variables = {}
+        self._structure = FeatureTree(num_features)
         self._initialize()
 
     def _initialize(self):
         self._session = None
-        num_rows, num_features = self._data.shape
-        self._structure = FeatureTree(num_features, self._config)
         self._update_session()
 
     @profile_timed
@@ -336,6 +340,7 @@ class Model(object):
         '_seed',
         '_assignments',
         '_variables',
+        '_structure',
     ]
 
     def __getstate__(self):
