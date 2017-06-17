@@ -4,7 +4,7 @@ from __future__ import print_function
 
 import numpy as np
 
-from treecat.engine import DEFAULT_CONFIG
+from treecat.training import DEFAULT_CONFIG
 
 
 def generate_dataset(num_rows, num_cols, density=0.9, config=None):

@@ -20,7 +20,7 @@ PYTHON = sys.executable
 @parsable
 def fit(model_in, model_out=None):
     '''Fit a pickled model and optionally save it.'''
-    from treecat.engine import Model
+    from treecat.training import Model
     assert Model  # Pacify linter.
     with open(model_in, 'rb') as f:
         model = pickle.load(f)
@@ -37,8 +37,8 @@ def profile_fit(rows=100, cols=10, cats=4, epochs=5, tool='timers'):
     '''Profile Model.fit() on a random dataset.
     Available tools: timers, time, snakeviz
     '''
-    from treecat.engine import DEFAULT_CONFIG
-    from treecat.engine import Model
+    from treecat.training import DEFAULT_CONFIG
+    from treecat.training import Model
     from treecat.generate import generate_dataset
     config = deepcopy(DEFAULT_CONFIG)
     config['num_categories'] = cats
