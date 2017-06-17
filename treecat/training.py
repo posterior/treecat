@@ -27,11 +27,11 @@ DEFAULT_CONFIG = {
 logger = logging.getLogger(__name__)
 
 
-class FeatureTree(object):
+class TreeStructure(object):
     '''Topological data representing a tree on features.'''
 
     def __init__(self, num_vertices, config):
-        logger.debug('FeatureTree with %d vertices', num_vertices)
+        logger.debug('TreeStructure with %d vertices', num_vertices)
         init_edges = [(v, v + 1) for v in range(num_vertices - 1)]
         V, E, tree_grid = make_tree(init_edges)
         V, K, complete_grid = make_complete_graph(V)
@@ -76,7 +76,7 @@ def build_graph(tree, inits, config):
     Component distributions are Dirichlet-categorical.
 
     Args:
-      tree: A FeatureTree object.
+      tree: A TreeStructure object.
       inits: An dict of optional saved tensor values.
       config: A global config dict.
 
@@ -95,7 +95,7 @@ def build_graph(tree, inits, config):
         save: Eval global variables.
     '''
     logger.debug('build_graph of tree with %d vertices' % tree.num_vertices)
-    assert isinstance(tree, FeatureTree)
+    assert isinstance(tree, TreeStructure)
     assert isinstance(inits, dict)
     assert isinstance(config, dict)
     V = tree.num_vertices
@@ -258,7 +258,7 @@ class Model(object):
     def _initialize(self):
         self._session = None
         num_rows, num_features = self._data.shape
-        self._structure = FeatureTree(num_features, self._config)
+        self._structure = TreeStructure(num_features, self._config)
         self._update_session()
 
     @profile_timed
