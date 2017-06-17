@@ -11,7 +11,7 @@ import numpy as np
 from treecat.engine import DEFAULT_CONFIG
 from treecat.engine import Model
 from treecat.testutil import assert_equal
-from treecat.util import tempdir
+from treecat.testutil import tempdir
 
 TINY_CONFIG = deepcopy(DEFAULT_CONFIG)
 TINY_CONFIG['annealing']['epochs'] = 2

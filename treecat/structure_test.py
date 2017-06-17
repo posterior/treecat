@@ -14,7 +14,9 @@ from treecat.structure import make_complete_graph
 from treecat.structure import make_propagation_schedule
 from treecat.structure import make_tree
 from treecat.structure import sample_tree
-from treecat.util import NUM_SPANNING_TREES
+
+# https://oeis.org/A000272
+NUM_SPANNING_TREES = [1, 1, 1, 3, 16, 125, 1296, 16807, 262144, 4782969]
 
 EXAMPLE_TREES = [
     [],
