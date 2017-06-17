@@ -27,11 +27,14 @@ DEFAULT_CONFIG = {
 
 logger = logging.getLogger(__name__)
 
+# line_profiler defines profile in the __builtins__ module.
+profile = getattr(__builtins__, 'profile', lambda fun: fun)
+
 
 class TreeStructure(object):
     '''Topological data representing a tree on features.'''
 
-    def __init__(self, num_vertices, config):
+    def __init__(self, num_vertices):
         logger.debug('TreeStructure with %d vertices', num_vertices)
         init_edges = [(v, v + 1) for v in range(num_vertices - 1)]
         V, E, tree_grid = make_tree(init_edges)
@@ -40,6 +43,10 @@ class TreeStructure(object):
         self._num_edges = E
         self._complete_grid = complete_grid
         self.update_grid(tree_grid)
+
+    def __eq__(self, other):
+        return (self._num_vertices == other._num_vertices and
+                (self._tree_grid == other._tree_grid).all())
 
     def update_grid(self, tree_grid):
         assert tree_grid.shape == (3, self._num_edges)
@@ -71,6 +78,7 @@ class TreeStructure(object):
         return self._tree_edges[v1, v2]
 
 
+@profile_timed
 def build_graph(tree, inits, config):
     '''Builds a tf graph for sampling assignments via message passing.
 
@@ -245,6 +253,7 @@ class Model(object):
         logger.info('Model of %d x %d data', len(data), len(data[0]))
         data = np.asarray(data, np.int32)
         mask = np.asarray(mask, np.bool_)
+        num_rows, num_features = data.shape
         assert data.shape == mask.shape
         if config is None:
             config = deepcopy(DEFAULT_CONFIG)
@@ -255,12 +264,11 @@ class Model(object):
         self._assigned_rows = set()
         self._assignments = np.zeros(data.shape, dtype=np.int32)
         self._variables = {}
+        self._structure = TreeStructure(num_features)
         self._initialize()
 
     def _initialize(self):
         self._session = None
-        num_rows, num_features = self._data.shape
-        self._structure = TreeStructure(num_features, self._config)
         self._update_session()
 
     @profile_timed
@@ -304,8 +312,8 @@ class Model(object):
 
     @profile_timed
     def _sample_structure(self):
-        logger.debug('Model._sample_structure given %d rows',
-                     len(self._assigned_rows))
+        logger.info('Model._sample_structure given %d rows',
+                    len(self._assigned_rows))
         edge_prob = self._session.run('structure/edge_prob:0')
         complete_grid = self._structure.complete_grid
         assert edge_prob.shape[0] == complete_grid.shape[1]
@@ -337,6 +345,7 @@ class Model(object):
         '_assigned_rows',
         '_assignments',
         '_variables',
+        '_structure',
     ]
 
     def __getstate__(self):
@@ -361,9 +370,10 @@ def get_annealing_schedule(num_rows, config):
     row_to_remove = itertools.cycle(row_ids)
 
     # Use a linear annealing schedule.
-    add_rate = config['annealing']['epochs']
-    remove_rate = config['annealing']['epochs'] - 1.0
-    state = float(config['annealing']['init_rows'])
+    epochs = float(config['annealing']['epochs'])
+    add_rate = epochs
+    remove_rate = epochs - 1.0
+    state = epochs * config['annealing']['init_rows']
 
     # Perform batch operations between batches.
     num_fresh = 0

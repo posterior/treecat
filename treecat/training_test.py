@@ -2,7 +2,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import cPickle as pickle
 import os
 from copy import deepcopy
 
@@ -12,6 +11,11 @@ from treecat.testutil import assert_equal
 from treecat.testutil import tempdir
 from treecat.training import DEFAULT_CONFIG
 from treecat.training import Model
+
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle
 
 TINY_CONFIG = deepcopy(DEFAULT_CONFIG)
 TINY_CONFIG['annealing']['epochs'] = 2
@@ -60,3 +64,4 @@ def test_model_save_load():
     assert_equal(model2._seed, model._seed)
     assert_equal(model2._assignments, model._assignments)
     assert_equal(model2._variables, model._variables)
+    assert_equal(model2._structure, model._structure)
