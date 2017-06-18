@@ -288,8 +288,8 @@ def sample_tree(grid, edge_prob, edges, seed=0, steps=1):
     counter_remove_accept = PROFILE_COUNTERS['sample_tree_remove_accept']
     counter_remove_choices = PROFILE_HISTOGRAMS['sample_tree_remove_choices']
 
-    counter_calls += 1
-    counter_steps += steps * E
+    counter_calls.add()
+    counter_steps.add(steps * E)
     for step in range(steps * E):
         k12, v1, v2 = tree.grid[:, np.random.randint(K)]
         if v2 in tree.neighbors[v1]:
@@ -303,9 +303,9 @@ def sample_tree(grid, edge_prob, edges, seed=0, steps=1):
             k34 = np.random.choice(valid_edges, p=valid_probs)
             k34, v3, v4 = tree.grid[:, k34]
             tree.add_edge(v3, v4)
-            counter_add_propose += 1
-            counter_add_accept += (k12 != k34)
-            counter_add_choices[len(valid_edges)] += 1
+            counter_add_propose.add()
+            counter_add_accept.add(k12 != k34)
+            counter_add_choices.add(len(valid_edges))
         else:
             # Steal a random edge from the path between these two vertices.
             logger.debug('sample_tree step %d: try to add edge', step)
@@ -322,9 +322,9 @@ def sample_tree(grid, edge_prob, edges, seed=0, steps=1):
             k34 = np.random.choice(valid_edges, p=valid_probs)
             k34, v3, v4 = tree.grid[:, k34]
             tree.move_edge(v3, v4, v1, v2)
-            counter_remove_propose += 1
-            counter_remove_accept += (k12 != k34)
-            counter_remove_choices[len(valid_edges)] += 1
+            counter_remove_propose.add()
+            counter_remove_accept.add(k12 != k34)
+            counter_remove_choices.add(len(valid_edges))
 
     edges = [(u1, u2) for u1 in range(V) for u2 in tree.neighbors[u1]
              if u1 < u2]

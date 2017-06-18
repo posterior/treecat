@@ -21,19 +21,27 @@ def TODO(message=''):
     raise NotImplementedError('TODO {}'.format(message))
 
 
+class ProfileHistogram(object):
+    __slots__ = ['counts']
+
+    def __init__(self):
+        self.counts = defaultdict(lambda: 0)
+
+    def add(self, value, delta=1):
+        self.counts[value] += delta
+
+    def items(self):
+        return self.counts.items()
+
+
 class ProfileCounter(object):
     __slots__ = ['count']
 
     def __init__(self):
         self.count = 0
 
-    def __iadd__(self, delta):
+    def add(self, delta=1):
         self.count += delta
-        return self
-
-    def __isub__(self, delta):
-        self.count -= delta
-        return self
 
 
 class ProfileTimer(object):
@@ -64,7 +72,7 @@ def profile_timed(fun):
     return profiled_fun
 
 
-PROFILE_HISTOGRAMS = defaultdict(lambda: defaultdict(lambda: 0))
+PROFILE_HISTOGRAMS = defaultdict(ProfileHistogram)
 PROFILE_COUNTERS = defaultdict(ProfileCounter)
 PROFILE_TIMERS = defaultdict(ProfileTimer)
 
