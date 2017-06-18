@@ -8,7 +8,6 @@ import numpy as np
 import pytest
 from goftests import multinomial_goodness_of_fit
 
-from treecat.structure import MutableTree
 from treecat.structure import find_center_of_tree
 from treecat.structure import make_complete_graph
 from treecat.structure import make_propagation_schedule
@@ -127,29 +126,6 @@ def test_make_propagation_schedule(edges, root):
     [(0, 1), (1, 2), (2, 3)],
     [(0, 1), (1, 2), (2, 3), (3, 4)],
 ])
-def test_mutable_tree_find_tour(edges):
-    E = len(edges)
-    V = 1 + E
-    grid = make_complete_graph(V)
-    tree = MutableTree(grid, edges)
-    for k, v1, v2 in grid.T:
-        if (v1, v2) in edges:
-            continue
-        tour = tree.find_tour([v1, v2])
-        assert tour[0] == v1
-        assert tour[1] == v2
-        assert tour[-1] == v1
-        for pair in zip(tour[1:], tour[2:]):
-            v3, v4 = sorted(pair)
-            assert (v3, v4) in edges
-
-
-@pytest.mark.parametrize('edges', [
-    [(0, 1)],
-    [(0, 1), (1, 2)],
-    [(0, 1), (1, 2), (2, 3)],
-    [(0, 1), (1, 2), (2, 3), (3, 4)],
-])
 def test_sample_tree(edges):
     np.random.seed(0)
     E = len(edges)
@@ -160,7 +136,7 @@ def test_sample_tree(edges):
     edge_prob_dict = {(v1, v2): edge_prob[k] for k, v1, v2 in grid.T}
 
     # Generate many samples via MCMC.
-    total_count = 1000
+    total_count = 2000
     counts = defaultdict(lambda: 0)
     for seed in range(total_count):
         edges = sample_tree(grid, edge_prob, edges, seed)
@@ -173,4 +149,4 @@ def test_sample_tree(edges):
     probs = np.array(
         [np.prod([edge_prob_dict[edge] for edge in key]) for key in keys])
     probs /= probs.sum()
-    assert 1e-3 < multinomial_goodness_of_fit(probs, counts, total_count)
+    assert 1e-2 < multinomial_goodness_of_fit(probs, counts, total_count)

@@ -70,7 +70,7 @@ class TreeStructure(object):
 def make_complete_graph(num_vertices):
     '''Constructs a complete graph.
 
-    The inverse pairing function is: k = v1 + v2 * (v2 - 1) // 2
+    The pairing function is: k = v1 + v2 * (v2 - 1) // 2
 
     Args:
       num_vertices: Number of vertices.
@@ -182,7 +182,7 @@ def make_propagation_schedule(grid, root=None):
 class MutableTree(object):
     '''MCMC tree for random spanning trees.'''
 
-    __slots__ = ['VEK', 'grid', 'neighbors', 'components', 'num_components']
+    __slots__ = ['VEK', 'grid', 'e2k', 'k2e', 'neighbors', 'components']
 
     def __init__(self, grid, edges):
         '''Build a mutable spanning tree.
@@ -197,18 +197,32 @@ class MutableTree(object):
         assert grid.shape == (3, K)
         self.VEK = (V, E, K)
         self.grid = grid
+        self.k2e = {}
+        self.e2k = [None] * E
         self.neighbors = [set() for _ in range(V)]
-        for v1, v2 in edges:
+        for e, v1v2 in enumerate(edges):
+            v1, v2 = sorted(v1v2)
+            k = v1 + v2 * (v2 - 1) // 2
+            self.k2e[k] = e
+            self.e2k[e] = k
             self.neighbors[v1].add(v2)
             self.neighbors[v2].add(v1)
         self.components = np.zeros([V], dtype=np.bool_)
-        self.num_components = 1
+        assert len(self.e2k) == self.VEK[1]
+        assert len(self.k2e) == self.VEK[1]
 
-    def remove_edge(self, v1, v2):
-        '''Remove edge (v1, v2) and update neighbors and components.'''
-        assert self.num_components == 1
+    def remove_edge(self, k):
+        '''Remove edge k from tree and update data structures.'''
+        assert len(self.e2k) == self.VEK[1]
+        assert len(self.k2e) == self.VEK[1]
         neighbors = self.neighbors
         components = self.components
+        e = self.k2e.pop(k)
+        k2 = self.e2k.pop()
+        if e != len(self.e2k):
+            self.k2e[k2] = e
+            self.e2k[e] = k2
+        k, v1, v2 = self.grid[:, k]
         neighbors[v1].remove(v2)
         neighbors[v2].remove(v1)
         stack = [v1]
@@ -218,53 +232,28 @@ class MutableTree(object):
             for v2 in neighbors[v1]:
                 if not components[v2]:
                     stack.append(v2)
-        self.num_components = 2
+        assert len(self.e2k) == self.VEK[1] - 1
+        assert len(self.k2e) == self.VEK[1] - 1
 
-    def add_edge(self, v1, v2):
-        '''Remove edge (v1, v2) and update neighbors and components.'''
+    def add_edge(self, k):
+        '''Remove edge k and update data structures.'''
+        assert len(self.e2k) == self.VEK[1] - 1
+        assert len(self.k2e) == self.VEK[1] - 1
+        k, v1, v2 = self.grid[:, k]
         assert self.components[v1] != self.components[v2]
-        assert self.num_components == 2
+        self.k2e[k] = len(self.e2k)
+        self.e2k.append(k)
         self.neighbors[v1].add(v2)
         self.neighbors[v2].add(v1)
         self.components[:] = False
-        self.num_components = 1
-
-    def move_edge(self, v1, v2, v3, v4):
-        '''Move edge (v1, v2) to (v3, v4) and update neighbors.'''
-        assert self.num_components == 1
-        if (v1, v2) == (v3, v4) or (v1, v2) == (v4, v3):
-            return
-        self.neighbors[v1].remove(v2)
-        self.neighbors[v2].remove(v1)
-        self.neighbors[v3].add(v4)
-        self.neighbors[v4].add(v3)
-
-    def find_tour(self, tour):
-        '''Backtrack to find a tour [v1, v2, ..., v1] between two vertices.
-
-        Args:
-          tour: A partial tour [v1, v2, ..., vk] where the first edge (v1, v2)
-            is missing and all other edges exist. This is modified in-place.
-            This assumes that there is no edge directly between v1 and v2.
-
-        Returns:
-          A completed tour on success or None on failure.
-          On success, the input argument was mutated to be complete.
-          On failure, the input argument was reset to its state in entry.
-        '''
-        for v in self.neighbors[tour[-1]]:
-            if v == tour[-2]:
-                continue  # No U-turn.
-            tour.append(v)
-            if v == tour[0] or self.find_tour(tour) is not None:
-                return tour  # Done.
-            tour.pop()
+        assert len(self.e2k) == self.VEK[1]
+        assert len(self.k2e) == self.VEK[1]
 
 
 @profile_timed
 @np_seterr(divide='raise')
 def sample_tree(grid, edge_prob, edges, seed=0, steps=1):
-    '''Sample a random spanning tree of a weighted complete graph using MCMC.
+    '''Sample a random spanning tree of a dense weighted graph using MCMC.
 
     Args:
       grid: A 3 x K array as returned by make_complete_graph().
@@ -280,49 +269,34 @@ def sample_tree(grid, edge_prob, edges, seed=0, steps=1):
     np.random.seed(seed)
     tree = MutableTree(grid, edges)
     V, E, K = tree.VEK
-    steps = E * steps + np.random.randint(2)  # Break even/odd determinsm.
+    if V <= 2:
+        return edges
+    proposals = E * steps + np.random.randint(2)  # Break even/odd determinsm.
 
     COUNTERS.sample_tree_calls += 1
-    COUNTERS.sample_tree_steps += steps
-    for step in range(steps):
-        k12, v1, v2 = tree.grid[:, np.random.randint(K)]
-        if v2 in tree.neighbors[v1]:
-            # Remove the edge and add a random edge between two components.
-            logger.debug('sample_tree step %d: try to remove edge', step)
+    COUNTERS.sample_tree_propose += proposals
+    for step in range(proposals):
+        logger.debug('sample_tree step %d', step)
+        k1 = tree.e2k[np.random.randint(E)]
+        tree.remove_edge(k1)
 
-            tree.remove_edge(v1, v2)
-            valid_edges = np.where(tree.components[tree.grid[1, :]] !=
-                                   tree.components[tree.grid[2, :]])[0]
-            valid_probs = edge_prob[valid_edges]  # Pick an edge to add.
-            valid_probs /= valid_probs.sum()
-            k34 = np.random.choice(valid_edges, p=valid_probs)
-            k34, v3, v4 = tree.grid[:, k34]
-            tree.add_edge(v3, v4)
+        # Sample from the proposal distribution.
+        valid = (tree.components[tree.grid[1, :]] !=
+                 tree.components[tree.grid[2, :]])
+        valid_edges = np.where(valid)[0]
+        valid_probs = edge_prob[valid_edges]
+        valid_probs /= valid_probs.sum()
+        HISTOGRAMS.sample_tree_choices.update([len(valid_edges)])
+        k2 = np.random.choice(valid_edges, p=valid_probs)
 
-            COUNTERS.sample_tree_add_propose += 1
-            COUNTERS.sample_tree_add_accept += (k12 != k34)
-            HISTOGRAMS.sample_tree_add_choices.update([len(valid_edges)])
+        # Decide whether to accept or reject.
+        mh_odds = edge_prob[k2] / edge_prob[k1]
+        if k1 != k2 or mh_odds > np.random.random():
+            tree.add_edge(k2)
+            COUNTERS.sample_tree_accept += 1
         else:
-            # Steal a random edge from the path between these two vertices.
-            logger.debug('sample_tree step %d: try to add edge', step)
-
-            tour = tree.find_tour([v1, v2])
-            valid_edges = np.zeros([len(tour) - 1], dtype=np.int32)
-            for i, pair in enumerate(zip(tour, tour[1:])):
-                v3, v4 = sorted(pair)
-                k34 = v3 + v4 * (v4 - 1) // 2
-                assert all(grid[:, k34] == (k34, v3, v4))
-                valid_edges[i] = k34
-            # TODO Apply exp() here rather than in tf, to improve stability.
-            valid_probs = 1.0 / edge_prob[valid_edges]  # Pick an edge to omit.
-            valid_probs /= valid_probs.sum()
-            k34 = np.random.choice(valid_edges, p=valid_probs)
-            k34, v3, v4 = tree.grid[:, k34]
-            tree.move_edge(v3, v4, v1, v2)
-
-            COUNTERS.sample_tree_remove_propose += 1
-            COUNTERS.sample_tree_remove_accept += (k12 != k34)
-            HISTOGRAMS.sample_tree_remove_choices.update([len(valid_edges)])
+            tree.add_edge(k1)
+            COUNTERS.sample_tree_reject += 1
 
     edges = [(u1, u2) for u1 in range(V) for u2 in tree.neighbors[u1]
              if u1 < u2]

@@ -12,6 +12,7 @@ from timeit import default_timer
 
 import numpy as np
 
+DEBUG_LEVEL = int(os.environ.get('TREECAT_DEBUG_LEVEL', 0))
 LOG_LEVEL = int(os.environ.get('TREECAT_LOG_LEVEL', logging.CRITICAL))
 PROFILING = (LOG_LEVEL <= 15)
 LOG_FILENAME = os.environ.get('TREECAT_LOG_FILE')
