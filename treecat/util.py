@@ -23,6 +23,21 @@ def TODO(message=''):
     raise NotImplementedError('TODO {}'.format(message))
 
 
+def sizeof(array):
+    '''Computes byte size of numpy.ndarray or tensorflow.Tensors.
+    Args:
+      array: A numpy array or tensorflow Tensor.
+
+    Returns:
+      Datamemory footprint in bytes.
+    '''
+    dtype = array.dtype
+    size = dtype.size if hasattr(dtype, 'size') else dtype.itemsize
+    for dim in array.shape:
+        size *= int(dim)
+    return size
+
+
 class ProfilingSet(defaultdict):
     __getattr__ = defaultdict.__getitem__
     __setattr__ = defaultdict.__setitem__

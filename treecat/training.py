@@ -12,7 +12,9 @@ import tensorflow as tf
 from treecat.structure import TreeStructure
 from treecat.structure import make_propagation_schedule
 from treecat.structure import sample_tree
+from treecat.util import COUNTERS
 from treecat.util import profile_timed
+from treecat.util import sizeof
 
 DEFAULT_CONFIG = {
     'seed': 0,
@@ -91,6 +93,13 @@ def build_graph(tree, inits, config):
     edge_probs = tf.Variable(
         edge_prior + tf.cast(edge_ss.initial_value, tf.float32),
         name='edge_probs')
+
+    COUNTERS.footprint_learning_vert_ss = sizeof(vert_ss)
+    COUNTERS.footprint_learning_edge_ss = sizeof(edge_ss)
+    COUNTERS.footprint_learning_feat_ss = sizeof(feat_ss)
+    COUNTERS.footprint_learning_tree_ss = sizeof(tree_ss)
+    COUNTERS.footprint_learning_vert_probs = sizeof(vert_probs)
+    COUNTERS.footprint_learning_edge_probs = sizeof(edge_probs)
 
     # This is run to compute edge logits for learning the tree structure.
     with tf.name_scope('structure'):
