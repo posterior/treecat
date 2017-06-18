@@ -5,6 +5,7 @@ isort
 jupyter
 line_profiler
 numpy
+pylint
 pytest
 snakeviz
 tensorflow

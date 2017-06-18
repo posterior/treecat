@@ -10,6 +10,7 @@ format: FORCE
 
 lint: FORCE
 	flake8 $(PY_FILES)
+	pylint $(PY_FILES)
 
 test: lint FORCE
 	cd treecat ; py.test -v

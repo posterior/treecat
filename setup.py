@@ -18,5 +18,5 @@ setup(
         'tensorflow': ['tensorflow>=1.1.0'],
         'tensorflow with gpu': ['tensorflow-gpu>=1.1.0']
     },
-    tests_require=['pytest', 'flake8', 'goftests'],
+    tests_require=['pytest', 'pylint', 'flake8', 'goftests'],
     license='Apache License 2.0')
