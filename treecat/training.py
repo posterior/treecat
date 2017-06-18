@@ -18,7 +18,7 @@ DEFAULT_CONFIG = {
     'seed': 0,
     'num_categories': 3,  # E.g. CSE-IT data.
     'num_components': 32,
-    'sample_tree_steps': 10,
+    'sample_tree_steps': 32,
     'annealing': {
         'init_rows': 2,
         'epochs': 100.0,
@@ -272,8 +272,8 @@ class Model(object):
         complete_grid = self._structure.complete_grid
         assert edge_prob.shape[0] == complete_grid.shape[1]
         edges = self._structure.tree_grid[1:3, :].T
-        steps = self._config['sample_tree_steps']
-        edges = sample_tree(complete_grid, edge_prob, edges, steps, self._seed)
+        edges = sample_tree(complete_grid, edge_prob, edges, self._seed,
+                            steps=self._config['sample_tree_steps'])
         self._seed += 1
         self._structure.set_edges(edges)
         self._update_session()
