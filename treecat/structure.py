@@ -9,6 +9,7 @@ import numpy as np
 
 from treecat.util import PROFILE_COUNTERS
 from treecat.util import PROFILE_HISTOGRAMS
+from treecat.util import np_seterr
 from treecat.util import profile_timed
 
 logger = logging.getLogger(__name__)
@@ -261,6 +262,7 @@ class MutableTree(object):
 
 
 @profile_timed
+@np_seterr(divide='raise')
 def sample_tree(grid, edge_prob, edges, seed=0, steps=1):
     '''Sample a random spanning tree of a weighted complete graph using MCMC.
 

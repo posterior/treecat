@@ -9,6 +9,8 @@ import os
 from collections import defaultdict
 from timeit import default_timer
 
+import numpy as np
+
 LOG_LEVEL = int(os.environ.get('TREECAT_LOG_LEVEL', logging.CRITICAL))
 PROFILING = (LOG_LEVEL <= 15)
 LOG_FILENAME = os.environ.get('TREECAT_LOG_FILE')
@@ -19,6 +21,23 @@ logger = logging.getLogger(__name__)
 
 def TODO(message=''):
     raise NotImplementedError('TODO {}'.format(message))
+
+
+def np_seterr(**settings):
+    '''Decorator to run with temporary np.seterr() settings.'''
+
+    def decorator(fun):
+        @functools.wraps(fun)
+        def decorated_fun(*args, **kwargs):
+            old = np.seterr(**settings)
+            try:
+                return fun(*args, **kwargs)
+            finally:
+                np.seterr(**old)
+
+        return decorated_fun
+
+    return decorator
 
 
 class ProfileHistogram(object):

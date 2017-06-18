@@ -136,6 +136,8 @@ def build_graph(tree, inits, config):
                     tf.squeeze(
                         tf.multinomial(tf.log(message)[tf.newaxis, :], 1), 1),
                     tf.int32)
+                tf.Assert(
+                    tf.reduce_all(sample < M), [sample], name='assert_sample')
                 samples[v] = sample
     assignments = tf.squeeze(tf.parallel_stack(samples), name='assignments')
 
@@ -272,8 +274,12 @@ class Model(object):
         complete_grid = self._structure.complete_grid
         assert edge_prob.shape[0] == complete_grid.shape[1]
         edges = self._structure.tree_grid[1:3, :].T
-        edges = sample_tree(complete_grid, edge_prob, edges, self._seed,
-                            steps=self._config['sample_tree_steps'])
+        edges = sample_tree(
+            complete_grid,
+            edge_prob,
+            edges,
+            seed=self._seed,
+            steps=self._config['sample_tree_steps'])
         self._seed += 1
         self._structure.set_edges(edges)
         self._update_session()
