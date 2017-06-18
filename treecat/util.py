@@ -60,6 +60,7 @@ class ProfileTimer(object):
 
 
 def profile_timed(fun):
+    '''Decorator for time-based profiling of individual functions.'''
     if not PROFILING:
         return fun
     timer = PROFILE_TIMERS[fun]
@@ -72,6 +73,7 @@ def profile_timed(fun):
     return profiled_fun
 
 
+# Use these to access global profiling state.
 PROFILE_HISTOGRAMS = defaultdict(ProfileHistogram)
 PROFILE_COUNTERS = defaultdict(ProfileCounter)
 PROFILE_TIMERS = defaultdict(ProfileTimer)

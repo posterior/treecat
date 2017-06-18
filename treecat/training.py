@@ -315,7 +315,11 @@ class Model(object):
 
 
 def get_annealing_schedule(num_rows, config):
-    '''Iterator for subsample annealing yielding (action, arg) pairs.'''
+    '''Iterator for subsample annealing yielding (action, arg) pairs.
+
+    Actions are one of: 'add_row', 'remove_row', or 'batch'.
+    The add and remove actions each provide a row_id arg.
+    '''
     # Randomly shuffle rows.
     row_ids = list(range(num_rows))
     np.random.seed(config['seed'])
