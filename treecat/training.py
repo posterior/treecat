@@ -13,7 +13,7 @@ from treecat.structure import TreeStructure
 from treecat.structure import make_propagation_schedule
 from treecat.structure import sample_tree
 from treecat.util import COUNTERS
-from treecat.util import profile_timed
+from treecat.util import profile
 from treecat.util import sizeof
 
 DEFAULT_CONFIG = {
@@ -29,11 +29,8 @@ DEFAULT_CONFIG = {
 
 logger = logging.getLogger(__name__)
 
-# line_profiler defines profile in the __builtins__ module.
-profile = getattr(__builtins__, 'profile', lambda fun: fun)
 
-
-@profile_timed
+@profile
 def build_graph(tree, inits, config):
     '''Builds a tf graph for sampling assignments via message passing.
 
@@ -234,7 +231,7 @@ class Model(object):
         self._session = None
         self._update_session()
 
-    @profile_timed
+    @profile
     def _update_session(self):
         if self._session is not None:
             self._variables = self._session.run(self._actions['save'])
@@ -246,7 +243,7 @@ class Model(object):
             self._session = tf.Session()
         self._session.run(self._actions['load'])
 
-    @profile_timed
+    @profile
     def _add_row(self, row_id):
         logger.debug('Model.add_row %d', row_id)
         assert row_id not in self._assigned_rows, row_id
@@ -260,7 +257,7 @@ class Model(object):
         assert assignments.shape == (self._data.shape[1], )
         self._assignments[row_id, :] = assignments
 
-    @profile_timed
+    @profile
     def _remove_row(self, row_id):
         logger.debug('Model.remove_row %d', row_id)
         assert row_id in self._assigned_rows, row_id
@@ -273,7 +270,7 @@ class Model(object):
                 'row_mask:0': self._mask[row_id],
             })
 
-    @profile_timed
+    @profile
     def _sample_structure(self):
         logger.info('Model._sample_structure given %d rows',
                     len(self._assigned_rows))

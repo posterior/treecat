@@ -9,7 +9,7 @@ import numpy as np
 
 from treecat.util import COUNTERS
 from treecat.util import HISTOGRAMS
-from treecat.util import profile_timed
+from treecat.util import profile
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +139,7 @@ def find_center_of_tree(grid):
     return v
 
 
-@profile_timed
+@profile
 def make_propagation_schedule(grid, root=None):
     '''Makes an efficient schedule for message passing on a tree.
 
@@ -249,7 +249,7 @@ class MutableTree(object):
         assert len(self.k2e) == self.VEK[1]
 
 
-@profile_timed
+@profile
 def sample_tree(grid, edge_logits, edges, seed=0, steps=1):
     '''Sample a random spanning tree of a dense weighted graph using MCMC.
 

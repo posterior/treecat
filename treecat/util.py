@@ -72,6 +72,9 @@ def profile_timed(fun):
     return profiled_fun
 
 
+# Allow line_profiler to override profile_timed by adding it to __builtins__.
+profile = __builtins__.get('profile', profile_timed)
+
 # Use these to access global profiling state.
 TIMERS = defaultdict(ProfileTimer)
 COUNTERS = ProfilingSet(lambda: 0)
