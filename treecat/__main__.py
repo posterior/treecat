@@ -59,7 +59,7 @@ def profile_fit(rows=100, cols=10, cats=4, epochs=5, tool='timers'):
             check_call(['snakeviz', profile_path])
         elif tool == 'timers':
             env = os.environ.copy()
-            env['TREECAT_PROFILE_TIME'] = '1'
+            env.setdefault('TREECAT_LOG_LEVEL', '15')
             Popen([PYTHON, '-O'] + cmd, env=env).wait()
 
         elif tool == 'line_profiler':

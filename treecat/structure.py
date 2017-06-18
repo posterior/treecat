@@ -7,6 +7,8 @@ from collections import deque
 
 import numpy as np
 
+from treecat.util import PROFILE_COUNTERS
+from treecat.util import PROFILE_HISTOGRAMS
 from treecat.util import profile_timed
 
 logger = logging.getLogger(__name__)
@@ -259,7 +261,7 @@ class MutableTree(object):
 
 
 @profile_timed
-def sample_tree(grid, edge_prob, edges, seed=0, steps=None):
+def sample_tree(grid, edge_prob, edges, seed=0, steps=1):
     '''Sample a random spanning tree of a weighted complete graph using MCMC.
 
     Args:
@@ -276,10 +278,19 @@ def sample_tree(grid, edge_prob, edges, seed=0, steps=None):
     np.random.seed(seed)
     tree = MutableTree(grid, edges)
     V, E, K = tree.VEK
-    if steps is None:
-        steps = E
 
-    for step in range(steps):
+    counter_calls = PROFILE_COUNTERS['sample_tree_calls']
+    counter_steps = PROFILE_COUNTERS['sample_tree_steps']
+    counter_add_propose = PROFILE_COUNTERS['sample_tree_add_propose']
+    counter_add_accept = PROFILE_COUNTERS['sample_tree_add_accept']
+    counter_add_choices = PROFILE_HISTOGRAMS['sample_tree_add_choices']
+    counter_remove_propose = PROFILE_COUNTERS['sample_tree_remove_propose']
+    counter_remove_accept = PROFILE_COUNTERS['sample_tree_remove_accept']
+    counter_remove_choices = PROFILE_HISTOGRAMS['sample_tree_remove_choices']
+
+    counter_calls += 1
+    counter_steps += steps * E
+    for step in range(steps * E):
         k12, v1, v2 = tree.grid[:, np.random.randint(K)]
         if v2 in tree.neighbors[v1]:
             # Remove the edge and add a random edge between two components.
@@ -292,6 +303,9 @@ def sample_tree(grid, edge_prob, edges, seed=0, steps=None):
             k34 = np.random.choice(valid_edges, p=valid_probs)
             k34, v3, v4 = tree.grid[:, k34]
             tree.add_edge(v3, v4)
+            counter_add_propose += 1
+            counter_add_accept += (k12 != k34)
+            counter_add_choices[len(valid_edges)] += 1
         else:
             # Steal a random edge from the path between these two vertices.
             logger.debug('sample_tree step %d: try to add edge', step)
@@ -308,6 +322,9 @@ def sample_tree(grid, edge_prob, edges, seed=0, steps=None):
             k34 = np.random.choice(valid_edges, p=valid_probs)
             k34, v3, v4 = tree.grid[:, k34]
             tree.move_edge(v3, v4, v1, v2)
+            counter_remove_propose += 1
+            counter_remove_accept += (k12 != k34)
+            counter_remove_choices[len(valid_edges)] += 1
 
     edges = [(u1, u2) for u1 in range(V) for u2 in tree.neighbors[u1]
              if u1 < u2]

@@ -6,20 +6,34 @@ import atexit
 import functools
 import logging
 import os
-import sys
 from collections import defaultdict
 from timeit import default_timer
 
-PROFILE_TIME = int(os.environ.get('TREECAT_PROFILE_TIME', 0))
-
 LOG_LEVEL = int(os.environ.get('TREECAT_LOG_LEVEL', logging.CRITICAL))
+PROFILING = (LOG_LEVEL <= 15)
 LOG_FILENAME = os.environ.get('TREECAT_LOG_FILE')
 LOG_FORMAT = '%(levelname).1s %(name)s %(message)s'
 logging.basicConfig(format=LOG_FORMAT, level=LOG_LEVEL, filename=LOG_FILENAME)
+logger = logging.getLogger(__name__)
 
 
 def TODO(message=''):
     raise NotImplementedError('TODO {}'.format(message))
+
+
+class ProfileCounter(object):
+    __slots__ = ['count']
+
+    def __init__(self):
+        self.count = 0
+
+    def __iadd__(self, delta):
+        self.count += delta
+        return self
+
+    def __isub__(self, delta):
+        self.count -= delta
+        return self
 
 
 class ProfileTimer(object):
@@ -37,11 +51,8 @@ class ProfileTimer(object):
         self.count += 1
 
 
-PROFILE_TIMERS = defaultdict(ProfileTimer)
-
-
 def profile_timed(fun):
-    if not PROFILE_TIME:
+    if not PROFILING:
         return fun
     timer = PROFILE_TIMERS[fun]
 
@@ -53,17 +64,36 @@ def profile_timed(fun):
     return profiled_fun
 
 
-def print_profile_timers():
+PROFILE_HISTOGRAMS = defaultdict(lambda: defaultdict(lambda: 0))
+PROFILE_COUNTERS = defaultdict(ProfileCounter)
+PROFILE_TIMERS = defaultdict(ProfileTimer)
+
+
+def log_profile_counters():
+    histograms = sorted(PROFILE_HISTOGRAMS.items())
+    logger.info('-' * 64)
+    logger.info('Profile counters:')
+    for name, histogram in histograms:
+        logger.info('{: >10s} {}'.format('Count', name))
+        for value, count in sorted(histogram.items()):
+            logger.info('{: >10d} {}'.format(count, value))
+    counts = sorted(PROFILE_COUNTERS.items())
+    logger.info('{: >10s} {}'.format('Count', 'Counter'))
+    for name, counter in counts:
+        logger.info('{: >10d} {}'.format(counter.count, name))
+
+
+def log_profile_timers():
     times = [(t.elapsed, t.count, f) for (f, t) in PROFILE_TIMERS.items()]
-    times.sort(reverse=True)
-    sys.stderr.write(
-        '{: >10} {: >10} {}\n'.format('Seconds', 'Calls', 'Function'))
-    sys.stderr.write('-' * 32 + '\n')
+    times.sort(reverse=True, key=lambda x: x[0])
+    logger.info('-' * 64)
+    logger.info('Profile timers:')
+    logger.info('{: >10} {: >10} {}'.format('Seconds', 'Calls', 'Function'))
     for time, count, fun in times:
-        if count > 0:
-            sys.stderr.write('{: >10.3f} {: >10} {}.{}\n'.format(
-                time, count, fun.__module__, fun.__name__))
+        logger.info('{: >10.3f} {: >10} {}.{}'.format(
+            time, count, fun.__module__, fun.__name__))
 
 
-if PROFILE_TIME:
-    atexit.register(print_profile_timers)
+if PROFILING:
+    atexit.register(log_profile_timers)
+    atexit.register(log_profile_counters)
