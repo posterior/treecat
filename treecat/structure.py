@@ -255,6 +255,16 @@ class MutableTree(object):
 def sample_tree(grid, edge_prob, edges, seed=0, steps=1):
     '''Sample a random spanning tree of a dense weighted graph using MCMC.
 
+    This uses Gibbs sampling on edges. Consider E undirected edges that can
+    move around a graph of V=1+E vertices. The edges are constrained so that no
+    two edges can span the same pair of vertices and so that the edges must
+    form a spanning tree. To Gibbs sample, chose one of the E edges at random
+    and move it anywhere else in the graph. After we remove the edge, notice
+    that the graph is split into two connected components. The constraints
+    imply that the edge must be replaced so as to connect the two components.
+    Hence to Gibbs sample, we collect all such bridging (vertex,vertex) pairs
+    and sample from them in proportion to edge_prob.
+
     Args:
       grid: A 3 x K array as returned by make_complete_graph().
       edge_prob: A length-K array of nonnormalized edge probabilities.
@@ -266,31 +276,28 @@ def sample_tree(grid, edge_prob, edges, seed=0, steps=1):
       A list of (vertex, vertex) pairs.
     '''
     logger.debug('sample_tree sampling a random spanning tree')
+    COUNTERS.sample_tree_calls += 1
     np.random.seed(seed)
+    if len(edges) <= 1:
+        return edges
     tree = MutableTree(grid, edges)
     V, E, K = tree.VEK
-    if V <= 2:
-        return edges
-    proposals = E * steps + np.random.randint(2)  # Break even/odd determinsm.
 
-    COUNTERS.sample_tree_calls += 1
-    COUNTERS.sample_tree_propose += proposals
-    for step in range(proposals):
+    for step in range(steps * E):
         logger.debug('sample_tree step %d', step)
         k1 = tree.e2k[np.random.randint(E)]
         tree.remove_edge(k1)
-        valid = (tree.components[tree.grid[1, :]] !=
-                 tree.components[tree.grid[2, :]])
-        valid_edges = np.where(valid)[0]
-        HISTOGRAMS.sample_tree_choices.update([len(valid_edges)])
+        valid_edges = np.where(
+            tree.components[grid[1, :]] != tree.components[grid[2, :]])[0]
         valid_probs = edge_prob[valid_edges]
         valid_probs /= valid_probs.sum()
         k2 = np.random.choice(valid_edges, p=valid_probs)
         tree.add_edge(k2)
-        COUNTERS.sample_tree_accept += (k1 != k2)
 
-    edges = [(u1, u2) for u1 in range(V) for u2 in tree.neighbors[u1]
-             if u1 < u2]
+        COUNTERS.sample_tree_propose += 1
+        COUNTERS.sample_tree_accept += (k1 != k2)
+        HISTOGRAMS.sample_tree_choices.update([len(valid_edges)])
+
+    edges = sorted((grid[1, k], grid[2, k]) for k in tree.e2k)
     assert len(edges) == E
-    edges.sort()
     return edges
