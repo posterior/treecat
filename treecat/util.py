@@ -44,6 +44,7 @@ def np_seterr(**settings):
 
 class ProfilingSet(defaultdict):
     __getattr__ = defaultdict.__getitem__
+    __setattr__ = defaultdict.__setitem__
 
 
 class ProfileTimer(object):
