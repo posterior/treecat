@@ -127,15 +127,16 @@ def test_sample_tree(num_edges):
     V = 1 + E
     grid = make_complete_graph(V)
     K = grid.shape[1]
-    edge_prob = np.exp(-np.random.random([K]))
-    edge_prob_dict = {(v1, v2): edge_prob[k] for k, v1, v2 in grid.T}
+    edge_logits = np.random.random([K])
+    edge_probs = np.exp(edge_logits)
+    edge_probs_dict = {(v1, v2): edge_probs[k] for k, v1, v2 in grid.T}
 
     # Generate many samples via MCMC.
     total_count = 2000
     counts = defaultdict(lambda: 0)
     edges = [(v, v + 1) for v in range(V - 1)]
     for seed in range(total_count):
-        edges = sample_tree(grid, edge_prob, edges, seed)
+        edges = sample_tree(grid, edge_logits, edges, seed)
         counts[tuple(edges)] += 1
     assert len(counts) == NUM_SPANNING_TREES[V]
 
@@ -143,6 +144,6 @@ def test_sample_tree(num_edges):
     keys = counts.keys()
     counts = np.array([counts[key] for key in keys])
     probs = np.array(
-        [np.prod([edge_prob_dict[edge] for edge in key]) for key in keys])
+        [np.prod([edge_probs_dict[edge] for edge in key]) for key in keys])
     probs /= probs.sum()
     assert 1e-2 < multinomial_goodness_of_fit(probs, counts, total_count)

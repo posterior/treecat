@@ -250,7 +250,7 @@ class MutableTree(object):
 
 
 @profile_timed
-def sample_tree(grid, edge_prob, edges, seed=0, steps=1):
+def sample_tree(grid, edge_logits, edges, seed=0, steps=1):
     '''Sample a random spanning tree of a dense weighted graph using MCMC.
 
     This uses Gibbs sampling on edges. Consider E undirected edges that can
@@ -261,11 +261,11 @@ def sample_tree(grid, edge_prob, edges, seed=0, steps=1):
     that the graph is split into two connected components. The constraints
     imply that the edge must be replaced so as to connect the two components.
     Hence to Gibbs sample, we collect all such bridging (vertex,vertex) pairs
-    and sample from them in proportion to edge_prob.
+    and sample from them in proportion to exp(edge_logits).
 
     Args:
       grid: A 3 x K array as returned by make_complete_graph().
-      edge_prob: A length-K array of nonnormalized edge probabilities.
+      edge_logits: A length-K array of nonnormalized log probabilities.
       edges: A list of E initial edges in the form of (vertex,vertex) pairs.
       seed: Seed for random number generation.
       steps: Number of MCMC steps to take.
@@ -287,7 +287,9 @@ def sample_tree(grid, edge_prob, edges, seed=0, steps=1):
         tree.remove_edge(k1)
         valid_edges = np.where(
             tree.components[grid[1, :]] != tree.components[grid[2, :]])[0]
-        valid_probs = edge_prob[valid_edges]
+        valid_probs = edge_logits[valid_edges]
+        valid_probs -= valid_probs.max()
+        np.exp(valid_probs, out=valid_probs)
         total_prob = valid_probs.sum()
         if total_prob > 0:
             valid_probs /= total_prob
@@ -299,7 +301,8 @@ def sample_tree(grid, edge_prob, edges, seed=0, steps=1):
 
         COUNTERS.sample_tree_propose += 1
         COUNTERS.sample_tree_accept += (k1 != k2)
-        HISTOGRAMS.sample_tree_choices.update([len(valid_edges)])
+        HISTOGRAMS.sample_tree_log2_choices.update(
+            [int(np.log2(len(valid_edges)))])
 
     edges = sorted((grid[1, k], grid[2, k]) for k in tree.e2k)
     assert len(edges) == E

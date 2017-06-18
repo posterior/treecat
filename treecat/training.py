@@ -50,7 +50,7 @@ def build_graph(tree, inits, config):
       assignments: Latent mixture class assignments for a single row.
       assign/add_row: Target op for adding a row of data.
       assign/remove_row: Target op for removing a row of data.
-      structure/edge_prob: Non-normalized probabilities of edges.
+      structure/edge_logits: Non-normalized log probabilities of edges.
 
     Returns:
       A dictionary of actions whose values can be input to Session.run():
@@ -92,14 +92,12 @@ def build_graph(tree, inits, config):
         edge_prior + tf.cast(edge_ss.initial_value, tf.float32),
         name='edge_probs')
 
-    # This is run to compute edge logprobs before learning the tree structure.
+    # This is run to compute edge logits for learning the tree structure.
     with tf.name_scope('structure'):
         one = tf.constant(1.0, dtype=tf.float32, name='one')
         weights = tf.cast(tree_ss, tf.float32)
         logits = tf.lgamma(weights + edge_prior) - tf.lgamma(weights + one)
-        edge_logprob = tf.reduce_sum(logits, [1, 2])
-        edge_logprob -= tf.reduce_max(edge_logprob)
-        tf.exp(edge_logprob, name='edge_prob')
+        tf.reduce_sum(logits, [1, 2], name='edge_logits')
 
     # This is run only during add_row().
     row_data = tf.placeholder(dtype=tf.int32, shape=[V], name='row_data')
@@ -270,13 +268,13 @@ class Model(object):
     def _sample_structure(self):
         logger.info('Model._sample_structure given %d rows',
                     len(self._assigned_rows))
-        edge_prob = self._session.run('structure/edge_prob:0')
+        edge_logits = self._session.run('structure/edge_logits:0')
         complete_grid = self._structure.complete_grid
-        assert edge_prob.shape[0] == complete_grid.shape[1]
+        assert edge_logits.shape[0] == complete_grid.shape[1]
         edges = self._structure.tree_grid[1:3, :].T
         edges = sample_tree(
             complete_grid,
-            edge_prob,
+            edge_logits,
             edges,
             seed=self._seed,
             steps=self._config['sample_tree_steps'])
