@@ -19,7 +19,7 @@ from treecat.util import sizeof
 DEFAULT_CONFIG = {
     'seed': 0,
     'num_categories': 3,  # E.g. CSE-IT data.
-    'num_components': 32,
+    'num_clusters': 32,
     'sample_tree_steps': 32,
     'annealing': {
         'init_rows': 2,
@@ -34,8 +34,8 @@ logger = logging.getLogger(__name__)
 def build_graph(tree, inits, config):
     '''Builds a tf graph for sampling assignments via message passing.
 
-    Component distributions are Dirichlet-categorical.
-    TODO Switch to Dirichlet-binomial.
+    Feature distributions are Dirichlet-categorical.
+    TODO Switch to Beta-binomial or Beta-(Poisson Binomial).
 
     Args:
       tree: A TreeStructure object.
@@ -63,11 +63,12 @@ def build_graph(tree, inits, config):
     V = tree.num_vertices
     E = V - 1  # Number of edges in the tree.
     K = V * (V - 1) // 2  # Number of edges in the complete graph.
-    M = config['num_components']  # Components of the mixture model.
-    C = config['num_categories']
+    M = config['num_clusters']  # Clusters in each mixture model.
+    C = config['num_categories']  # Categories possible for each feature.
     vertices = tf.range(V, dtype=tf.int32)
     tree_grid = tf.constant(tree.tree_grid)
     complete_grid = tf.constant(tree.complete_grid)
+    schedule = make_propagation_schedule(tree.tree_grid)
 
     # Hard-code these hyperparameters.
     feat_prior = tf.constant(0.5, dtype=tf.float32)  # Jeffreys prior.
@@ -91,12 +92,12 @@ def build_graph(tree, inits, config):
         edge_prior + tf.cast(edge_ss.initial_value, tf.float32),
         name='edge_probs')
 
-    COUNTERS.footprint_learning_vert_ss = sizeof(vert_ss)
-    COUNTERS.footprint_learning_edge_ss = sizeof(edge_ss)
-    COUNTERS.footprint_learning_feat_ss = sizeof(feat_ss)
-    COUNTERS.footprint_learning_tree_ss = sizeof(tree_ss)
-    COUNTERS.footprint_learning_vert_probs = sizeof(vert_probs)
-    COUNTERS.footprint_learning_edge_probs = sizeof(edge_probs)
+    COUNTERS.footprint_training_vert_ss = sizeof(vert_ss)
+    COUNTERS.footprint_training_edge_ss = sizeof(edge_ss)
+    COUNTERS.footprint_training_feat_ss = sizeof(feat_ss)
+    COUNTERS.footprint_training_tree_ss = sizeof(tree_ss)
+    COUNTERS.footprint_training_vert_probs = sizeof(vert_probs)
+    COUNTERS.footprint_training_edge_probs = sizeof(edge_probs)
 
     # This is run to compute edge logits for learning the tree structure.
     with tf.name_scope('structure'):
@@ -109,7 +110,6 @@ def build_graph(tree, inits, config):
     row_data = tf.placeholder(dtype=tf.int32, shape=[V], name='row_data')
     row_mask = tf.placeholder(dtype=tf.bool, shape=[V], name='row_mask')
     with tf.name_scope('propagate'):
-        schedule = make_propagation_schedule(tree.tree_grid)
         messages = [None] * V
         samples = [None] * V
         with tf.name_scope('feature'):
@@ -160,6 +160,7 @@ def build_graph(tree, inits, config):
             tf.gather(assignments, complete_grid[1, :]),
             tf.gather(assignments, complete_grid[2, :]),
         ], 1)
+        # Deltas are computed from row_mask and adapted to shape and dtype.
         delta_v_int = tf.cast(row_mask, tf.int32)
         delta_v_float = tf.cast(row_mask, tf.float32)
         delta_e_int = tf.cast(
@@ -199,7 +200,7 @@ def build_graph(tree, inits, config):
     }
 
 
-class Model(object):
+class TreeCatModel(object):
     '''Class for training TreeCat models.'''
 
     def __init__(self, data, mask, config=None):
@@ -210,7 +211,8 @@ class Model(object):
             mask: A 2D array of presence/absence, where present = True.
             config: A global config dict.
         '''
-        logger.info('Model of %d x %d data', len(data), len(data[0]))
+        logger.info('TreeCatModel of %d x %d data', data.shape[0],
+                    data.shape[1])
         data = np.asarray(data, np.int32)
         mask = np.asarray(mask, np.bool_)
         num_rows, num_features = data.shape
@@ -245,7 +247,7 @@ class Model(object):
 
     @profile
     def _add_row(self, row_id):
-        logger.debug('Model.add_row %d', row_id)
+        logger.debug('TreeCatModel.add_row %d', row_id)
         assert row_id not in self._assigned_rows, row_id
         self._assigned_rows.add(row_id)
         assignments, _ = self._session.run(
@@ -259,7 +261,7 @@ class Model(object):
 
     @profile
     def _remove_row(self, row_id):
-        logger.debug('Model.remove_row %d', row_id)
+        logger.debug('TreeCatModel.remove_row %d', row_id)
         assert row_id in self._assigned_rows, row_id
         self._assigned_rows.remove(row_id)
         self._session.run(
@@ -272,7 +274,7 @@ class Model(object):
 
     @profile
     def _sample_structure(self):
-        logger.info('Model._sample_structure given %d rows',
+        logger.info('TreeCatModel._sample_structure given %d rows',
                     len(self._assigned_rows))
         edge_logits = self._session.run('structure/edge_logits:0')
         complete_grid = self._structure.complete_grid
@@ -290,7 +292,7 @@ class Model(object):
 
     def fit(self):
         '''Sample the entire model using subsample-annealed MCMC.'''
-        logger.info('Model.fit')
+        logger.info('TreeCatModel.fit')
         assert not self._assigned_rows, 'assignments have already been sampled'
         num_rows = self._data.shape[0]
         for action, row_id in get_annealing_schedule(num_rows, self._config):
@@ -302,8 +304,8 @@ class Model(object):
                 self._sample_structure()
 
     _pickle_attrs = [
-        '_data',
-        '_mask',
+        '_data',  # TODO Do not persist data with model.
+        '_mask',  # TODO Do not persist mask with model.
         '_config',
         '_seed',
         '_assigned_rows',
@@ -313,13 +315,13 @@ class Model(object):
     ]
 
     def __getstate__(self):
-        logger.info('Model.__getstate__')
+        logger.info('TreeCatModel.__getstate__')
         if self._session is not None:
             self._variables = self._session.run(self._actions['save'])
         return {key: getattr(self, key) for key in self._pickle_attrs}
 
     def __setstate__(self, state):
-        logger.info('Model.__setstate__')
+        logger.info('TreeCatModel.__setstate__')
         self.__dict__.update(state)
         self._initialize()
 
