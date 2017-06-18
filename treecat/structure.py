@@ -279,24 +279,15 @@ def sample_tree(grid, edge_prob, edges, seed=0, steps=1):
         logger.debug('sample_tree step %d', step)
         k1 = tree.e2k[np.random.randint(E)]
         tree.remove_edge(k1)
-
-        # Sample from the proposal distribution.
         valid = (tree.components[tree.grid[1, :]] !=
                  tree.components[tree.grid[2, :]])
         valid_edges = np.where(valid)[0]
+        HISTOGRAMS.sample_tree_choices.update([len(valid_edges)])
         valid_probs = edge_prob[valid_edges]
         valid_probs /= valid_probs.sum()
-        HISTOGRAMS.sample_tree_choices.update([len(valid_edges)])
         k2 = np.random.choice(valid_edges, p=valid_probs)
-
-        # Decide whether to accept or reject.
-        mh_odds = edge_prob[k2] / edge_prob[k1]
-        if k1 != k2 or mh_odds > np.random.random():
-            tree.add_edge(k2)
-            COUNTERS.sample_tree_accept += 1
-        else:
-            tree.add_edge(k1)
-            COUNTERS.sample_tree_reject += 1
+        tree.add_edge(k2)
+        COUNTERS.sample_tree_accept += (k1 != k2)
 
     edges = [(u1, u2) for u1 in range(V) for u2 in tree.neighbors[u1]
              if u1 < u2]

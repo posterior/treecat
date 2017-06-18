@@ -136,7 +136,7 @@ def test_sample_tree(edges):
     edge_prob_dict = {(v1, v2): edge_prob[k] for k, v1, v2 in grid.T}
 
     # Generate many samples via MCMC.
-    total_count = 2000
+    total_count = 1000
     counts = defaultdict(lambda: 0)
     for seed in range(total_count):
         edges = sample_tree(grid, edge_prob, edges, seed)
