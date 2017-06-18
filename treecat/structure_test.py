@@ -120,15 +120,10 @@ def test_make_propagation_schedule(edges, root):
         assert actual_neighbors == neighbors[v]
 
 
-@pytest.mark.parametrize('edges', [
-    [(0, 1)],
-    [(0, 1), (1, 2)],
-    [(0, 1), (1, 2), (2, 3)],
-    [(0, 1), (1, 2), (2, 3), (3, 4)],
-])
-def test_sample_tree(edges):
+@pytest.mark.parametrize('num_edges', [1, 2, 3, 4])
+def test_sample_tree(num_edges):
     np.random.seed(0)
-    E = len(edges)
+    E = num_edges
     V = 1 + E
     grid = make_complete_graph(V)
     K = grid.shape[1]
@@ -138,6 +133,7 @@ def test_sample_tree(edges):
     # Generate many samples via MCMC.
     total_count = 1000
     counts = defaultdict(lambda: 0)
+    edges = [(v, v + 1) for v in range(V - 1)]
     for seed in range(total_count):
         edges = sample_tree(grid, edge_prob, edges, seed)
         counts[tuple(edges)] += 1
