@@ -9,7 +9,6 @@ import numpy as np
 
 from treecat.util import COUNTERS
 from treecat.util import HISTOGRAMS
-from treecat.util import np_seterr
 from treecat.util import profile_timed
 
 logger = logging.getLogger(__name__)
@@ -251,7 +250,6 @@ class MutableTree(object):
 
 
 @profile_timed
-@np_seterr(divide='raise')
 def sample_tree(grid, edge_prob, edges, seed=0, steps=1):
     '''Sample a random spanning tree of a dense weighted graph using MCMC.
 
@@ -290,8 +288,13 @@ def sample_tree(grid, edge_prob, edges, seed=0, steps=1):
         valid_edges = np.where(
             tree.components[grid[1, :]] != tree.components[grid[2, :]])[0]
         valid_probs = edge_prob[valid_edges]
-        valid_probs /= valid_probs.sum()
-        k2 = np.random.choice(valid_edges, p=valid_probs)
+        total_prob = valid_probs.sum()
+        if total_prob > 0:
+            valid_probs /= total_prob
+            k2 = np.random.choice(valid_edges, p=valid_probs)
+        else:
+            k2 = k1
+            COUNTERS.sample_tree_infeasible += 1
         tree.add_edge(k2)
 
         COUNTERS.sample_tree_propose += 1

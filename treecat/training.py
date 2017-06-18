@@ -131,15 +131,15 @@ def build_graph(tree, inits, config):
                     prior_v = vert_probs[v, :]
                     mat = tf.transpose(edge_probs[e, :, :], [1, 0])
                     message *= tf.gather(mat, samples[parent])[0, :] / prior_v
-                    assert len(message.shape) == 1
+                    assert message.shape == [M]
                 sample = tf.cast(
-                    tf.squeeze(
-                        tf.multinomial(tf.log(message)[tf.newaxis, :], 1), 1),
+                    tf.multinomial(tf.log(message)[tf.newaxis, :], 1)[0],
                     tf.int32)
-                tf.Assert(
-                    tf.reduce_all(sample < M), [sample], name='assert_sample')
+                # sample = tf.Print(sample, [message, sample])
                 samples[v] = sample
     assignments = tf.squeeze(tf.parallel_stack(samples), name='assignments')
+    with tf.control_dependencies([tf.assert_less(assignments, M)]):
+        assignments = tf.identity(assignments)
 
     # This is run during add_row() and remove_row().
     with tf.name_scope('update'):
