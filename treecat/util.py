@@ -6,6 +6,7 @@ import atexit
 import functools
 import logging
 import os
+from collections import Counter
 from collections import defaultdict
 from timeit import default_timer
 
@@ -40,27 +41,8 @@ def np_seterr(**settings):
     return decorator
 
 
-class ProfileHistogram(object):
-    __slots__ = ['counts']
-
-    def __init__(self):
-        self.counts = defaultdict(lambda: 0)
-
-    def add(self, value, delta=1):
-        self.counts[value] += delta
-
-    def items(self):
-        return self.counts.items()
-
-
-class ProfileCounter(object):
-    __slots__ = ['count']
-
-    def __init__(self):
-        self.count = 0
-
-    def add(self, delta=1):
-        self.count += delta
+class ProfilingSet(defaultdict):
+    __getattr__ = defaultdict.__getitem__
 
 
 class ProfileTimer(object):
@@ -82,7 +64,7 @@ def profile_timed(fun):
     '''Decorator for time-based profiling of individual functions.'''
     if not PROFILING:
         return fun
-    timer = PROFILE_TIMERS[fun]
+    timer = TIMERS[fun]
 
     @functools.wraps(fun)
     def profiled_fun(*args, **kwargs):
@@ -93,30 +75,28 @@ def profile_timed(fun):
 
 
 # Use these to access global profiling state.
-PROFILE_HISTOGRAMS = defaultdict(ProfileHistogram)
-PROFILE_COUNTERS = defaultdict(ProfileCounter)
-PROFILE_TIMERS = defaultdict(ProfileTimer)
+TIMERS = defaultdict(ProfileTimer)
+COUNTERS = ProfilingSet(lambda: 0)
+HISTOGRAMS = ProfilingSet(Counter)
 
 
 def log_profile_counters():
-    histograms = sorted(PROFILE_HISTOGRAMS.items())
     logger.info('-' * 64)
-    logger.info('Profile counters:')
-    for name, histogram in histograms:
+    logger.info('Counters:')
+    for name, histogram in sorted(HISTOGRAMS.items()):
         logger.info('{: >10s} {}'.format('Count', name))
         for value, count in sorted(histogram.items()):
             logger.info('{: >10d} {}'.format(count, value))
-    counts = sorted(PROFILE_COUNTERS.items())
     logger.info('{: >10s} {}'.format('Count', 'Counter'))
-    for name, counter in counts:
-        logger.info('{: >10d} {}'.format(counter.count, name))
+    for name, count in sorted(COUNTERS.items()):
+        logger.info('{: >10d} {}'.format(count, name))
 
 
 def log_profile_timers():
-    times = [(t.elapsed, t.count, f) for (f, t) in PROFILE_TIMERS.items()]
+    times = [(t.elapsed, t.count, f) for (f, t) in TIMERS.items()]
     times.sort(reverse=True, key=lambda x: x[0])
     logger.info('-' * 64)
-    logger.info('Profile timers:')
+    logger.info('Timers:')
     logger.info('{: >10} {: >10} {}'.format('Seconds', 'Calls', 'Function'))
     for time, count, fun in times:
         logger.info('{: >10.3f} {: >10} {}.{}'.format(
