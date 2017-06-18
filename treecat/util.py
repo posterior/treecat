@@ -29,7 +29,7 @@ def sizeof(array):
       array: A numpy array or tensorflow Tensor.
 
     Returns:
-      Datamemory footprint in bytes.
+      Memory footprint in bytes.
     '''
     dtype = array.dtype
     size = dtype.size if hasattr(dtype, 'size') else dtype.itemsize

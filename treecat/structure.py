@@ -302,7 +302,7 @@ def sample_tree(grid, edge_logits, edges, seed=0, steps=1):
         COUNTERS.sample_tree_propose += 1
         COUNTERS.sample_tree_accept += (k1 != k2)
         HISTOGRAMS.sample_tree_log2_choices.update(
-            [int(np.log2(len(valid_edges)))])
+            [len(valid_edges).bit_length()])
 
     edges = sorted((grid[1, k], grid[2, k]) for k in tree.e2k)
     assert len(edges) == E
