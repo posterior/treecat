@@ -108,9 +108,10 @@ def build_graph(tree, inits, config):
         with tf.name_scope('inbound'):
             for v, parent, children in reversed(schedule):
                 prior_v = vert_probs[v, :]
-                likelihood = likelihoods[v, :]
-                message = tf.cond(row_mask[v], lambda: prior_v,
-                                  lambda: likelihood * prior_v)
+                message = tf.cond(
+                    row_mask[v],
+                    lambda p=prior_v: p,
+                    lambda v=v, p=prior_v: likelihoods[v, :] * p)
                 assert message.shape == [M]
                 for child in children:
                     e = tree.find_edge(v, child)
