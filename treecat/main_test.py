@@ -5,5 +5,5 @@ from __future__ import print_function
 import treecat.__main__ as main
 
 
-def test_profile_fit():
-    main.profile_fit(10, 10)
+def test_profile_train():
+    main.profile_train(10, 10)

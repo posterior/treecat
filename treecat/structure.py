@@ -65,6 +65,10 @@ class TreeStructure(object):
         '''Find the edge index e of an unsorted pair of vertices (v1, v2).'''
         return self._tree_edges[v1, v2]
 
+    def gc(self):
+        '''Garbage collect temporary cached data structures.'''
+        self._complete_grid = None
+
 
 def make_complete_graph(num_vertices):
     '''Constructs a complete graph.

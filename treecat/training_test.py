@@ -2,61 +2,19 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import os
-from copy import deepcopy
-
-import numpy as np
-
-from treecat.persist import pickle_dump
-from treecat.persist import pickle_load
-from treecat.testutil import assert_equal
-from treecat.testutil import tempdir
-from treecat.training import DEFAULT_CONFIG
-from treecat.training import TreeCatModel
-
-TINY_CONFIG = deepcopy(DEFAULT_CONFIG)
-TINY_CONFIG['annealing']['epochs'] = 2
-
-TINY_DATA = np.array(
-    [
-        [0, 1, 1, 0, 2],
-        [0, 0, 0, 0, 1],
-        [1, 0, 2, 2, 2],
-        [1, 0, 0, 0, 1],
-    ],
-    dtype=np.int32)
-
-TINY_MASK = np.array(
-    [
-        [1, 1, 1, 0, 1],
-        [0, 0, 1, 1, 1],
-        [1, 0, 1, 1, 1],
-        [1, 1, 0, 0, 1],
-    ],
-    dtype=np.int32)
+from treecat.testutil import TINY_CONFIG
+from treecat.testutil import TINY_DATA
+from treecat.testutil import TINY_MASK
+from treecat.training import TreeCatTrainer
+from treecat.training import train_model
 
 
-def test_model_init_runs():
-    TreeCatModel(TINY_DATA, TINY_MASK)
+def test_trainer_init():
+    TreeCatTrainer(TINY_DATA, TINY_MASK, TINY_CONFIG)
 
 
-def test_model_fit_runs():
-    model = TreeCatModel(TINY_DATA, TINY_MASK, TINY_CONFIG)
-    model.fit()
+def test_train_model():
+    train_model(TINY_DATA, TINY_MASK, TINY_CONFIG)
 
 
-def test_model_save_load():
-    model = TreeCatModel(TINY_DATA, TINY_MASK, TINY_CONFIG)
-    model.fit()
-    with tempdir() as dirname:
-        filename = os.path.join(dirname, 'model.pkl.gz')
-        pickle_dump(model, filename)
-        model2 = pickle_load(filename)
-
-    assert_equal(model2._data, model._data)
-    assert_equal(model2._mask, model._mask)
-    assert_equal(model2._config, model._config)
-    assert_equal(model2._seed, model._seed)
-    assert_equal(model2._assignments, model._assignments)
-    assert_equal(model2._variables, model._variables)
-    assert_equal(model2._structure, model._structure)
+# TODO Test get_annealing_schedule().

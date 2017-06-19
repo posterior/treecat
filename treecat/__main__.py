@@ -18,36 +18,30 @@ PYTHON = sys.executable
 
 
 @parsable
-def fit(model_in, model_out=None):
-    '''Fit a pickled model and optionally save it.'''
-    from treecat.training import TreeCatModel
-    assert TreeCatModel  # Pacify linter.
-    model = pickle_load(model_in)
-    print('Fitting model')
-    model.fit()
-    print('Done fitting model')
-    if model_out is not None:
-        pickle_dump(model, model_out)
+def train(filename):
+    '''Train from a pickled (data, mask, config) tuple.'''
+    from treecat.training import train_model
+    data, mask, config = pickle_load(filename)
+    train_model(data, mask, config)
 
 
 @parsable
-def profile_fit(rows=100, cols=10, cats=4, epochs=5, tool='timers'):
-    '''Profile TreeCatModel.fit() on a random dataset.
+def profile_train(rows=100, cols=10, cats=4, epochs=5, tool='timers'):
+    '''Profile TreeCatTrainer.train() on a random dataset.
     Available tools: timers, time, snakeviz, line_profiler
     '''
-    from treecat.training import DEFAULT_CONFIG
-    from treecat.training import TreeCatModel
+    from treecat.config import DEFAULT_CONFIG
     from treecat.generate import generate_dataset
     config = deepcopy(DEFAULT_CONFIG)
     config['num_categories'] = cats
     config['annealing']['epochs'] = epochs
     data, mask = generate_dataset(rows, cols, config=config)
-    model = TreeCatModel(data, mask, config)
+    task = (data, mask, config)
     with tempdir() as dirname:
-        model_path = os.path.join(dirname, 'profile_fit.model.pkl.gz')
-        profile_path = os.path.join(dirname, 'profile_fit.prof')
-        pickle_dump(model, model_path)
-        cmd = [os.path.abspath(__file__), 'fit', model_path]
+        task_path = os.path.join(dirname, 'profile_train.pkl.gz')
+        profile_path = os.path.join(dirname, 'profile_train.prof')
+        pickle_dump(task, task_path)
+        cmd = [os.path.abspath(__file__), 'train', task_path]
         if tool == 'time':
             if platform.platform().startswith('Darwin'):
                 gnu_time = 'gtime'
@@ -68,7 +62,7 @@ def profile_fit(rows=100, cols=10, cats=4, epochs=5, tool='timers'):
             raise ValueError('Unknown tool: {}'.format(tool))
 
 
-# TODO Add a profile_fit_tf c
+# TODO Support tensorflow profiling.
 # https://github.com/tensorflow/tensorflow/tree/master/tensorflow/tools/tfprof
 
 if __name__ == '__main__':

@@ -5,9 +5,33 @@ from __future__ import print_function
 import contextlib
 import shutil
 import tempfile
+from copy import deepcopy
 
 import numpy as np
 import pytest
+
+from treecat.config import DEFAULT_CONFIG
+
+TINY_CONFIG = deepcopy(DEFAULT_CONFIG)
+TINY_CONFIG['annealing']['epochs'] = 2
+
+TINY_DATA = np.array(
+    [
+        [0, 1, 1, 0, 2],
+        [0, 0, 0, 0, 1],
+        [1, 0, 2, 2, 2],
+        [1, 0, 0, 0, 1],
+    ],
+    dtype=np.int32)
+
+TINY_MASK = np.array(
+    [
+        [1, 1, 1, 0, 1],
+        [0, 0, 1, 1, 1],
+        [1, 0, 1, 1, 1],
+        [1, 1, 0, 0, 1],
+    ],
+    dtype=np.int32)
 
 
 @contextlib.contextmanager

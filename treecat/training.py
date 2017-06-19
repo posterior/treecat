@@ -4,7 +4,6 @@ from __future__ import print_function
 
 import itertools
 import logging
-from copy import deepcopy
 
 import numpy as np
 import tensorflow as tf
@@ -15,17 +14,6 @@ from treecat.structure import sample_tree
 from treecat.util import COUNTERS
 from treecat.util import profile
 from treecat.util import sizeof
-
-DEFAULT_CONFIG = {
-    'seed': 0,
-    'num_categories': 3,  # E.g. CSE-IT data.
-    'num_clusters': 32,
-    'sample_tree_steps': 32,
-    'annealing': {
-        'init_rows': 2,
-        'epochs': 100.0,
-    },
-}
 
 logger = logging.getLogger(__name__)
 
@@ -200,10 +188,10 @@ def build_graph(tree, inits, config):
     }
 
 
-class TreeCatModel(object):
-    '''Class for training TreeCat models.'''
+class TreeCatTrainer(object):
+    '''Class for training a TreeCat model.'''
 
-    def __init__(self, data, mask, config=None):
+    def __init__(self, data, mask, config):
         '''Initialize a model in an unassigned state.
 
         Args:
@@ -211,43 +199,38 @@ class TreeCatModel(object):
             mask: A 2D array of presence/absence, where present = True.
             config: A global config dict.
         '''
-        logger.info('TreeCatModel of %d x %d data', data.shape[0],
+        logger.info('TreeCatTrainer of %d x %d data', data.shape[0],
                     data.shape[1])
         data = np.asarray(data, np.int32)
         mask = np.asarray(mask, np.bool_)
         num_rows, num_features = data.shape
         assert data.shape == mask.shape
-        if config is None:
-            config = deepcopy(DEFAULT_CONFIG)
         self._data = data
         self._mask = mask
         self._config = config
         self._seed = config['seed']
         self._assigned_rows = set()
-        self._assignments = np.zeros(data.shape, dtype=np.int32)
-        self._variables = {}
-        self._structure = TreeStructure(num_features)
-        self._initialize()
-
-    def _initialize(self):
+        self.assignments = np.zeros(data.shape, dtype=np.int32)
+        self.suffstats = {}
+        self.tree = TreeStructure(num_features)
         self._session = None
         self._update_session()
 
     @profile
     def _update_session(self):
         if self._session is not None:
-            self._variables = self._session.run(self._actions['save'])
+            self.suffstats = self._session.run(self._actions['save'])
             self._session.close()
         with tf.Graph().as_default():
             tf.set_random_seed(self._seed)
-            self._actions = build_graph(self._structure, self._variables,
+            self._actions = build_graph(self.tree, self.suffstats,
                                         self._config)
             self._session = tf.Session()
         self._session.run(self._actions['load'])
 
     @profile
-    def _add_row(self, row_id):
-        logger.debug('TreeCatModel.add_row %d', row_id)
+    def add_row(self, row_id):
+        logger.debug('TreeCatTrainer.add_row %d', row_id)
         assert row_id not in self._assigned_rows, row_id
         self._assigned_rows.add(row_id)
         assignments, _ = self._session.run(
@@ -257,29 +240,29 @@ class TreeCatModel(object):
                 'row_mask:0': self._mask[row_id],
             })
         assert assignments.shape == (self._data.shape[1], )
-        self._assignments[row_id, :] = assignments
+        self.assignments[row_id, :] = assignments
 
     @profile
-    def _remove_row(self, row_id):
-        logger.debug('TreeCatModel.remove_row %d', row_id)
+    def remove_row(self, row_id):
+        logger.debug('TreeCatTrainer.remove_row %d', row_id)
         assert row_id in self._assigned_rows, row_id
         self._assigned_rows.remove(row_id)
         self._session.run(
             'update/add_row',
             feed_dict={
-                'assignments:0': self._assignments[row_id],
+                'assignments:0': self.assignments[row_id],
                 'row_data:0': self._data[row_id],
                 'row_mask:0': self._mask[row_id],
             })
 
     @profile
-    def _sample_structure(self):
-        logger.info('TreeCatModel._sample_structure given %d rows',
+    def sample_tree(self):
+        logger.info('TreeCatTrainer.sample_tree given %d rows',
                     len(self._assigned_rows))
         edge_logits = self._session.run('structure/edge_logits:0')
-        complete_grid = self._structure.complete_grid
+        complete_grid = self.tree.complete_grid
         assert edge_logits.shape[0] == complete_grid.shape[1]
-        edges = self._structure.tree_grid[1:3, :].T
+        edges = self.tree.tree_grid[1:3, :].T
         edges = sample_tree(
             complete_grid,
             edge_logits,
@@ -287,43 +270,41 @@ class TreeCatModel(object):
             seed=self._seed,
             steps=self._config['sample_tree_steps'])
         self._seed += 1
-        self._structure.set_edges(edges)
+        self.tree.set_edges(edges)
         self._update_session()
 
-    def fit(self):
-        '''Sample the entire model using subsample-annealed MCMC.'''
-        logger.info('TreeCatModel.fit')
-        assert not self._assigned_rows, 'assignments have already been sampled'
-        num_rows = self._data.shape[0]
-        for action, row_id in get_annealing_schedule(num_rows, self._config):
-            if action == 'add_row':
-                self._add_row(row_id)
-            elif action == 'remove_row':
-                self._remove_row(row_id)
-            else:
-                self._sample_structure()
 
-    _pickle_attrs = [
-        '_data',  # TODO Do not persist data with model.
-        '_mask',  # TODO Do not persist mask with model.
-        '_config',
-        '_seed',
-        '_assigned_rows',
-        '_assignments',
-        '_variables',
-        '_structure',
-    ]
+def train_model(data, mask, config):
+    '''Train a TreeCat model using subsample-annealed MCMC.
 
-    def __getstate__(self):
-        logger.info('TreeCatModel.__getstate__')
-        if self._session is not None:
-            self._variables = self._session.run(self._actions['save'])
-        return {key: getattr(self, key) for key in self._pickle_attrs}
+    This can only be called once on each trainer object.
+    Let N be the number of data rows and V be the number of features.
 
-    def __setstate__(self, state):
-        logger.info('TreeCatModel.__setstate__')
-        self.__dict__.update(state)
-        self._initialize()
+    Returns:
+      A trained model as a dictionary with keys:
+        tree: A TreeStructure instance with the learned latent structure.
+        suffstats: Sufficient statistics of features, vertices, and
+          edges.
+        assignments: An [N, V] numpy array of latent cluster ids for each
+          cell in the dataset.
+    '''
+    logger.info('train_model')
+    trainer = TreeCatTrainer(data, mask, config)
+    num_rows = data.shape[0]
+    for action, row_id in get_annealing_schedule(num_rows, config):
+        if action == 'add_row':
+            trainer.add_row(row_id)
+        elif action == 'remove_row':
+            trainer.remove_row(row_id)
+        else:
+            trainer.sample_tree()
+    trainer.tree.gc()
+    return {
+        'config': config,
+        'tree': trainer.tree,
+        'suffstats': trainer.suffstats,
+        'assignments': trainer.assignments,
+    }
 
 
 def get_annealing_schedule(num_rows, config):
