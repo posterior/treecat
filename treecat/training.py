@@ -105,13 +105,13 @@ def build_graph(tree, inits, config):
             counts = tf.gather_nd(feat_ss, indices)
             likelihoods = feat_prior + tf.cast(counts, tf.float32)
             assert likelihoods.shape == [V, M]
-        with tf.name_scope('inbound'):
+        with tf.name_scope('inward'):
             for v, parent, children in reversed(schedule):
                 prior_v = vert_probs[v, :]
                 message = tf.cond(
                     row_mask[v],
-                    lambda p=prior_v: p,
-                    lambda v=v, p=prior_v: likelihoods[v, :] * p)
+                    lambda prior_v=prior_v: prior_v,
+                    lambda v=v, prior_v=prior_v: likelihoods[v, :] * prior_v)
                 assert message.shape == [M]
                 for child in children:
                     e = tree.find_edge(v, child)
@@ -119,7 +119,7 @@ def build_graph(tree, inits, config):
                     vec = messages[child][:, tf.newaxis]
                     message *= tf.reduce_sum(mat * vec) / prior_v
                 messages[v] = message / tf.reduce_max(message)
-        with tf.name_scope('outbound'):
+        with tf.name_scope('outward'):
             for v, parent, children in schedule:
                 message = messages[v]
                 if parent is not None:
