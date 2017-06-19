@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class TreeStructure(object):
-    '''Topological data representing a tree on features.'''
+    """Topological data representing a tree on features."""
 
     def __init__(self, num_vertices):
         logger.debug('TreeStructure with %d vertices', num_vertices)
@@ -29,11 +29,11 @@ class TreeStructure(object):
                 (self._tree_grid == other._tree_grid).all())
 
     def set_edges(self, edges):
-        '''Sets the edges of this tree.
+        """Sets the edges of this tree.
 
         Args:
           edges: A list of (vertex, vertex) pairs.
-        '''
+        """
         assert len(edges) == self._num_edges
         self._tree_grid = make_tree(edges)
         self._tree_edges = {}
@@ -51,27 +51,27 @@ class TreeStructure(object):
 
     @property
     def tree_grid(self):
-        '''Array of (edge, vertex, vertex) triples defining the tree graph.'''
+        """Array of (edge, vertex, vertex) triples defining the tree graph."""
         return self._tree_grid
 
     @property
     def complete_grid(self):
-        '''Array of (edge,vertex,vertex) triples defining a complete graph.'''
+        """Array of (edge,vertex,vertex) triples defining a complete graph."""
         if self._complete_grid is None:
             self._complete_grid = make_complete_graph(self._num_vertices)
         return self._complete_grid
 
     def find_edge(self, v1, v2):
-        '''Find the edge index e of an unsorted pair of vertices (v1, v2).'''
+        """Find the edge index e of an unsorted pair of vertices (v1, v2)."""
         return self._tree_edges[v1, v2]
 
     def gc(self):
-        '''Garbage collect temporary cached data structures.'''
+        """Garbage collect temporary cached data structures."""
         self._complete_grid = None
 
 
 def make_complete_graph(num_vertices):
-    '''Constructs a complete graph.
+    """Constructs a complete graph.
 
     The pairing function is: k = v1 + v2 * (v2 - 1) // 2
 
@@ -82,7 +82,7 @@ def make_complete_graph(num_vertices):
       V: Number of vertices.
       K: Number of edges.
       grid: a 3 x K grid of (edge, vertex, vertex) triples.
-    '''
+    """
     V = num_vertices
     K = V * (V - 1) // 2
     grid = np.zeros([3, K], np.int32)
@@ -95,7 +95,7 @@ def make_complete_graph(num_vertices):
 
 
 def make_tree(edges):
-    '''Constructs a tree graph from a set of (vertex,vertex) pairs.
+    """Constructs a tree graph from a set of (vertex,vertex) pairs.
 
     Args:
       edges: A list or set of unordered (vertex, vertex) pairs.
@@ -104,7 +104,7 @@ def make_tree(edges):
       V: Number of vertices.
       E: Number of edges.
       grid: a 3 x E grid of (edge, vertex, vertex) triples.
-    '''
+    """
     assert all(isinstance(edge, tuple) for edge in edges)
     edges = [tuple(sorted(edge)) for edge in edges]
     edges.sort()
@@ -116,14 +116,14 @@ def make_tree(edges):
 
 
 def find_center_of_tree(grid):
-    '''Finds a maximally central vertex in a tree graph.
+    """Finds a maximally central vertex in a tree graph.
 
     Args:
         grid: A tree graph as returned by make_tree().
 
     Returns:
         Vertex id of a maximally central vertex.
-    '''
+    """
     E = grid.shape[1]
     V = 1 + E
     neighbors = [set() for _ in range(V)]
@@ -145,7 +145,7 @@ def find_center_of_tree(grid):
 
 @profile
 def make_propagation_schedule(grid, root=None):
-    '''Makes an efficient schedule for message passing on a tree.
+    """Makes an efficient schedule for message passing on a tree.
 
     Args:
       grid: A tree graph as returned by make_tree().
@@ -157,7 +157,7 @@ def make_propagation_schedule(grid, root=None):
         parent: Either this vertex's parent node, or None at the root.
         children: List of neighbors deeper in the tree.
         outbound: List of neighbors shallower in the tree (at most one).
-    '''
+    """
     if root is None:
         root = find_center_of_tree(grid)
     E = grid.shape[1]
@@ -183,17 +183,17 @@ def make_propagation_schedule(grid, root=None):
 
 
 class MutableTree(object):
-    '''MCMC tree for random spanning trees.'''
+    """MCMC tree for random spanning trees."""
 
     __slots__ = ['VEK', 'grid', 'e2k', 'k2e', 'neighbors', 'components']
 
     def __init__(self, grid, edges):
-        '''Build a mutable spanning tree.
+        """Build a mutable spanning tree.
 
         Args:
           grid: A 3 x K array as returned by make_complete_graph().
           edges: A list of E edges in the form of (vertex,vertex) pairs.
-        '''
+        """
         E = len(edges)
         V = 1 + E
         K = V * (V - 1) // 2
@@ -215,7 +215,7 @@ class MutableTree(object):
         assert len(self.k2e) == self.VEK[1]
 
     def remove_edge(self, k):
-        '''Remove edge k from tree and update data structures.'''
+        """Remove edge k from tree and update data structures."""
         assert len(self.e2k) == self.VEK[1]
         assert len(self.k2e) == self.VEK[1]
         neighbors = self.neighbors
@@ -239,7 +239,7 @@ class MutableTree(object):
         assert len(self.k2e) == self.VEK[1] - 1
 
     def add_edge(self, k):
-        '''Remove edge k and update data structures.'''
+        """Remove edge k and update data structures."""
         assert len(self.e2k) == self.VEK[1] - 1
         assert len(self.k2e) == self.VEK[1] - 1
         k, v1, v2 = self.grid[:, k]
@@ -255,7 +255,7 @@ class MutableTree(object):
 
 @profile
 def sample_tree(grid, edge_logits, edges, seed=0, steps=1):
-    '''Sample a random spanning tree of a dense weighted graph using MCMC.
+    """Sample a random spanning tree of a dense weighted graph using MCMC.
 
     This uses Gibbs sampling on edges. Consider E undirected edges that can
     move around a graph of V=1+E vertices. The edges are constrained so that no
@@ -276,7 +276,7 @@ def sample_tree(grid, edge_logits, edges, seed=0, steps=1):
 
     Returns:
       A list of (vertex, vertex) pairs.
-    '''
+    """
     logger.debug('sample_tree sampling a random spanning tree')
     COUNTERS.sample_tree_calls += 1
     np.random.seed(seed)

@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 @profile
 def build_graph(tree, inits, config):
-    '''Builds a tf graph for sampling assignments via message passing.
+    """Builds a tensorflow graph for sampling assignments via message passing.
 
     Feature distributions are Dirichlet-categorical.
     TODO Switch to Beta-binomial or Beta-(Poisson Binomial).
@@ -43,7 +43,7 @@ def build_graph(tree, inits, config):
       A dictionary of actions whose values can be input to Session.run():
         load: Initialize global variables.
         save: Eval global variables.
-    '''
+    """
     logger.debug('build_graph of tree with %d vertices' % tree.num_vertices)
     assert isinstance(tree, TreeStructure)
     assert isinstance(inits, dict)
@@ -189,16 +189,16 @@ def build_graph(tree, inits, config):
 
 
 class TreeCatTrainer(object):
-    '''Class for training a TreeCat model.'''
+    """Class for training a TreeCat model."""
 
     def __init__(self, data, mask, config):
-        '''Initialize a model in an unassigned state.
+        """Initialize a model in an unassigned state.
 
         Args:
             data: A 2D array of categorical data.
             mask: A 2D array of presence/absence, where present = True.
             config: A global config dict.
-        '''
+        """
         logger.info('TreeCatTrainer of %d x %d data', data.shape[0],
                     data.shape[1])
         data = np.asarray(data, np.int32)
@@ -275,7 +275,7 @@ class TreeCatTrainer(object):
 
 
 def train_model(data, mask, config):
-    '''Train a TreeCat model using subsample-annealed MCMC.
+    """Train a TreeCat model using subsample-annealed MCMC.
 
     This can only be called once on each trainer object.
     Let N be the number of data rows and V be the number of features.
@@ -287,7 +287,7 @@ def train_model(data, mask, config):
           edges.
         assignments: An [N, V] numpy array of latent cluster ids for each
           cell in the dataset.
-    '''
+    """
     logger.info('train_model')
     trainer = TreeCatTrainer(data, mask, config)
     num_rows = data.shape[0]
@@ -308,11 +308,11 @@ def train_model(data, mask, config):
 
 
 def get_annealing_schedule(num_rows, config):
-    '''Iterator for subsample annealing yielding (action, arg) pairs.
+    """Iterator for subsample annealing yielding (action, arg) pairs.
 
     Actions are one of: 'add_row', 'remove_row', or 'batch'.
     The add and remove actions each provide a row_id arg.
-    '''
+    """
     # Randomly shuffle rows.
     row_ids = list(range(num_rows))
     np.random.seed(config['seed'])

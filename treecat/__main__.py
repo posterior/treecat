@@ -19,7 +19,7 @@ PYTHON = sys.executable
 
 @parsable
 def train(filename):
-    '''Train from a pickled (data, mask, config) tuple.'''
+    """Train from a pickled (data, mask, config) tuple."""
     from treecat.training import train_model
     data, mask, config = pickle_load(filename)
     train_model(data, mask, config)
@@ -27,9 +27,9 @@ def train(filename):
 
 @parsable
 def profile_train(rows=100, cols=10, cats=4, epochs=5, tool='timers'):
-    '''Profile TreeCatTrainer.train() on a random dataset.
+    """Profile TreeCatTrainer.train() on a random dataset.
     Available tools: timers, time, snakeviz, line_profiler
-    '''
+    """
     from treecat.config import DEFAULT_CONFIG
     from treecat.generate import generate_dataset
     config = deepcopy(DEFAULT_CONFIG)

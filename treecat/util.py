@@ -24,13 +24,13 @@ def TODO(message=''):
 
 
 def sizeof(array):
-    '''Computes byte size of numpy.ndarray or tensorflow.Tensors.
+    """Computes byte size of numpy.ndarray or tensorflow.Tensors.
     Args:
       array: A numpy array or tensorflow Tensor.
 
     Returns:
       Memory footprint in bytes.
-    '''
+    """
     dtype = array.dtype
     size = dtype.size if hasattr(dtype, 'size') else dtype.itemsize
     for dim in array.shape:
@@ -59,7 +59,7 @@ class ProfileTimer(object):
 
 
 def profile_timed(fun):
-    '''Decorator for time-based profiling of individual functions.'''
+    """Decorator for time-based profiling of individual functions."""
     if not PROFILING:
         return fun
     timer = TIMERS[fun]

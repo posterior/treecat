@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def build_graph(tree, suffstats, config):
-    '''Builds a tf graph for using a trained model.
+    """Builds a tensorflow graph for using a trained model.
 
     Args:
       tree: A TreeStructure object.
@@ -31,7 +31,7 @@ def build_graph(tree, suffstats, config):
       mask: An [N, V] placeholder for input presence/absence.
       sample: An [N, V] tensor for imputed output data.
       logprob: An [N] tensor of logprob values of each data row.
-    '''
+    """
     assert isinstance(tree, TreeStructure)
     logger.debug('build_graph of tree with %d vertices' % tree.num_vertices)
     V = tree.num_vertices
@@ -104,7 +104,7 @@ def build_graph(tree, suffstats, config):
 
 
 class TreeCatServer(object):
-    '''Class for serving queries against a trained TreeCat model.'''
+    """Class for serving queries against a trained TreeCat model."""
 
     def __init__(self, tree, suffstats, config):
         logger.info('TreeCatServer with %d features', tree.num_vertices)
@@ -115,13 +115,13 @@ class TreeCatServer(object):
         with tf.Graph().as_default():
             tf.set_random_seed(self._seed)
             init = tf.global_variables_initializer()
-            self._actions = build_graph(tree, suffstats, self._config)
+            build_graph(tree, suffstats, self._config)
             self._session = tf.Session()
         self._session.run(init)
 
     @profile
     def sample(self, data, mask):
-        '''Sample from the posterior conditional distribution.
+        """Sample from the posterior conditional distribution.
 
         Let V be the number of features and N be the number of rows in input
         data and mask. This function draws in parallel N samples, each sample
@@ -138,10 +138,10 @@ class TreeCatServer(object):
           conditioned on should match the value of input data, and the cells
           that were not present should be randomly sampled from the conditional
           posterior.
-        '''
+        """
         logger.info('sampling %d rows', data.shape[0])
         assert data.shape == mask.shape
-        assert data.shape[1] == self.tree.num_vertices
+        assert data.shape[1] == self._tree.num_vertices
         result = self._sess.run('sample', {'data': data, 'mask': mask})
         assert result.shape == data.shape
         assert result.dtype == data.dtype
@@ -149,7 +149,7 @@ class TreeCatServer(object):
 
     @profile
     def logprob(self, data, mask):
-        '''Compute log probabilities of each row of data.
+        """Compute log probabilities of each row of data.
 
         Let V be the number of features and N be the number of rows in input
         data and mask. This function computes in parallel the logprob of each
@@ -162,10 +162,10 @@ class TreeCatServer(object):
 
         Returns:
           An [N] numpy array of log probabilities.
-        '''
+        """
         logger.info('computing logprob of %d rows', data.shape[0])
         assert data.shape == mask.shape
-        assert data.shape[1] == self.tree.num_vertices
+        assert data.shape[1] == self._tree.num_vertices
         result = self._sess.run('logprob', {'data': data, 'mask': mask})
         assert result.shape == [data.shape[0]]
         return result
