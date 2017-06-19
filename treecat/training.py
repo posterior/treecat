@@ -104,12 +104,14 @@ def build_graph(tree, inits, config):
             indices = tf.stack([vertices, row_data], 1)
             counts = tf.gather_nd(feat_ss, indices)
             likelihoods = feat_prior + tf.cast(counts, tf.float32)
+            assert likelihoods.shape == [V, M]
         with tf.name_scope('inbound'):
             for v, parent, children in reversed(schedule):
                 prior_v = vert_probs[v, :]
-                likelihood = likelihoods[v]
+                likelihood = likelihoods[v, :]
                 message = tf.cond(row_mask[v], lambda: prior_v,
                                   lambda: likelihood * prior_v)
+                assert message.shape == [M]
                 for child in children:
                     e = tree.find_edge(v, child)
                     mat = edge_probs[e, :, :]
@@ -125,11 +127,9 @@ def build_graph(tree, inits, config):
                     mat = tf.transpose(edge_probs[e, :, :], [1, 0])
                     message *= tf.gather(mat, samples[parent])[0, :] / prior_v
                     assert message.shape == [M]
-                sample = tf.cast(
+                samples[v] = tf.cast(
                     tf.multinomial(tf.log(message)[tf.newaxis, :], 1)[0],
                     tf.int32)
-                # sample = tf.Print(sample, [message, sample])
-                samples[v] = sample
     assignments = tf.squeeze(tf.parallel_stack(samples), name='assignments')
     with tf.control_dependencies([tf.assert_less(assignments, M)]):
         assignments = tf.identity(assignments)
