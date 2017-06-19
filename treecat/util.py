@@ -6,12 +6,14 @@ import atexit
 import functools
 import logging
 import os
+import sys
 from collections import Counter
 from collections import defaultdict
 from timeit import default_timer
 
 DEBUG_LEVEL = int(os.environ.get('TREECAT_DEBUG_LEVEL', 0))
 LOG_LEVEL = int(os.environ.get('TREECAT_LOG_LEVEL', logging.CRITICAL))
+LOG_ART = int(os.environ.get('TREECAT_LOG_ART', 0))
 PROFILING = (LOG_LEVEL <= 15)
 LOG_FILENAME = os.environ.get('TREECAT_LOG_FILE')
 LOG_FORMAT = '%(levelname).1s %(name)s %(message)s'
@@ -21,6 +23,14 @@ logger = logging.getLogger(__name__)
 
 def TODO(message=''):
     raise NotImplementedError('TODO {}'.format(message))
+
+
+def log_art(art):
+    sys.stderr.write(art)
+    sys.stderr.flush()
+
+
+art_logger = log_art if LOG_ART else (lambda art: None)
 
 
 def sizeof(array):

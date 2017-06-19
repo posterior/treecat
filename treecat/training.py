@@ -12,6 +12,7 @@ from treecat.structure import TreeStructure
 from treecat.structure import make_propagation_schedule
 from treecat.structure import sample_tree
 from treecat.util import COUNTERS
+from treecat.util import art_logger
 from treecat.util import profile
 from treecat.util import sizeof
 
@@ -118,7 +119,7 @@ def build_graph(tree, inits, config):
                     mat = edge_probs[e, :, :]
                     vec = messages[child][:, tf.newaxis]
                     message *= tf.reduce_sum(mat * vec) / prior_v
-                messages[v] = message / tf.reduce_max(message)
+                messages[v] = message
         with tf.name_scope('outward'):
             for v, parent, children in schedule:
                 message = messages[v]
@@ -295,10 +296,13 @@ def train_model(data, mask, config):
     num_rows = data.shape[0]
     for action, row_id in get_annealing_schedule(num_rows, config):
         if action == 'add_row':
+            art_logger('+')
             trainer.add_row(row_id)
         elif action == 'remove_row':
+            art_logger('-')
             trainer.remove_row(row_id)
         else:
+            art_logger('\n')
             trainer.sample_tree()
     trainer.tree.gc()
     return {
