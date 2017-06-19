@@ -103,12 +103,13 @@ def build_graph(tree, inits, config):
         with tf.name_scope('feature'):
             indices = tf.stack([vertices, row_data], 1)
             counts = tf.gather_nd(feat_ss, indices)
-            likelihood = feat_prior + tf.cast(counts, tf.float32)
+            likelihoods = feat_prior + tf.cast(counts, tf.float32)
         with tf.name_scope('inbound'):
             for v, parent, children in reversed(schedule):
                 prior_v = vert_probs[v, :]
+                likelihood = likelihoods[v]
                 message = tf.cond(row_mask[v], lambda: prior_v,
-                                  lambda: likelihood[v] * prior_v)
+                                  lambda: likelihood * prior_v)
                 for child in children:
                     e = tree.find_edge(v, child)
                     mat = edge_probs[e, :, :]
