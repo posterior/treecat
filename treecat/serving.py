@@ -125,7 +125,7 @@ def build_graph(tree, suffstats, config, num_rows):
     assert parent is None
     logprob = tf.add(
         tf.log(tf.reduce_sum(messages[root], axis=1)),
-        tf.reduce_sum(tf.log(tf.stack(messages_scale))),
+        tf.reduce_sum(tf.log(tf.parallel_stack(messages_scale))),
         name='logprob')
     assert logprob.shape == [N]
 
