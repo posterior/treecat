@@ -119,7 +119,7 @@ def build_graph(tree, inits, config):
                     mat = edge_probs[e, :, :]
                     vec = messages[child][:, tf.newaxis]
                     message *= tf.reduce_sum(mat * vec) / prior_v
-                messages[v] = message
+                messages[v] = message * tf.reciprocal(tf.reduce_max(message))
         with tf.name_scope('outward'):
             for v, parent, children in schedule:
                 message = messages[v]
@@ -151,33 +151,28 @@ def build_graph(tree, inits, config):
             tf.gather(assignments, complete_grid[1, :]),
             tf.gather(assignments, complete_grid[2, :]),
         ], 1)
-        # Deltas are computed from row_mask and adapted to shape and dtype.
-        delta_v_int = tf.cast(row_mask, tf.int32)
-        delta_v_float = tf.cast(row_mask, tf.float32)
-        delta_e_int = tf.cast(
-            tf.logical_and(
-                tf.gather(row_mask, tree_grid[1, :]),
-                tf.gather(row_mask, tree_grid[2, :])), tf.int32)
-        delta_e_float = tf.cast(delta_e_int, tf.float32)
-        delta_k_int = tf.cast(
-            tf.logical_and(
-                tf.gather(row_mask, complete_grid[1, :]),
-                tf.gather(row_mask, complete_grid[2, :])), tf.int32)
+        # Updates are adapted to shape and dtype.
+        d_feat_ss = tf.cast(row_mask, tf.int32)
+        d_vert_ss = tf.ones([V], tf.int32)
+        d_edge_ss = tf.ones([E], tf.int32)
+        d_tree_ss = tf.ones([K], tf.int32)
+        d_vert_probs = tf.ones([V], tf.float32)
+        d_edge_probs = tf.ones([E], tf.float32)
         tf.group(
-            tf.scatter_nd_add(feat_ss, feat_indices, delta_v_int, True),
-            tf.scatter_nd_add(vert_ss, vert_indices, delta_v_int, True),
-            tf.scatter_nd_add(edge_ss, edge_indices, delta_e_int, True),
-            tf.scatter_nd_add(tree_ss, tree_indices, delta_k_int, True),
-            tf.scatter_nd_add(vert_probs, vert_indices, delta_v_float, True),
-            tf.scatter_nd_add(edge_probs, edge_indices, delta_e_float, True),
+            tf.scatter_nd_add(feat_ss, feat_indices, d_feat_ss, True),
+            tf.scatter_nd_add(vert_ss, vert_indices, d_vert_ss, True),
+            tf.scatter_nd_add(edge_ss, edge_indices, d_edge_ss, True),
+            tf.scatter_nd_add(tree_ss, tree_indices, d_tree_ss, True),
+            tf.scatter_nd_add(vert_probs, vert_indices, d_vert_probs, True),
+            tf.scatter_nd_add(edge_probs, edge_indices, d_edge_probs, True),
             name='add_row')
         tf.group(
-            tf.scatter_nd_sub(feat_ss, feat_indices, delta_v_int, True),
-            tf.scatter_nd_sub(vert_ss, vert_indices, delta_v_int, True),
-            tf.scatter_nd_sub(edge_ss, edge_indices, delta_e_int, True),
+            tf.scatter_nd_sub(feat_ss, feat_indices, d_feat_ss, True),
+            tf.scatter_nd_sub(vert_ss, vert_indices, d_vert_ss, True),
+            tf.scatter_nd_sub(edge_ss, edge_indices, d_edge_ss, True),
             # Note that tree_ss is not updated during remove_row.
-            tf.scatter_nd_sub(vert_probs, vert_indices, delta_v_float, True),
-            tf.scatter_nd_sub(edge_probs, edge_indices, delta_e_float, True),
+            tf.scatter_nd_sub(vert_probs, vert_indices, d_vert_probs, True),
+            tf.scatter_nd_sub(edge_probs, edge_indices, d_edge_probs, True),
             name='remove_row')
 
     # These actions allow saving and loading variables when the graph changes.
@@ -276,6 +271,14 @@ class TreeCatTrainer(object):
         self.tree.set_edges(edges)
         self._update_session()
 
+    def finish(self):
+        logger.info('TreeCatTrainer.finish with %d rows',
+                    len(self._assigned_rows))
+        self.suffstats = self._session.run(self._actions['save'])
+        self.tree.gc()
+        self._session.close()
+        self._session = None
+
 
 def train_model(data, mask, config):
     """Train a TreeCat model using subsample-annealed MCMC.
@@ -304,7 +307,7 @@ def train_model(data, mask, config):
         else:
             art_logger('\n')
             trainer.sample_tree()
-    trainer.tree.gc()
+    trainer.finish()
     return {
         'config': config,
         'tree': trainer.tree,

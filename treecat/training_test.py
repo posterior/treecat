@@ -14,7 +14,13 @@ def test_trainer_init():
 
 
 def test_train_model():
-    train_model(TINY_DATA, TINY_MASK, TINY_CONFIG)
+    N, V = TINY_DATA.shape
+    E = V - 1
+    model = train_model(TINY_DATA, TINY_MASK, TINY_CONFIG)
+    assert model['config'] == TINY_CONFIG
+    assert model['suffstats']['feat_ss'].sum() == TINY_MASK.sum()
+    assert model['suffstats']['vert_ss'].sum() == N * V
+    assert model['suffstats']['edge_ss'].sum() == N * E
 
 
 # TODO Test get_annealing_schedule().
