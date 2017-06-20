@@ -16,6 +16,24 @@ from treecat.util import sizeof
 logger = logging.getLogger(__name__)
 
 
+def make_logits(prior, suffstats):
+    '''Convert a conjugate prior + suffstats to normalized logits.
+
+    Args:
+      prior: A prior with shape broadcastable to suffstats.
+      suffstats: A numpy array of sufficient statistics (counts).
+
+    Returns:
+      A numpy array of logits. The exp() of will be L1 normalized for each
+      leading index, i.e. np.allclose(1, np.exp(result).sum(axis=0)).
+    '''
+    probs = prior + suffstats.astype(np.float32)
+    totals = probs.sum(axis=0)
+    assert (totals > 0).all()
+    probs /= totals.reshape((1, ) + probs.shape[1:])
+    return np.log(probs)
+
+
 @profile
 def build_graph(tree, suffstats, config, num_rows):
     """Builds a tensorflow graph for using a trained model.
@@ -23,9 +41,9 @@ def build_graph(tree, suffstats, config, num_rows):
     This implements two message passing algorithms along the latent tree:
     1. an algorithm to draw conditional samples and
     2. an algorithm to compute conditional log probability.
-    Both algorithms follow a two part inward-outward schedule (which
-    generalizes forward-backward algorithms from chains to trees).
-    The inward 'survey' part is common to both algorithms.
+    The sample algorithm follows a two part inward-outward schedule (that
+    generalizes the standard HMM forward-backward algorithms from chains to
+    trees). The inward pass is also used by the logprob algorithm.
 
     Args:
       tree: A TreeStructure object.
@@ -59,50 +77,45 @@ def build_graph(tree, suffstats, config, num_rows):
     vert_prior = 1.0 / M  # Nonparametric.
     edge_prior = 1.0 / M**2  # Nonparametric.
 
-    # Non-normalized probabilities are constant but shared across queries.
-    feat_probs = tf.Variable(
-        feat_prior + suffstats['feat_ss'].astype(np.float32),
-        name='feat_probs')
-    vert_probs = tf.Variable(
-        vert_prior + suffstats['vert_ss'].astype(np.float32),
-        name='vert_probs')
-    edge_probs = tf.Variable(
-        edge_prior + suffstats['edge_ss'].astype(np.float32),
-        name='edge_probs')
+    # These log probabilities are constant but shared across queries.
+    feat_logits = tf.Variable(make_logits(feat_prior, suffstats['feat_ss']))
+    vert_logits = tf.Variable(make_logits(vert_prior, suffstats['vert_ss']))
+    edge_logits = tf.Variable(make_logits(edge_prior, suffstats['edge_ss']))
 
-    COUNTERS.footprint_serving_feat_probs = sizeof(feat_probs)
-    COUNTERS.footprint_serving_vert_probs = sizeof(vert_probs)
-    COUNTERS.footprint_serving_edge_probs = sizeof(edge_probs)
+    COUNTERS.footprint_serving_feat_logits = sizeof(feat_logits)
+    COUNTERS.footprint_serving_vert_logits = sizeof(vert_logits)
+    COUNTERS.footprint_serving_edge_logits = sizeof(edge_logits)
 
     # These are the inputs to both sample() and logprob().
     data = tf.placeholder(tf.int32, [N, V], name='data')
     mask = tf.placeholder(tf.bool, [V], name='mask')
 
-    # This inward pass is run for both sample() and logprob() functions.
+    # This inward pass is run during both sample() and logprob() functions.
     with tf.name_scope('inward'):
         messages = [None] * V
         with tf.name_scope('observed'):
             vertices = tf.zeros_like(data)
             vertices += tf.range(V, dtype=np.int32)[tf.newaxis, :]
             indices = tf.stack([vertices, data], 2)
-            likelihoods = tf.gather_nd(feat_probs, indices)
-            assert likelihoods.shape == [N, V, M]
+            logits = tf.gather_nd(feat_logits, indices)
+            assert logits.shape == [N, V, M]
         with tf.name_scope('latent'):
             for v, parent, children in reversed(schedule):
-                prior_v = tf.tile(vert_probs[tf.newaxis, v, :], [N, 1])
-                assert prior_v.shape == [N, M]
-                likelihood = likelihoods[:, v, :]
-                message = tf.cond(mask[v], lambda: prior_v,
-                                  lambda: likelihood * prior_v)
+                message = tf.cond(
+                    mask[v],
+                    lambda: tf.zeros([N, M]),
+                    lambda v=v: logits[:, v, :])
                 assert message.shape == [N, M]
                 for child in children:
                     e = tree.find_edge(v, child)
-                    mat = edge_probs[e, :, :]
-                    vec = messages[child][:, tf.newaxis]
-                    message *= tf.reduce_sum(mat * vec) / prior_v
-                messages[v] = message / tf.reduce_max(message)
+                    # This is a matrix-vector multiply.
+                    message += tf.reduce_logsumexp(
+                        edge_logits[e, :, :] + messages[child][:, tf.newaxis])
+                prior_v = vert_logits[tf.newaxis, v, :]
+                assert prior_v.shape == [1, M]
+                messages[v] = message + (1.0 - len(children)) * prior_v
 
-    # This outward pass is run only for the sample() function.
+    # This outward pass is run only during the sample() function.
     with tf.name_scope('outward_sample'):
         latent_samples = [None] * V
         observed_samples = [None] * V
@@ -111,24 +124,26 @@ def build_graph(tree, suffstats, config, num_rows):
                 message = messages[v]
                 if parent is not None:
                     e = tree.find_edge(v, parent)
-                    prior_v = vert_probs[tf.newaxis, v, :]
-                    mat = tf.transpose(edge_probs[e, :, :], [1, 0])
-                    message *= (
-                        tf.gather(mat, latent_samples[parent])[0, :] / prior_v)
+                    # This is a matrix multiply with a one-hot vector.
+                    message += tf.gather(
+                        tf.transpose(edge_logits[e, :, :], [1, 0]),
+                        latent_samples[parent])[0, :]
+                    prior_v = vert_logits[tf.newaxis, v, :]
+                    message -= prior_v
                 assert message.shape == [N, M]
                 latent_samples[v] = tf.cast(
-                    tf.multinomial(tf.log(message), 1)[:, 0], tf.int32)
+                    tf.multinomial(message, 1)[:, 0], tf.int32)
                 assert latent_samples[v].shape == [N]
         with tf.name_scope('observed'):
             for v, parent, children in schedule:
-                assert feat_probs.shape == [V, C, M]
+                assert feat_logits.shape == [V, C, M]
 
                 def copied(v=v):
                     return data[:, v]
 
                 def sampled(v=v):
                     logits = tf.gather(
-                        tf.transpose(feat_probs[v, :, :], [1, 0]),
+                        tf.transpose(feat_logits[v, :, :], [1, 0]),
                         latent_samples[v])
                     assert logits.shape == [N, C]
                     return tf.cast(tf.multinomial(logits, 1)[:, 0], tf.int32)
@@ -139,9 +154,14 @@ def build_graph(tree, suffstats, config, num_rows):
         tf.parallel_stack(observed_samples), [1, 0], name='sample')
     assert sample.shape == [N, V]
 
-    # This outward pass is run only for the logprob() function.
-    with tf.name_scope('outward_logprob'):
-        pass  # TODO
+    # This is run only during the logprob() function.
+    with tf.name_scope('logprob'):
+        root, parent, children = schedule[0]
+        assert parent is None
+        message = messages[root]
+        assert message.shape == [N, M]
+        logprob = tf.reduce_logsumexp(message, axis=1, name='logprob')
+        assert logprob.shape == [N]
 
 
 class TreeCatServer(object):
