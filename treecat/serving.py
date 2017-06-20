@@ -114,6 +114,7 @@ def build_graph(tree, suffstats, config, num_rows):
                     trans = edge_probs[e, :, :]
                     if child < v:
                         trans = tf.transpose(trans, [1, 0])
+                    # Orientation: trans[v, child].
                     message *= tf.matmul(messages[child], trans) / prior_v
                     assert message.shape == [N, M]
                 messages_scale[v] = tf.reduce_max(message)
@@ -139,8 +140,8 @@ def build_graph(tree, suffstats, config, num_rows):
                     trans = edge_probs[e, :, :]
                     if parent < v:
                         trans = tf.transpose(trans, [1, 0])
+                    # Orientation: trans[v, parent].
                     message *= tf.gather(trans, latent_samples[parent])[0, :]
-                    # FIXME Subtract off previous inward message.
                 assert message.shape == [N, M]
                 latent_samples[v] = tf.cast(
                     tf.multinomial(tf.log(message), 1)[:, 0], tf.int32)

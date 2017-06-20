@@ -130,6 +130,7 @@ def build_graph(tree, inits, config):
                     trans = edge_probs[e, :, :]
                     if child < v:
                         trans = tf.transpose(trans, [1, 0])
+                    # Orientation: trans[v, child].
                     message *= tf_matvecmul(trans, messages[child]) / prior_v
                 messages[v] = message / tf.reduce_max(message)
     with tf.name_scope('outward/latent'):
@@ -140,8 +141,9 @@ def build_graph(tree, inits, config):
                 e = tree.find_edge(v, parent)
                 prior_v = vert_probs[v, :]
                 trans = edge_probs[e, :, :]
-                if child > v:
+                if parent > v:
                     trans = tf.transpose(trans, [1, 0])
+                # Orientation: trans[parent, v].
                 message *= tf.gather(trans, samples[parent])[0, :] / prior_v
                 assert message.shape == [M]
             samples[v] = tf.cast(
