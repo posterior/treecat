@@ -19,6 +19,13 @@ from treecat.util import sizeof
 logger = logging.getLogger(__name__)
 
 
+def tf_matvecmul(matrix, vector):
+    assert len(matrix.shape) == 2
+    assert len(vector.shape) == 1
+    assert matrix.shape[1] == vector.shape[0]
+    return tf.reduce_sum(matrix * vector[:, tf.newaxis], axis=1)
+
+
 @profile
 def build_graph(tree, inits, config):
     """Builds a tensorflow graph for sampling assignments via message passing.
@@ -95,49 +102,55 @@ def build_graph(tree, inits, config):
         logits = tf.lgamma(weights + edge_prior) - tf.lgamma(weights + one)
         tf.reduce_sum(logits, [1, 2], name='edge_logits')
 
-    # This is run only during add_row().
+    # This inward-outward algorithm is run only during add_row().
     row_data = tf.placeholder(dtype=tf.int32, shape=[V], name='row_data')
     row_mask = tf.placeholder(dtype=tf.bool, shape=[V], name='row_mask')
-    with tf.name_scope('propagate'):
-        messages = [None] * V  # Arbitrarily scaled probabilities.
-        samples = [None] * V
-        with tf.name_scope('feature'):
+    with tf.name_scope('inward'):
+        with tf.name_scope('observed'):
             indices = tf.stack([vertices, row_data], 1)
             counts = tf.gather_nd(feat_ss, indices)
-            likelihoods = feat_prior + tf.cast(counts, tf.float32)
-            assert likelihoods.shape == [V, M]
-        with tf.name_scope('inward'):
+            data_probs = feat_prior + tf.cast(counts, tf.float32)
+            assert data_probs.shape == [V, M]
+        with tf.name_scope('latent'):
+            messages = [None] * V
             for v, parent, children in reversed(schedule):
                 prior_v = vert_probs[v, :]
-                message = tf.cond(
-                    row_mask[v],
-                    lambda prior_v=prior_v: prior_v,
-                    lambda v=v, prior_v=prior_v: likelihoods[v, :] * prior_v)
+                assert prior_v.shape == [M]
+
+                def present(prior_v=prior_v, v=v):
+                    return prior_v * data_probs[v, :]
+
+                def absent(prior_v=prior_v):
+                    return prior_v
+
+                message = tf.cond(row_mask[v], present, absent)
                 assert message.shape == [M]
                 for child in children:
                     e = tree.find_edge(v, child)
-                    mat = edge_probs[e, :, :]
-                    vec = messages[child][:, tf.newaxis]
-                    message *= tf.reduce_sum(mat * vec) / prior_v
-                message *= tf.reciprocal(tf.reduce_max(message))
-                messages[v] = message
-        with tf.name_scope('outward'):
-            for v, parent, children in schedule:
-                message = messages[v]
-                if parent is not None:
-                    e = tree.find_edge(v, parent)
-                    prior_v = vert_probs[v, :]
-                    mat = tf.transpose(edge_probs[e, :, :], [1, 0])
-                    message *= tf.gather(mat, samples[parent])[0, :] / prior_v
-                    assert message.shape == [M]
-                samples[v] = tf.cast(
-                    tf.multinomial(tf.log(message)[tf.newaxis, :], 1)[0],
-                    tf.int32)
+                    trans = edge_probs[e, :, :]
+                    if child < v:
+                        trans = tf.transpose(trans, [1, 0])
+                    message *= tf_matvecmul(trans, messages[child]) / prior_v
+                messages[v] = message / tf.reduce_max(message)
+    with tf.name_scope('outward/latent'):
+        samples = [None] * V
+        for v, parent, children in schedule:
+            message = messages[v]
+            if parent is not None:
+                e = tree.find_edge(v, parent)
+                prior_v = vert_probs[v, :]
+                trans = edge_probs[e, :, :]
+                if child > v:
+                    trans = tf.transpose(trans, [1, 0])
+                message *= tf.gather(trans, samples[parent])[0, :] / prior_v
+                assert message.shape == [M]
+            samples[v] = tf.cast(
+                tf.multinomial(tf.log(message)[tf.newaxis, :], 1)[0], tf.int32)
     assignments = tf.squeeze(tf.parallel_stack(samples), name='assignments')
     with tf.control_dependencies([tf.assert_less(assignments, M)]):
         assignments = tf.identity(assignments)
 
-    # This is run during add_row() and remove_row().
+    # This suffstats update is run during add_row() and remove_row().
     with tf.name_scope('update'):
         # This is optimized for the dense case, i.e. row_mask is mostly True.
         feat_indices = tf.stack([vertices, row_data, assignments], 1)

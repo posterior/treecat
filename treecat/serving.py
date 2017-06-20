@@ -16,7 +16,7 @@ from treecat.util import sizeof
 logger = logging.getLogger(__name__)
 
 
-def make_logits(prior, suffstats):
+def make_posterior(prior, suffstats):
     '''Convert a conjugate prior + suffstats to normalized logits.
 
     Args:
@@ -24,14 +24,13 @@ def make_logits(prior, suffstats):
       suffstats: A numpy array of sufficient statistics (counts).
 
     Returns:
-      A numpy array of logits. The exp() of will be L1 normalized for each
-      leading index, i.e. np.allclose(1, np.exp(result).sum(axis=0)).
+      A numpy array of normalized probabilities.
     '''
     probs = prior + suffstats.astype(np.float32)
-    totals = probs.sum(axis=0)
+    totals = probs.sum(axis=0).reshape((1, ) + probs.shape[1:])
     assert (totals > 0).all()
-    probs /= totals.reshape((1, ) + probs.shape[1:])
-    return np.log(probs)
+    probs /= totals
+    return probs
 
 
 @profile
@@ -67,9 +66,7 @@ def build_graph(tree, suffstats, config, num_rows):
     M = config['num_clusters']  # Clusters in each mixture model.
     C = config['num_categories']  # Categories possible for each feature..
     N = num_rows  # Number of rows in data.
-    assert suffstats['vert_ss'].shape == (V, M)
-    assert suffstats['edge_ss'].shape == (E, M, M)
-    assert suffstats['feat_ss'].shape == (V, C, M)
+    vertices = tf.tile(tf.range(V, dtype=tf.int32)[tf.newaxis, :], [N, 1])
     schedule = make_propagation_schedule(tree.tree_grid)
 
     # Hard-code these hyperparameters.
@@ -77,77 +74,90 @@ def build_graph(tree, suffstats, config, num_rows):
     vert_prior = 1.0 / M  # Nonparametric.
     edge_prior = 1.0 / M**2  # Nonparametric.
 
-    # These log probabilities are constant but shared across queries.
-    feat_logits = tf.Variable(make_logits(feat_prior, suffstats['feat_ss']))
-    vert_logits = tf.Variable(make_logits(vert_prior, suffstats['vert_ss']))
-    edge_logits = tf.Variable(make_logits(edge_prior, suffstats['edge_ss']))
+    # These probabilities are constant but shared across queries.
+    assert suffstats['vert_ss'].shape == (V, M)
+    assert suffstats['edge_ss'].shape == (E, M, M)
+    assert suffstats['feat_ss'].shape == (V, C, M)
+    feat_probs = tf.Variable(make_posterior(feat_prior, suffstats['feat_ss']))
+    vert_probs = tf.Variable(make_posterior(vert_prior, suffstats['vert_ss']))
+    edge_probs = tf.Variable(make_posterior(edge_prior, suffstats['edge_ss']))
 
-    COUNTERS.footprint_serving_feat_logits = sizeof(feat_logits)
-    COUNTERS.footprint_serving_vert_logits = sizeof(vert_logits)
-    COUNTERS.footprint_serving_edge_logits = sizeof(edge_logits)
-
-    # These are the inputs to both sample() and logprob().
-    data = tf.placeholder(tf.int32, [N, V], name='data')
-    mask = tf.placeholder(tf.bool, [V], name='mask')
+    COUNTERS.footprint_serving_feat_probs = sizeof(feat_probs)
+    COUNTERS.footprint_serving_vert_probs = sizeof(vert_probs)
+    COUNTERS.footprint_serving_edge_probs = sizeof(edge_probs)
 
     # This inward pass is run during both sample() and logprob() functions.
+    data = tf.placeholder(tf.int32, [N, V], name='data')
+    mask = tf.placeholder(tf.bool, [V], name='mask')
     with tf.name_scope('inward'):
-        messages = [None] * V  # Properly scaled log probabilities.
         with tf.name_scope('observed'):
-            vertices = tf.zeros_like(data)
-            vertices += tf.range(V, dtype=np.int32)[tf.newaxis, :]
             indices = tf.stack([vertices, data], 2)
-            data_logits = tf.gather_nd(feat_logits, indices)
-            assert data_logits.shape == [N, V, M]
+            data_probs = tf.gather_nd(feat_probs, indices)
+            assert data_probs.shape == [N, V, M]
         with tf.name_scope('latent'):
+            messages = [None] * V
+            messages_scale = [None] * V
             for v, parent, children in reversed(schedule):
-                message = tf.cond(
-                    mask[v],
-                    lambda: tf.zeros([N, M]),
-                    lambda v=v: data_logits[:, v, :])
+                prior_v = vert_probs[tf.newaxis, v, :]
+                assert prior_v.shape == [1, M]
+
+                def present(prior_v=prior_v, v=v):
+                    return prior_v * data_probs[:, v, :]
+
+                def absent(prior_v=prior_v):
+                    return tf.tile(prior_v, [N, 1])
+
+                message = tf.cond(mask[v], present, absent)
                 assert message.shape == [N, M]
                 for child in children:
                     e = tree.find_edge(v, child)
-                    # This is a matrix-vector multiply in log space.
-                    message += tf.reduce_logsumexp(
-                        edge_logits[e, :, :] + messages[child][:, tf.newaxis])
-                prior_v = vert_logits[tf.newaxis, v, :]
-                assert prior_v.shape == [1, M]
-                messages[v] = message + (1.0 - len(children)) * prior_v
+                    trans = edge_probs[e, :, :]
+                    if child < v:
+                        trans = tf.transpose(trans, [1, 0])
+                    message *= tf.matmul(messages[child], trans) / prior_v
+                    assert message.shape == [N, M]
+                messages_scale[v] = tf.reduce_max(message)
+                messages[v] = message / messages_scale[v]
+
+    # This aggregation is run only during the logprob() function.
     root, parent, children = schedule[0]
     assert parent is None
-    logprob = tf.reduce_logsumexp(messages[root], axis=1, name='logprob')
+    logprob = tf.add(
+        tf.log(tf.reduce_sum(messages[root], axis=1)),
+        tf.reduce_sum(tf.log(tf.stack(messages_scale))),
+        name='logprob')
     assert logprob.shape == [N]
 
     # This outward pass is run only during the sample() function.
     with tf.name_scope('outward'):
-        latent_samples = [None] * V
-        observed_samples = [None] * V
         with tf.name_scope('latent'):
+            latent_samples = [None] * V
             for v, parent, children in schedule:
                 message = messages[v]
                 if parent is not None:
                     e = tree.find_edge(v, parent)
-                    # This is a matrix multiply with a one-hot vector.
-                    message += tf.gather(
-                        tf.transpose(edge_logits[e, :, :], [1, 0]),
-                        latent_samples[parent])[0, :]
+                    trans = edge_probs[e, :, :]
+                    if parent < v:
+                        trans = tf.transpose(trans, [1, 0])
+                    message *= tf.gather(trans, latent_samples[parent])[0, :]
                     # FIXME Subtract off previous inward message.
                 assert message.shape == [N, M]
                 latent_samples[v] = tf.cast(
-                    tf.multinomial(message, 1)[:, 0], tf.int32)
+                    tf.multinomial(tf.log(message), 1)[:, 0], tf.int32)
                 assert latent_samples[v].shape == [N]
         with tf.name_scope('observed'):
+            observed_samples = [None] * V
             for v, parent, children in schedule:
-                assert feat_logits.shape == [V, C, M]
+                assert feat_probs.shape == [V, C, M]
 
                 def copied(v=v):
                     return data[:, v]
 
                 def sampled(v=v):
-                    logits = tf.gather(
-                        tf.transpose(feat_logits[v, :, :], [1, 0]),
-                        latent_samples[v])
+                    logits = tf.log(
+                        tf.gather(
+                            tf.transpose(feat_probs[v, :, :], [1, 0]),
+                            latent_samples[v]))
                     assert logits.shape == [N, C]
                     return tf.cast(tf.multinomial(logits, 1)[:, 0], tf.int32)
 
