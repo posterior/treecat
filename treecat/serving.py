@@ -92,31 +92,35 @@ def build_graph(tree, suffstats, config, num_rows):
 
     # This inward pass is run during both sample() and logprob() functions.
     with tf.name_scope('inward'):
-        messages = [None] * V
+        messages = [None] * V  # Properly scaled log probabilities.
         with tf.name_scope('observed'):
             vertices = tf.zeros_like(data)
             vertices += tf.range(V, dtype=np.int32)[tf.newaxis, :]
             indices = tf.stack([vertices, data], 2)
-            logits = tf.gather_nd(feat_logits, indices)
-            assert logits.shape == [N, V, M]
+            data_logits = tf.gather_nd(feat_logits, indices)
+            assert data_logits.shape == [N, V, M]
         with tf.name_scope('latent'):
             for v, parent, children in reversed(schedule):
                 message = tf.cond(
                     mask[v],
                     lambda: tf.zeros([N, M]),
-                    lambda v=v: logits[:, v, :])
+                    lambda v=v: data_logits[:, v, :])
                 assert message.shape == [N, M]
                 for child in children:
                     e = tree.find_edge(v, child)
-                    # This is a matrix-vector multiply.
+                    # This is a matrix-vector multiply in log space.
                     message += tf.reduce_logsumexp(
                         edge_logits[e, :, :] + messages[child][:, tf.newaxis])
                 prior_v = vert_logits[tf.newaxis, v, :]
                 assert prior_v.shape == [1, M]
                 messages[v] = message + (1.0 - len(children)) * prior_v
+    root, parent, children = schedule[0]
+    assert parent is None
+    logprob = tf.reduce_logsumexp(messages[root], axis=1, name='logprob')
+    assert logprob.shape == [N]
 
     # This outward pass is run only during the sample() function.
-    with tf.name_scope('outward_sample'):
+    with tf.name_scope('outward'):
         latent_samples = [None] * V
         observed_samples = [None] * V
         with tf.name_scope('latent'):
@@ -128,8 +132,7 @@ def build_graph(tree, suffstats, config, num_rows):
                     message += tf.gather(
                         tf.transpose(edge_logits[e, :, :], [1, 0]),
                         latent_samples[parent])[0, :]
-                    prior_v = vert_logits[tf.newaxis, v, :]
-                    message -= prior_v
+                    # FIXME Subtract off previous inward message.
                 assert message.shape == [N, M]
                 latent_samples[v] = tf.cast(
                     tf.multinomial(message, 1)[:, 0], tf.int32)
@@ -154,15 +157,6 @@ def build_graph(tree, suffstats, config, num_rows):
         tf.parallel_stack(observed_samples), [1, 0], name='sample')
     assert sample.shape == [N, V]
 
-    # This is run only during the logprob() function.
-    with tf.name_scope('logprob'):
-        root, parent, children = schedule[0]
-        assert parent is None
-        message = messages[root]
-        assert message.shape == [N, M]
-        logprob = tf.reduce_logsumexp(message, axis=1, name='logprob')
-        assert logprob.shape == [N]
-
 
 class TreeCatServer(object):
     """Class for serving queries against a trained TreeCat model."""
@@ -177,18 +171,28 @@ class TreeCatServer(object):
         self._session = None
         self._num_rows = None
 
+    def __del__(self):
+        if self._session is not None:
+            self._session.close()
+
+    def gc(self):
+        """Garbage collect temporary resources."""
+        if self._session is not None:
+            self._session.close()
+            self._session = None
+            self._num_rows = None
+
     # This works around an issue with tf.multinomial and dynamic sizing.
     # Each time a different size is requested, a new graph is built.
     def _get_session(self, num_rows):
         assert num_rows is not None
         if self._num_rows != num_rows:
-            if self._session is not None:
-                self._session.close()
+            self.gc()
             with tf.Graph().as_default():
                 tf.set_random_seed(self._seed)
-                init = tf.global_variables_initializer()
                 build_graph(self._tree, self._suffstats, self._config,
                             num_rows)
+                init = tf.global_variables_initializer()
                 self._session = tf.Session()
             self._session.run(init)
             self._num_rows = num_rows
@@ -220,7 +224,7 @@ class TreeCatServer(object):
         assert data.shape[1] == self._tree.num_vertices
         assert mask.shape[0] == self._tree.num_vertices
         session = self._get_session(num_rows)
-        result = session.run('sample', {'data': data, 'mask': mask})
+        result = session.run('sample:0', {'data:0': data, 'mask:0': mask})
         assert result.shape == data.shape
         assert result.dtype == data.dtype
         return result
@@ -246,6 +250,6 @@ class TreeCatServer(object):
         assert data.shape[1] == self._tree.num_vertices
         assert mask.shape[0] == self._tree.num_vertices
         session = self._get_session(num_rows)
-        result = session.run('logprob', {'data': data, 'mask': mask})
+        result = session.run('logprob:0', {'data:0': data, 'mask:0': mask})
         assert result.shape == [num_rows]
         return result

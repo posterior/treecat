@@ -99,7 +99,7 @@ def build_graph(tree, inits, config):
     row_data = tf.placeholder(dtype=tf.int32, shape=[V], name='row_data')
     row_mask = tf.placeholder(dtype=tf.bool, shape=[V], name='row_mask')
     with tf.name_scope('propagate'):
-        messages = [None] * V
+        messages = [None] * V  # Arbitrarily scaled probabilities.
         samples = [None] * V
         with tf.name_scope('feature'):
             indices = tf.stack([vertices, row_data], 1)
@@ -119,7 +119,8 @@ def build_graph(tree, inits, config):
                     mat = edge_probs[e, :, :]
                     vec = messages[child][:, tf.newaxis]
                     message *= tf.reduce_sum(mat * vec) / prior_v
-                messages[v] = message * tf.reciprocal(tf.reduce_max(message))
+                message *= tf.reciprocal(tf.reduce_max(message))
+                messages[v] = message
         with tf.name_scope('outward'):
             for v, parent, children in schedule:
                 message = messages[v]
@@ -213,6 +214,10 @@ class TreeCatTrainer(object):
         self.tree = TreeStructure(num_features)
         self._session = None
         self._update_session()
+
+    def __del__(self):
+        if self._session is not None:
+            self._session.close()
 
     @profile
     def _update_session(self):
