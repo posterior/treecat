@@ -24,7 +24,7 @@ def test_server_init(model):
     server._get_session(7)
 
 
-def test_server_sample(model):
+def test_server_sample_shape(model):
     N, V = TINY_DATA.shape
     server = TreeCatServer(model['tree'], model['suffstats'], TINY_CONFIG)
 
@@ -38,7 +38,7 @@ def test_server_sample(model):
         assert np.allclose(samples[:, mask], TINY_DATA[:, mask])
 
 
-def test_server_logprob(model):
+def test_server_logprob_shape(model):
     N, V = TINY_DATA.shape
     server = TreeCatServer(model['tree'], model['suffstats'], TINY_CONFIG)
 
@@ -53,10 +53,12 @@ def test_server_logprob(model):
 
 
 @pytest.mark.xfail
-def test_server_logprob_total(model):
+def test_server_logprob_is_normalized(model):
     N, V = TINY_DATA.shape
     C = TINY_CONFIG['num_categories']
     server = TreeCatServer(model['tree'], model['suffstats'], TINY_CONFIG)
+
+    # The total probability of all possible rows should be 1.
     factors = [range(C)] * V
     data = np.array(list(itertools.product(*factors)), dtype=np.int32)
     mask = np.array([True] * V, dtype=np.bool_)
