@@ -27,7 +27,8 @@ def make_posterior(prior, suffstats):
       A numpy array of normalized probabilities.
     '''
     probs = prior + suffstats.astype(np.float32)
-    totals = probs.sum(axis=0).reshape((1, ) + probs.shape[1:])
+    axes = tuple(range(1, len(probs.shape)))
+    totals = probs.sum(axis=axes, keepdims=True)
     assert (totals > 0).all()
     probs /= totals
     return probs
@@ -78,9 +79,10 @@ def build_graph(tree, suffstats, config, num_rows):
     assert suffstats['vert_ss'].shape == (V, M)
     assert suffstats['edge_ss'].shape == (E, M, M)
     assert suffstats['feat_ss'].shape == (V, C, M)
-    feat_probs = tf.Variable(make_posterior(feat_prior, suffstats['feat_ss']))
     vert_probs = tf.Variable(make_posterior(vert_prior, suffstats['vert_ss']))
     edge_probs = tf.Variable(make_posterior(edge_prior, suffstats['edge_ss']))
+    feat_probs = tf.Variable(
+        make_posterior(feat_prior, suffstats['feat_ss']) * C)
 
     COUNTERS.footprint_serving_feat_probs = sizeof(feat_probs)
     COUNTERS.footprint_serving_vert_probs = sizeof(vert_probs)
@@ -262,5 +264,5 @@ class TreeCatServer(object):
         assert mask.shape[0] == self._tree.num_vertices
         session = self._get_session(num_rows)
         result = session.run('logprob:0', {'data:0': data, 'mask:0': mask})
-        assert result.shape == [num_rows]
+        assert result.shape == (num_rows, )
         return result

@@ -38,7 +38,6 @@ def test_server_sample(model):
         assert np.allclose(samples[:, mask], TINY_DATA[:, mask])
 
 
-@pytest.mark.xfail
 def test_server_logprob(model):
     N, V = TINY_DATA.shape
     server = TreeCatServer(model['tree'], model['suffstats'], TINY_CONFIG)
@@ -51,3 +50,16 @@ def test_server_logprob(model):
         assert logprob.shape == (N, )
         assert np.isfinite(logprob).all()
         assert (logprob < 0.0).all()  # Assuming features are discrete.
+
+
+@pytest.mark.xfail
+def test_server_logprob_total(model):
+    N, V = TINY_DATA.shape
+    C = TINY_CONFIG['num_categories']
+    server = TreeCatServer(model['tree'], model['suffstats'], TINY_CONFIG)
+    factors = [range(C)] * V
+    data = np.array(list(itertools.product(*factors)), dtype=np.int32)
+    mask = np.array([True] * V, dtype=np.bool_)
+    logprob = server.logprob(data, mask)
+    total = np.exp(np.logaddexp.reduce(logprob))
+    assert abs(total - 1.0) < 1e-6, total
