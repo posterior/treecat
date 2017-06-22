@@ -100,6 +100,7 @@ def build_graph(tree, suffstats, config, num_rows):
             messages = [None] * V
             messages_scale = [None] * V
             for v, parent, children in reversed(schedule):
+                # Propagate from children to v.
                 prior_v = vert_probs[tf.newaxis, v, :]
                 assert prior_v.shape == [1, M]
 
@@ -114,9 +115,9 @@ def build_graph(tree, suffstats, config, num_rows):
                 for child in children:
                     e = tree.find_edge(v, child)
                     trans = edge_probs[e, :, :]
-                    if child < v:
+                    if child > v:
                         trans = tf.transpose(trans, [1, 0])
-                    # Orientation: trans[v, child].
+                    # Orientation: trans[child, v].
                     message *= tf.matmul(messages[child], trans) / prior_v
                     assert message.shape == [N, M]
                 messages_scale[v] = tf.reduce_max(message)
@@ -136,6 +137,7 @@ def build_graph(tree, suffstats, config, num_rows):
         with tf.name_scope('latent'):
             latent_samples = [None] * V
             for v, parent, children in schedule:
+                # Propagate from parent to v.
                 message = messages[v]
                 if parent is not None:
                     e = tree.find_edge(v, parent)
