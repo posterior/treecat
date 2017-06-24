@@ -5,8 +5,10 @@ from __future__ import print_function
 import logging
 
 import numpy as np
+from scipy.special import gammaln
 
 from treecat.structure import make_propagation_schedule
+from treecat.structure import sample_tree
 from treecat.util import profile
 
 logger = logging.getLogger(__name__)
@@ -17,7 +19,6 @@ class NumpyTrainer(object):
         logger.info('NumpyTrainer of %d x %d data', data.shape[0],
                     data.shape[1])
         super(NumpyTrainer, self).__init__(data, mask, config)
-        self._init_tensors()
         self._schedule = make_propagation_schedule(self.tree.tree_grid)
 
         # These are useful dimensions to import into locals().
@@ -28,13 +29,10 @@ class NumpyTrainer(object):
         C = self._config['num_categories']  # Categories for each feature.
         self._VEKMC = (V, E, K, M, C)
 
-    def _init_tensors(self):
-        V, E, K, M, C = self._VEKMC
-
         # Hard-code these hyperparameters.
-        feat_prior = 0.5  # Jeffreys prior.
-        vert_prior = 1.0 / M  # Nonparametric.
-        edge_prior = 1.0 / M**2  # Nonparametric.
+        self._feat_prior = 0.5  # Jeffreys prior.
+        self._vert_prior = 1.0 / M  # Nonparametric.
+        self._edge_prior = 1.0 / M**2  # Nonparametric.
 
         # Sufficient statistics are maintained always.
         self._vert_ss = np.zeros([V, M], np.int32)
@@ -44,15 +42,23 @@ class NumpyTrainer(object):
         # Sufficient statistics for tree learning are reset after each batch.
         # This is the most expensive data structure, costing O(V^2 M^2) space.
         self._tree_ss = np.zeros([K, M, M], np.int32)
-        self._tree_ss += edge_prior
 
         # Non-normalized probabilities are maintained within each batch.
-        self._feat_probs = feat_prior + self._feat_ss.astype(np.float32)
-        self._vert_probs = vert_prior + self._vert_ss.astype(np.float32)
-        self._edge_probs = edge_prior + self._edge_ss.astype(np.float32)
+        self._feat_probs = self._feat_prior + self._feat_ss.astype(np.float32)
+        self._vert_probs = self._vert_prior + self._vert_ss.astype(np.float32)
+        self._edge_probs = self._edge_prior + self._edge_ss.astype(np.float32)
 
         # Temporaries.
         self._messages = np.zeros([V, M], dtype=np.float32)
+
+    def _update_tree(self):
+        self._tree_ss[...] = 0
+        self._feat_probs[...] = self._feat_ss
+        self._feat_probs += self._feat_prior
+        self._vert_probs[...] = self._vert_ss
+        self._vert_probs += self._vert_prior
+        self._edge_probs[...] = self._edge_ss
+        self._edge_probs += self._edge_prior
 
     @profile
     def _update_tensors(self, data, mask, assignments, diff):
@@ -135,3 +141,29 @@ class NumpyTrainer(object):
         assert assignments_in.dtype == np.int32_
         assert assignments_in.shape == (V, )
         self._update_tensors(data, mask, assignments_in, -1)
+
+    @profile
+    def sample_tree(self):
+        logger.info('NumpyTrainer.sample_tree given %d rows',
+                    len(self._assigned_rows))
+        # Compute edge logits.
+        V, E, K, M, C = self._VEKMC
+        edge_logits = np.zeros([K], np.float32)
+        for k in range(K):
+            block = self._tree_ss[k, :, :].astype(np.float32)
+            block += self._edge_prior
+            edge_logits[k] = gammaln(block).sum()
+
+        # Sample the tree.
+        complete_grid = self.tree.complete_grid
+        assert edge_logits.shape[0] == complete_grid.shape[1]
+        edges = self.tree.tree_grid[1:3, :].T
+        edges = sample_tree(
+            complete_grid,
+            edge_logits,
+            edges,
+            seed=self._seed,
+            steps=self._config['sample_tree_steps'])
+        self._seed += 1
+        self.tree.set_edges(edges)
+        self._update_tree()

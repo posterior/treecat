@@ -36,7 +36,14 @@ setup(
     packages=['treecat'],
     ext_modules=cythonize(extensions),
     entry_points=parsable.find_entry_points('treecat'),
-    install_requires=['cython', 'eigency', 'numpy', 'six', 'parsable'],
+    install_requires=[
+        'cython',
+        'eigency',
+        'numpy',
+        'parsable',
+        'scipy',
+        'six',
+    ],
     extras_require={
         'tensorflow': ['tensorflow>=1.1.0'],
         'tensorflow with gpu': ['tensorflow-gpu>=1.1.0']

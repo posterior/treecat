@@ -224,14 +224,14 @@ class TensorflowTrainer(TrainerBase):
                     data.shape[1])
         super(TensorflowTrainer, self).__init__(data, mask, config)
         self._session = None
-        self._update_session()
+        self._update_tree()
 
     def __del__(self):
         if self._session is not None:
             self._session.close()
 
     @profile
-    def _update_session(self):
+    def _update_tree(self):
         if self._session is not None:
             self.suffstats = self._session.run(self._actions['save'])
             self._session.close()
@@ -285,7 +285,7 @@ class TensorflowTrainer(TrainerBase):
             steps=self._config['sample_tree_steps'])
         self._seed += 1
         self.tree.set_edges(edges)
-        self._update_session()
+        self._update_tree()
 
     def finish(self):
         logger.info('TensorflowTrainer.finish with %d rows',
