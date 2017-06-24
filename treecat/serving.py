@@ -106,7 +106,7 @@ def build_graph(tree, suffstats, config, num_rows):
     factor_latent_latent = tf.Variable(factors['latent_latent'])
 
     # Propagate upward from observed to latent.
-    # This is run during both sample() and logprob() functions.
+    # This is run during both sample() and logprob().
     messages = [None] * V
     with tf.name_scope('upward'):
         for v, parent, children in reversed(schedule):
@@ -123,7 +123,7 @@ def build_graph(tree, suffstats, config, num_rows):
             assert messages[v].shape == [N, M]
 
     # Propagate latent state inward from children to v.
-    # This is run during both sample() and logprob() functions.
+    # This is run during both sample() and logprob().
     messages_scale = [None] * V
     with tf.name_scope('inward'):
         for v, parent, children in reversed(schedule):
@@ -140,7 +140,7 @@ def build_graph(tree, suffstats, config, num_rows):
             messages[v] = message / messages_scale[v]
 
     # Aggregate the total logprob.
-    # This is run only during the logprob() function.
+    # This is run only during logprob().
     root, parent, children = schedule[0]
     assert parent is None
     logprob = tf.add(
@@ -168,7 +168,7 @@ def build_graph(tree, suffstats, config, num_rows):
             assert latent_samples[v].shape == [N]
 
     # Propagate downward from latent to observed.
-    # This is run only during the sample() function.
+    # This is run only during sample().
     with tf.name_scope('downward'):
         observed_samples = [None] * V
         for v, parent, children in schedule:
