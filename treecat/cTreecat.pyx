@@ -8,13 +8,14 @@ from eigency.core cimport MatrixXi
 from eigency.core cimport VectorXi
 from eigency.core cimport Map
 
+from libc.stdint cimport int64_t
 from libcpp cimport bool
-from libcpp.utility cimport pair
-from libcpp.vector cimport vector
 from libcpp.map cimport map
 from libcpp.string cimport string
+from libcpp.utility cimport pair
+from libcpp.vector cimport vector
 
-ctypedef map[string, string] Config
+ctypedef map[string, int64_t] Config
 
 
 cdef extern from 'treecat.hpp' namespace 'treecat':
@@ -33,7 +34,7 @@ cdef extern from 'treecat.hpp' namespace 'treecat':
         pass
 
     bool _train_model 'treecat::train_model' \
-        (Map[MatrixXi]& data, Config& config, Model& model)
+        (Map[MatrixXi]& data, Config& config, Model& model, string& error)
 
 
 def echo(arg):
@@ -44,8 +45,9 @@ def train_model(data, mask, config):
     cdef Config _config
     cdef Model _model
     # TODO convert config
-    status = _train_model(Map[MatrixXi](data), _config, _model)
-    assert status
+    cdef string error
+    if not _train_model(Map[MatrixXi](data), _config, _model, error):
+        raise ValueError(error)
     return {
         'config': config,
         'suffstats': None,  # TODO

@@ -10,7 +10,7 @@ namespace treecat {
 
 std::string echo(const std::string& message);
 
-typedef std::map<std::string, std::string> Config;
+typedef std::map<std::string, int64_t> Config;
 
 struct SuffStats {
     int row;
@@ -29,6 +29,6 @@ struct Model {
 };
 
 bool train_model(const Eigen::Map<Eigen::MatrixXi>& data, const Config& config,
-                 Model& model);
+                 Model& model, std::string& error);
 
 }  // namespace treecat
