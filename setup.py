@@ -21,7 +21,7 @@ extensions = [
 try:
     import pypandoc
     long_description = pypandoc.convert('README.md', 'rst')
-except(IOError, ImportError, OSError) as e:
+except (IOError, ImportError, OSError) as e:
     sys.stderr.write('Failed to convert README.md to rst:\n  {}\n'.format(e))
     sys.stderr.flush()
     long_description = open('README.md').read()

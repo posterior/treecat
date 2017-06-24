@@ -5,15 +5,14 @@ from __future__ import print_function
 import contextlib
 import shutil
 import tempfile
-from copy import deepcopy
 
 import numpy as np
 import pytest
 
 from treecat.config import DEFAULT_CONFIG
 
-TINY_CONFIG = deepcopy(DEFAULT_CONFIG)
-TINY_CONFIG['annealing']['epochs'] = 2
+TINY_CONFIG = DEFAULT_CONFIG.copy()
+TINY_CONFIG['annealing_epochs'] = 2
 
 TINY_DATA = np.array(
     [

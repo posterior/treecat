@@ -5,7 +5,6 @@ from __future__ import print_function
 import os
 import platform
 import sys
-from copy import deepcopy
 from subprocess import Popen
 from subprocess import check_call
 
@@ -32,9 +31,9 @@ def profile_train(rows=100, cols=10, cats=4, epochs=5, tool='timers'):
     """
     from treecat.config import DEFAULT_CONFIG
     from treecat.generate import generate_dataset
-    config = deepcopy(DEFAULT_CONFIG)
+    config = DEFAULT_CONFIG.copy()
     config['num_categories'] = cats
-    config['annealing']['epochs'] = epochs
+    config['annealing_epochs'] = epochs
     data, mask = generate_dataset(rows, cols, config=config)
     task = (data, mask, config)
     with tempdir() as dirname:

@@ -7,8 +7,6 @@ DEFAULT_CONFIG = {
     'num_categories': 4,
     'num_clusters': 32,
     'sample_tree_steps': 32,
-    'annealing': {
-        'init_rows': 2,
-        'epochs': 100.0,
-    },
+    'annealing_init_rows': 2,
+    'annealing_epochs': 100.0,
 }
