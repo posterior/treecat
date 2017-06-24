@@ -4,7 +4,7 @@ from __future__ import print_function
 
 DEFAULT_CONFIG = {
     'seed': 0,
-    'num_categories': 3,  # E.g. CSE-IT data.
+    'num_categories': 4,
     'num_clusters': 32,
     'sample_tree_steps': 32,
     'annealing': {
