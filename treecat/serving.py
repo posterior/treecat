@@ -97,21 +97,19 @@ def build_graph(tree, suffstats, config, num_rows):
     N = num_rows  # Number of rows in data.
     schedule = make_propagation_schedule(tree.tree_grid)
     factors = make_posterior_factors(tree.tree_grid, suffstats)
+    data = tf.placeholder(tf.int32, [N, V], name='data')
+    mask = tf.placeholder(tf.bool, [V], name='mask')
 
     # These posterior factors are constant across calls.
-    # factor_observed = tf.Variable(factors['observed'])
     factor_observed_latent = tf.Variable(factors['observed_latent'])
     factor_latent = tf.Variable(factors['latent'])
     factor_latent_latent = tf.Variable(factors['latent_latent'])
 
-    # This inward pass is run during both sample() and logprob() functions.
-    data = tf.placeholder(tf.int32, [N, V], name='data')
-    mask = tf.placeholder(tf.bool, [V], name='mask')
-    with tf.name_scope('inward'):
-        messages = [None] * V
-        messages_scale = [None] * V
+    # Propagate upward from observed to latent.
+    # This is run during both sample() and logprob() functions.
+    messages = [None] * V
+    with tf.name_scope('upward'):
         for v, parent, children in reversed(schedule):
-            # Propagate from observed to latent.
 
             def present(v=v):
                 return tf.multiply(factor_latent[v, tf.newaxis, :],
@@ -121,10 +119,15 @@ def build_graph(tree, suffstats, config, num_rows):
             def absent(v=v):
                 return tf.tile(factor_latent[v, tf.newaxis, :], [N, 1])
 
-            message = tf.cond(mask[v], present, absent)
-            assert message.shape == [N, M]
+            messages[v] = tf.cond(mask[v], present, absent)
+            assert messages[v].shape == [N, M]
 
-            # Propagate latent state from children to v.
+    # Propagate latent state inward from children to v.
+    # This is run during both sample() and logprob() functions.
+    messages_scale = [None] * V
+    with tf.name_scope('inward'):
+        for v, parent, children in reversed(schedule):
+            message = messages[v]
             for child in children:
                 e = tree.find_edge(v, child)
                 if v < child:
@@ -136,7 +139,8 @@ def build_graph(tree, suffstats, config, num_rows):
             messages_scale[v] = tf.reduce_max(message)
             messages[v] = message / messages_scale[v]
 
-    # This aggregation is run only during the logprob() function.
+    # Aggregate the total logprob.
+    # This is run only during the logprob() function.
     root, parent, children = schedule[0]
     assert parent is None
     logprob = tf.add(
@@ -145,13 +149,12 @@ def build_graph(tree, suffstats, config, num_rows):
         name='logprob')
     assert logprob.shape == [N]
 
-    # This outward pass is run only during the sample() function.
+    # Propagate latent state outward from parent to v.
+    # This is run only during the sample() function.
     with tf.name_scope('outward'):
         latent_samples = [None] * V
-        observed_samples = [None] * V
         for v, parent, children in schedule:
             message = messages[v]
-            # Propagate latent state from parent to v.
             if parent is not None:
                 e = tree.find_edge(v, parent)
                 if parent < v:
@@ -164,7 +167,11 @@ def build_graph(tree, suffstats, config, num_rows):
                 tf.multinomial(tf.log(message), 1)[:, 0], tf.int32)
             assert latent_samples[v].shape == [N]
 
-            # Propagate from latent to observed.
+    # Propagate downward from latent to observed.
+    # This is run only during the sample() function.
+    with tf.name_scope('downward'):
+        observed_samples = [None] * V
+        for v, parent, children in schedule:
 
             def copied(v=v):
                 return data[:, v]
@@ -176,8 +183,6 @@ def build_graph(tree, suffstats, config, num_rows):
                         latent_samples[v]))
                 assert logits.shape == [N, C]
                 return tf.cast(tf.multinomial(logits, 1)[:, 0], tf.int32)
-
-            # TODO Propagate from observed to latent.
 
             observed_samples[v] = tf.cond(mask[v], copied, sampled)
             assert observed_samples[v].shape == [N]

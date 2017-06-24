@@ -65,6 +65,8 @@ def build_graph(tree, inits, config):
     tree_grid = tf.constant(tree.tree_grid)
     complete_grid = tf.constant(tree.complete_grid)
     schedule = make_propagation_schedule(tree.tree_grid)
+    row_data = tf.placeholder(dtype=tf.int32, shape=[V], name='row_data')
+    row_mask = tf.placeholder(dtype=tf.bool, shape=[V], name='row_mask')
 
     # Hard-code these hyperparameters.
     feat_prior = tf.constant(0.5, dtype=tf.float32)  # Jeffreys prior.
@@ -102,39 +104,36 @@ def build_graph(tree, inits, config):
         logits = tf.lgamma(weights + edge_prior) - tf.lgamma(weights + one)
         tf.reduce_sum(logits, [1, 2], name='edge_logits')
 
-    # This inward-outward algorithm is run only during add_row().
-    row_data = tf.placeholder(dtype=tf.int32, shape=[V], name='row_data')
-    row_mask = tf.placeholder(dtype=tf.bool, shape=[V], name='row_mask')
+    # This dynamic programming algorithm is run only during add_row().
+    with tf.name_scope('upward'):
+        indices = tf.stack([vertices, row_data], 1)
+        counts = tf.gather_nd(feat_ss, indices)
+        data_probs = feat_prior + tf.cast(counts, tf.float32)
+        assert data_probs.shape == [V, M]
     with tf.name_scope('inward'):
-        with tf.name_scope('observed'):
-            indices = tf.stack([vertices, row_data], 1)
-            counts = tf.gather_nd(feat_ss, indices)
-            data_probs = feat_prior + tf.cast(counts, tf.float32)
-            assert data_probs.shape == [V, M]
-        with tf.name_scope('latent'):
-            messages = [None] * V
-            for v, parent, children in reversed(schedule):
-                prior_v = vert_probs[v, :]
-                assert prior_v.shape == [M]
+        messages = [None] * V
+        for v, parent, children in reversed(schedule):
+            prior_v = vert_probs[v, :]
+            assert prior_v.shape == [M]
 
-                def present(prior_v=prior_v, v=v):
-                    return prior_v * data_probs[v, :]
+            def present(prior_v=prior_v, v=v):
+                return prior_v * data_probs[v, :]
 
-                def absent(prior_v=prior_v):
-                    return prior_v
+            def absent(prior_v=prior_v):
+                return prior_v
 
-                message = tf.cond(row_mask[v], present, absent)
-                assert message.shape == [M]
-                for child in children:
-                    e = tree.find_edge(v, child)
-                    trans = edge_probs[e, :, :]
-                    if child < v:
-                        trans = tf.transpose(trans, [1, 0])
-                    # Orientation: trans[v, child].
-                    message *= tf_matvecmul(trans, messages[child]) / prior_v
-                messages[v] = message / tf.reduce_max(message)
-    with tf.name_scope('outward/latent'):
-        samples = [None] * V
+            message = tf.cond(row_mask[v], present, absent)
+            assert message.shape == [M]
+            for child in children:
+                e = tree.find_edge(v, child)
+                trans = edge_probs[e, :, :]
+                if child < v:
+                    trans = tf.transpose(trans, [1, 0])
+                # Orientation: trans[v, child].
+                message *= tf_matvecmul(trans, messages[child]) / prior_v
+            messages[v] = message / tf.reduce_max(message)
+    with tf.name_scope('outward'):
+        latent_samples = [None] * V
         for v, parent, children in schedule:
             message = messages[v]
             if parent is not None:
@@ -144,11 +143,13 @@ def build_graph(tree, inits, config):
                 if parent > v:
                     trans = tf.transpose(trans, [1, 0])
                 # Orientation: trans[parent, v].
-                message *= tf.gather(trans, samples[parent])[0, :] / prior_v
+                message *= tf.gather(trans,
+                                     latent_samples[parent])[0, :] / prior_v
                 assert message.shape == [M]
-            samples[v] = tf.cast(
+            latent_samples[v] = tf.cast(
                 tf.multinomial(tf.log(message)[tf.newaxis, :], 1)[0], tf.int32)
-    assignments = tf.squeeze(tf.parallel_stack(samples), name='assignments')
+    assignments = tf.squeeze(
+        tf.parallel_stack(latent_samples), name='assignments')
     with tf.control_dependencies([tf.assert_less(assignments, M)]):
         assignments = tf.identity(assignments)
 
