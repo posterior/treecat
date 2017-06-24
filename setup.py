@@ -1,8 +1,11 @@
 from parsable import parsable
 from setuptools import setup
 
-with open('README.md') as f:
-    long_description = f.read()
+try:
+    import pypandoc
+    long_description = pypandoc.convert('README.md', 'rst')
+except(IOError, ImportError):
+    long_description = open('README.md').read()
 
 setup(
     name='treecat',
