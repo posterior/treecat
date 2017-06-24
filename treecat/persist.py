@@ -3,11 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import gzip
-
-try:
-    import cPickle as pickle
-except ImportError:
-    import pickle
+from six.moves import cPickle as pickle
 
 
 def pickle_dump(data, filename):

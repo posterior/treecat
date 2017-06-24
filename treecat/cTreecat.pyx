@@ -38,7 +38,7 @@ cdef extern from 'treecat.hpp' namespace 'treecat':
 
 
 def echo(arg):
-    return _echo(bytes(arg, encoding='utf-8')).decode('utf-8')
+    return _echo(arg.encode('utf-8')).decode('utf-8')
 
 
 def train_model(data, mask, config):
