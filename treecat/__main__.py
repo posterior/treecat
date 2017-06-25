@@ -16,11 +16,36 @@ from treecat.testutil import tempdir
 PYTHON = sys.executable
 
 
+def run_with_tool(cmd, tool, dirname):
+    profile_path = os.path.join(dirname, 'profile_train.prof')
+    if tool == 'pdb':
+        check_call([PYTHON, '-m', 'pdb'] + cmd)
+    elif tool == 'time':
+        if platform.platform().startswith('Darwin'):
+            gnu_time = 'gtime'
+        else:
+            gnu_time = '/usr/bin/time'
+        check_call([gnu_time, '-v', PYTHON, '-O'] + cmd)
+    elif tool == 'snakeviz':
+        check_call([PYTHON, '-m', 'cProfile', '-o', profile_path] + cmd)
+        check_call(['snakeviz', profile_path])
+    elif tool == 'timers':
+        env = os.environ.copy()
+        env.setdefault('TREECAT_LOG_LEVEL', '15')
+        Popen([PYTHON, '-O'] + cmd, env=env).wait()
+
+    elif tool == 'line_profiler':
+        check_call(['kernprof', '-l', '-v', '-o', profile_path] + cmd)
+    else:
+        raise ValueError('Unknown tool: {}'.format(tool))
+
+
 @parsable
-def train(filename):
-    """Train from a pickled (data, mask, config) tuple."""
+def train(dataset_path, config_path):
+    """Train from pickled data, mask, config."""
     from treecat.training import train_model
-    data, mask, config = pickle_load(filename)
+    data, mask = pickle_load(dataset_path)
+    config = pickle_load(config_path)
     train_model(data, mask, config)
 
 
@@ -35,38 +60,17 @@ def profile_train(rows=100,
     Available tools: timers, time, snakeviz, line_profiler, pdb
     """
     from treecat.config import DEFAULT_CONFIG
-    from treecat.generate import generate_dataset
+    from treecat.generate import generate_dataset_file
     config = DEFAULT_CONFIG.copy()
     config['num_categories'] = cats
     config['annealing_epochs'] = epochs
     config['engine'] = engine
-    data, mask = generate_dataset(rows, cols, config=config)
-    task = (data, mask, config)
+    dataset_path = generate_dataset_file(rows, cols, cats)
     with tempdir() as dirname:
-        task_path = os.path.join(dirname, 'profile_train.pkl.gz')
-        profile_path = os.path.join(dirname, 'profile_train.prof')
-        pickle_dump(task, task_path)
-        cmd = [os.path.abspath(__file__), 'train', task_path]
-        if tool == 'pdb':
-            check_call([PYTHON, '-m', 'pdb'] + cmd)
-        elif tool == 'time':
-            if platform.platform().startswith('Darwin'):
-                gnu_time = 'gtime'
-            else:
-                gnu_time = '/usr/bin/time'
-            check_call([gnu_time, '-v', PYTHON, '-O'] + cmd)
-        elif tool == 'snakeviz':
-            check_call([PYTHON, '-m', 'cProfile', '-o', profile_path] + cmd)
-            check_call(['snakeviz', profile_path])
-        elif tool == 'timers':
-            env = os.environ.copy()
-            env.setdefault('TREECAT_LOG_LEVEL', '15')
-            Popen([PYTHON, '-O'] + cmd, env=env).wait()
-
-        elif tool == 'line_profiler':
-            check_call(['kernprof', '-l', '-v', '-o', profile_path] + cmd)
-        else:
-            raise ValueError('Unknown tool: {}'.format(tool))
+        config_path = os.path.join(dirname, 'config.pkl.gz')
+        pickle_dump(config, config_path)
+        cmd = [os.path.abspath(__file__), 'train', dataset_path, config_path]
+        run_with_tool(cmd, tool, dirname)
 
 
 # TODO Support tensorflow profiling.
