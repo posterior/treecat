@@ -123,6 +123,47 @@ class ServerBase(object):
         """
         raise NotImplementedError()
 
+    def entropy(self, feature_sets, cond_data=None, cond_mask=None):
+        """Compute entropy of a subset of features, conditioned on data.
+
+        Args:
+          feature_sets: A list of sets of fetaures on which to compute entropy.
+          cond_data: An optional row of data on which to condition.
+          cond_mask: An optional row of mask on which to condition.
+            This defaults to all-false and hence unconditioned entropy.
+
+        Returns:
+          A numpy array of entropy estimates, one estimate per feature set.
+        """
+        assert isinstance(feature_sets, list)
+        assert (cond_data is None) == (cond_mask is None)
+        N = self._config['serving_samples']
+        V = self._tree.num_vertices
+        for feature_set in feature_sets:
+            for feature in feature_set:
+                assert 0 <= feature and feature <= V
+        data = np.zeros([N, V], dtype=np.int32)
+        mask = np.zeros([V], dtype=np.int32)
+
+        # Generate samples.
+        if cond_data is not None and cond_mask is not None:
+            assert cond_data.shape == cond_mask.shape
+            assert cond_data.dtype == np.int32
+            assert cond_mask.dtype == np.bool_
+            data[...] = cond_data[np.newaxis, :]
+            mask[:] = cond_mask
+        samples = self.sample(data, mask)
+
+        # Compte entropies.
+        result = np.zeros([len(feature_sets)], dtype=np.float32)
+        for i, feature_set in enumerate(feature_sets):
+            mask[:] = False
+            mask[list(feature_set)] = True
+            logprob = self.logprob(samples, mask)
+            result[i] = -np.mean(logprob * np.exp(logprob))
+
+        return result
+
 
 def serve_model(tree, suffstats, config):
     if config['engine'] == 'numpy':

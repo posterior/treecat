@@ -9,5 +9,6 @@ DEFAULT_CONFIG = {
     'sample_tree_steps': 10,
     'annealing_init_rows': 2,
     'annealing_epochs': 100.0,
+    'serving_samples': 1024,
     'engine': 'numpy',
 }

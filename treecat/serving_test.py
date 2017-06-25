@@ -178,3 +178,19 @@ def test_server_gof(engine, model):
     probs = np.array([probs[key] for key in keys])
     probs /= probs.sum()  # Test normalization elsewhere.
     assert 1e-2 < multinomial_goodness_of_fit(probs, counts, total_count=N)
+
+
+@pytest.mark.parametrize('engine', [
+    'numpy',
+    pytest.mark.xfail('tensorflow'),
+])
+def test_server_entropy(engine, model):
+    config = TINY_CONFIG.copy()
+    config['engine'] = engine
+    server = serve_model(model['tree'], model['suffstats'], config)
+    V = TINY_DATA.shape[1]
+    feature_sets = [(v1, v2) for v2 in range(V) for v1 in range(v2)]
+    entropies = server.entropy(feature_sets)
+    assert entropies.shape == (len(feature_sets),)
+    assert np.all(np.isfinite(entropies))
+    assert np.all(entropies >= 0)
