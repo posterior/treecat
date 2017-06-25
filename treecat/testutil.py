@@ -13,6 +13,7 @@ from treecat.config import DEFAULT_CONFIG
 
 TINY_CONFIG = DEFAULT_CONFIG.copy()
 TINY_CONFIG['annealing_epochs'] = 2
+TINY_CONFIG['num_clusters'] = 7
 
 TINY_DATA = np.array(
     [

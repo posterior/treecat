@@ -69,6 +69,7 @@ class TrainerBase(object):
               cell in the dataset.
         """
         logger.info('train()')
+        np.random.seed(self._config['seed'])
         num_rows = self._data.shape[0]
         for action, row_id in get_annealing_schedule(num_rows, self._config):
             if action == 'add_row':
@@ -121,7 +122,6 @@ def get_annealing_schedule(num_rows, config):
     """
     # Randomly shuffle rows.
     row_ids = list(range(num_rows))
-    np.random.seed(config['seed'])
     np.random.shuffle(row_ids)
     row_to_add = itertools.cycle(row_ids)
     row_to_remove = itertools.cycle(row_ids)

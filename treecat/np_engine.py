@@ -11,6 +11,7 @@ from six.moves import xrange
 from treecat.serving import ServerBase
 from treecat.serving import make_posterior_factors
 from treecat.structure import TreeStructure
+from treecat.structure import find_complete_edge
 from treecat.structure import make_propagation_schedule
 from treecat.structure import sample_tree
 from treecat.training import TrainerBase
@@ -90,6 +91,9 @@ class NumpyTrainer(TrainerBase):
         COUNTERS.footprint_training_messages = sizeof(self._messages)
 
     def _update_tree(self):
+        for e, v1, v2 in self.tree.tree_grid.T:
+            k = find_complete_edge(v1, v2)
+            self._edge_ss[e, :, :] = self._tree_ss[k, :, :]
         self._schedule = make_propagation_schedule(self.tree.tree_grid)
         self._tree_ss[...] = 0
         self._feat_probs[...] = self._feat_ss
@@ -106,9 +110,9 @@ class NumpyTrainer(TrainerBase):
         mask = self._mask[row_id]
         assignments = self.assignments[row_id]
 
-        vertices = np.arange(V, dtype=np.int32)
-        tree_edges = np.arange(E, dtype=np.int32)
-        complete_edges = np.arange(K, dtype=np.int32)
+        vertices = self.tree.vertices
+        tree_edges = self.tree.tree_grid[0, :]
+        complete_edges = self.tree.complete_grid[0, :]
         data_mask = data[mask]
         assignments_mask = assignments[mask]
         assignments_e = (assignments[self.tree.tree_grid[1, :]],
@@ -146,7 +150,7 @@ class NumpyTrainer(TrainerBase):
                 message /= feat_probs_sum[v, :]
             # Propagate latent state inward from children to v.
             for child in children:
-                e = self.tree.find_edge(v, child)
+                e = self.tree.find_tree_edge(v, child)
                 if v < child:
                     trans = edge_probs[e, :, :]
                 else:
@@ -159,7 +163,7 @@ class NumpyTrainer(TrainerBase):
         for v, parent, children in self._schedule:
             message = messages[v, :]
             if parent is not None:
-                e = self.tree.find_edge(v, parent)
+                e = self.tree.find_tree_edge(v, parent)
                 if parent < v:
                     trans = edge_probs[e, :, :]
                 else:
@@ -185,8 +189,9 @@ class NumpyTrainer(TrainerBase):
         # Compute edge logits.
         V, E, K, M, C = self._VEKMC
         edge_logits = np.zeros([K], np.float32)
+        block = np.zeros([M, M], dtype=np.float32)
         for k in xrange(K):
-            block = self._tree_ss[k, :, :].astype(np.float32)
+            block[...] = self._tree_ss[k, :, :]
             block += self._edge_prior
             edge_logits[k] = gammaln(block).sum()  # Costs ~8% of total time!
 
@@ -221,11 +226,10 @@ class NumpyServer(ServerBase):
         logger.info('TensorflowServer with %d features', tree.num_vertices)
         assert isinstance(tree, TreeStructure)
         self._tree = tree
-        self._suffstats = suffstats
         self._config = config
         self._seed = config['seed']
-        self._schedule = make_propagation_schedule(tree.tree_grid)
         self._factors = make_posterior_factors(tree.tree_grid, suffstats)
+        self._schedule = make_propagation_schedule(tree.tree_grid)
 
         # These are useful dimensions to import into locals().
         V = self._tree.num_vertices
@@ -252,7 +256,7 @@ class NumpyServer(ServerBase):
                 message *= factor_observed_latent[v, data[:, v], :]
             # Propagate latent state inward from children to v.
             for child in children:
-                e = self._tree.find_edge(child, v)
+                e = self._tree.find_tree_edge(child, v)
                 if child < v:
                     trans = factor_latent_latent[e, :, :]
                 else:
@@ -265,8 +269,8 @@ class NumpyServer(ServerBase):
             # Aggregate the total logprob.
             root, parent, children = self._schedule[0]
             assert parent is None
-            logprob = np.log(messages[root, :, :].sum(axis=2))
-            logprob += np.log(messages_scale).sum(axes=1)
+            logprob = np.log(messages[root, :, :].sum(axis=1))
+            logprob += np.log(messages_scale).sum(axis=0)
             return logprob
 
         elif task == 'sample':
@@ -276,7 +280,7 @@ class NumpyServer(ServerBase):
                 message = messages[v, :, :]
                 # Propagate latent state outward from parent to v.
                 if parent is not None:
-                    e = self._tree.find_edge(parent, v)
+                    e = self._tree.find_tree_edge(parent, v)
                     if parent < v:
                         trans = factor_latent_latent[e, :, :]
                     else:
@@ -284,7 +288,7 @@ class NumpyServer(ServerBase):
                     message *= trans[latent_samples[parent, :], :]
                 sample_from_probs2(message, out=latent_samples[v, :])
                 # Propagate downward from latent to observed.
-                if mask[v]:
+                if not mask[v]:
                     probs = factor_observed_latent[v, :, latent_samples[v, :]]
                     probs = probs.T / probs.sum()
                     sample_from_probs2(probs, out=observed_samples[:, v])

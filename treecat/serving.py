@@ -4,16 +4,20 @@ from __future__ import print_function
 
 import numpy as np
 
+from treecat.util import COUNTERS
+from treecat.util import sizeof
 
-def make_posterior_factors(grid, suffstats):
-    """Computes a complete factorization of the posterior.
+
+def make_posterior(grid, suffstats):
+    """Computes a posterior marginals.
 
     Args:
+      grid: a 3 x E grid of (edge, vertex, vertex) triples.
       suffstats: A dictionary with numpy arrays for sufficient statistics:
         vert_ss, edge_ss, and feat_ss.
 
     Returns:
-      A dictionary with numpy arrays for factors of the posterior:
+      A dictionary with numpy arrays for marginals of the posterior:
       observed, observed_latent, latent, latent_latent.
     """
     V, C, M = suffstats['feat_ss'].shape
@@ -31,20 +35,20 @@ def make_posterior_factors(grid, suffstats):
     latent = vert_prior + suffstats['vert_ss'].astype(np.float32)
     latent_latent = edge_prior + suffstats['edge_ss'].astype(np.float32)
     observed_latent = feat_prior + suffstats['feat_ss'].astype(np.float32)
-    latent /= latent.sum(1, keepdims=True)
-    latent_latent /= latent_latent.sum((1, 2), keepdims=True)
-    observed_latent /= observed_latent.sum((1, 2), keepdims=True)
+    latent /= latent.sum(axis=1, keepdims=True)
+    latent_latent /= latent_latent.sum(axis=(1, 2), keepdims=True)
+    observed_latent /= observed_latent.sum(axis=(1, 2), keepdims=True)
 
-    # Correct observed_latent for partially observed data.
-    partial_latent = observed_latent.sum(1)
+    # Correct observed_latent for partially observed data,
+    # so that its marginals agree with observed and latent.
+    partial_latent = observed_latent.sum(axis=1)
     observed_latent *= (latent / partial_latent)[:, np.newaxis, :]
+    observed = observed_latent.sum(axis=2)
 
-    # Finally compute a non-overlapping factorization.
-    observed = observed_latent.sum(2)
-    observed_latent /= observed[:, :, np.newaxis]
-    observed_latent /= latent[:, np.newaxis, :]
-    latent_latent /= latent[grid[1, :], :, np.newaxis]
-    latent_latent /= latent[grid[2, :], np.newaxis, :]
+    COUNTERS.footprint_serving_observed = sizeof(observed)
+    COUNTERS.footprint_serving_observed_latent = sizeof(observed_latent)
+    COUNTERS.footprint_serving_latent = sizeof(latent)
+    COUNTERS.footprint_serving_latent_latent = sizeof(latent_latent)
 
     return {
         'observed': observed,
@@ -52,6 +56,29 @@ def make_posterior_factors(grid, suffstats):
         'latent': latent,
         'latent_latent': latent_latent,
     }
+
+
+def make_posterior_factors(grid, suffstats):
+    """Computes a complete factorization of the posterior.
+
+    Args:
+      grid: a 3 x E grid of (edge, vertex, vertex) triples.
+      suffstats: A dictionary with numpy arrays for sufficient statistics:
+        vert_ss, edge_ss, and feat_ss.
+
+    Returns:
+      A dictionary with numpy arrays for factors of the posterior:
+      observed, observed_latent, latent, latent_latent.
+    """
+    factors = make_posterior(grid, suffstats)
+
+    # Remove duplicated information so that factorization is non-overlapping.
+    factors['observed_latent'] /= factors['observed'][:, :, np.newaxis]
+    factors['observed_latent'] /= factors['latent'][:, np.newaxis, :]
+    factors['latent_latent'] /= factors['latent'][grid[1, :], :, np.newaxis]
+    factors['latent_latent'] /= factors['latent'][grid[2, :], np.newaxis, :]
+
+    return factors
 
 
 class ServerBase(object):

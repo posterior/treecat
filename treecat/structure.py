@@ -23,6 +23,7 @@ class TreeStructure(object):
         self._num_edges = num_vertices - 1
         self.set_edges([(v, v + 1) for v in range(num_vertices - 1)])
         self._complete_grid = None  # Lazily constructed.
+        self._vertices = np.arange(num_vertices, dtype=np.int32)
 
     def __eq__(self, other):
         return (self._num_vertices == other._num_vertices and
@@ -61,13 +62,24 @@ class TreeStructure(object):
             self._complete_grid = make_complete_graph(self._num_vertices)
         return self._complete_grid
 
-    def find_edge(self, v1, v2):
+    @property
+    def vertices(self):
+        return self._vertices
+
+    def find_tree_edge(self, v1, v2):
         """Find the edge index e of an unsorted pair of vertices (v1, v2)."""
         return self._tree_edges[v1, v2]
 
     def gc(self):
         """Garbage collect temporary cached data structures."""
         self._complete_grid = None
+
+
+def find_complete_edge(v1, v2):
+    """Find the edge index k of an unsorted pair of vertices (v1, v2)."""
+    if v2 < v1:
+        v1, v2 = v2, v1
+    return v1 + v2 * (v2 - 1) // 2
 
 
 def make_complete_graph(num_vertices):
@@ -203,9 +215,8 @@ class MutableTree(object):
         self.k2e = {}
         self.e2k = [None] * E
         self.neighbors = [set() for _ in range(V)]
-        for e, v1v2 in enumerate(edges):
-            v1, v2 = sorted(v1v2)
-            k = v1 + v2 * (v2 - 1) // 2
+        for e, (v1, v2) in enumerate(edges):
+            k = find_complete_edge(v1, v2)
             self.k2e[k] = e
             self.e2k[e] = k
             self.neighbors[v1].add(v2)

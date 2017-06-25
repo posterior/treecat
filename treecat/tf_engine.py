@@ -9,6 +9,7 @@ import tensorflow as tf
 from treecat.serving import ServerBase
 from treecat.serving import make_posterior_factors
 from treecat.structure import TreeStructure
+from treecat.structure import find_complete_edge
 from treecat.structure import make_propagation_schedule
 from treecat.structure import sample_tree
 from treecat.training import TrainerBase
@@ -98,8 +99,12 @@ def build_training_graph(tree, inits, config):
     COUNTERS.footprint_training_vert_probs = sizeof(vert_probs)
     COUNTERS.footprint_training_edge_probs = sizeof(edge_probs)
 
-    # This is run to compute edge logits for learning the tree structure.
+    # This copies tree_ss to edge_ss after updating the tree structure.
+    edges = tf.placeholder(dtype=tf.int32, shape=[E], name='edges')
+    tf.assign(edge_ss, tf.gather(tree_ss, edges), name='update_tree')
+
     with tf.name_scope('structure'):
+        # This is run to compute edge logits for learning the tree structure.
         one = tf.constant(1.0, dtype=tf.float32, name='one')
         weights = tf.cast(tree_ss, tf.float32)
         logits = tf.lgamma(weights + edge_prior) - tf.lgamma(weights + one)
@@ -130,7 +135,7 @@ def build_training_graph(tree, inits, config):
             message = tf.cond(row_mask[v], present, absent)
             assert message.shape == [M]
             for child in children:
-                e = tree.find_edge(v, child)
+                e = tree.find_tree_edge(v, child)
                 if v < child:
                     trans = edge_probs[e, :, :]
                 else:
@@ -145,7 +150,7 @@ def build_training_graph(tree, inits, config):
         for v, parent, children in schedule:
             message = messages[v]
             if parent is not None:
-                e = tree.find_edge(v, parent)
+                e = tree.find_tree_edge(v, parent)
                 prior_v = vert_probs[v, :]
                 if parent < v:
                     trans = edge_probs[e, :, :]
@@ -236,6 +241,11 @@ class TensorflowTrainer(TrainerBase):
     @profile
     def _update_tree(self):
         if self._session is not None:
+            edges = [
+                find_complete_edge(v1, v2)
+                for e, v1, v2 in self.tree.tree_grid.T
+            ]
+            self._session.run('update_tree', {'edges:0': edges})
             self.suffstats = self._session.run(self._actions['save'])
             self._session.close()
         with tf.Graph().as_default():
@@ -366,7 +376,7 @@ def build_serving_graph(tree, suffstats, config, num_rows):
         for v, parent, children in reversed(schedule):
             message = messages[v]
             for child in children:
-                e = tree.find_edge(child, v)
+                e = tree.find_tree_edge(child, v)
                 if child < v:
                     trans = factor_latent_latent[e, :, :]
                 else:
@@ -393,7 +403,7 @@ def build_serving_graph(tree, suffstats, config, num_rows):
         for v, parent, children in schedule:
             message = messages[v]
             if parent is not None:
-                e = tree.find_edge(parent, v)
+                e = tree.find_tree_edge(parent, v)
                 if parent < v:
                     trans = factor_latent_latent[e, :, :]
                 else:
