@@ -64,7 +64,7 @@ def make_posterior_factors(grid, suffstats):
 
 
 @profile
-def build_graph(tree, suffstats, config, num_rows):
+def build_serving_graph(tree, suffstats, config, num_rows):
     """Builds a tensorflow graph for using a trained model.
 
     This implements two message passing algorithms along the latent tree:
@@ -88,7 +88,8 @@ def build_graph(tree, suffstats, config, num_rows):
       sample: An [N, V] tensor for imputed output data.
       logprob: An [N] tensor of logprob values of each data row.
     """
-    logger.debug('build_graph of tree with %d vertices' % tree.num_vertices)
+    logger.debug('build_serving_graph of tree with %d vertices',
+                 tree.num_vertices)
     assert isinstance(tree, TreeStructure)
     assert num_rows > 0
     V = tree.num_vertices
@@ -191,7 +192,12 @@ def build_graph(tree, suffstats, config, num_rows):
     assert sample.shape == [N, V]
 
 
-class TreeCatServer(object):
+class ServerBase(object):
+    """Base class for serving queries against a trained TreeCat model."""
+    pass
+
+
+class TreeCatServer(ServerBase):
     """Class for serving queries against a trained TreeCat model."""
 
     def __init__(self, tree, suffstats, config):
@@ -223,8 +229,8 @@ class TreeCatServer(object):
             self.gc()
             with tf.Graph().as_default():
                 tf.set_random_seed(self._seed)
-                build_graph(self._tree, self._suffstats, self._config,
-                            num_rows)
+                build_serving_graph(self._tree, self._suffstats, self._config,
+                                    num_rows)
                 init = tf.global_variables_initializer()
                 self._session = tf.Session()
             self._session.run(init)

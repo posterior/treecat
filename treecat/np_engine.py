@@ -8,6 +8,7 @@ import numpy as np
 from scipy.special import gammaln
 
 from six.moves import xrange
+from treecat.serving import ServerBase
 from treecat.structure import make_propagation_schedule
 from treecat.structure import sample_tree
 from treecat.training import TrainerBase
@@ -202,3 +203,7 @@ class NumpyTrainer(TrainerBase):
         }
         self._tree_ss = None
         self.tree.gc()
+
+
+class NumpyServer(ServerBase):
+    pass

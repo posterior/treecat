@@ -25,7 +25,7 @@ def tf_matvecmul(matrix, vector):
 
 
 @profile
-def build_graph(tree, inits, config):
+def build_training_graph(tree, inits, config):
     """Builds a tensorflow graph for sampling assignments via message passing.
 
     Feature distributions are Dirichlet-categorical.
@@ -50,7 +50,8 @@ def build_graph(tree, inits, config):
         load: Initialize global variables.
         save: Eval global variables.
     """
-    logger.debug('build_graph of tree with %d vertices' % tree.num_vertices)
+    logger.debug('build_training_graph of tree with %d vertices',
+                 tree.num_vertices)
     assert isinstance(tree, TreeStructure)
     assert isinstance(inits, dict)
     assert isinstance(config, dict)
@@ -237,8 +238,8 @@ class TensorflowTrainer(TrainerBase):
             self._session.close()
         with tf.Graph().as_default():
             tf.set_random_seed(self._seed)
-            self._actions = build_graph(self.tree, self.suffstats,
-                                        self._config)
+            self._actions = build_training_graph(self.tree, self.suffstats,
+                                                 self._config)
             self._session = tf.Session()
         self._session.run(self._actions['load'])
 
