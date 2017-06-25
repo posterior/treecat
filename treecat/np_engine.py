@@ -290,7 +290,8 @@ class NumpyServer(ServerBase):
                 # Propagate downward from latent to observed.
                 if not mask[v]:
                     probs = factor_observed_latent[v, :, latent_samples[v, :]]
-                    probs = probs.T / probs.sum()
+                    assert probs.shape == (N, C)
+                    probs /= probs.sum(axis=1, keepdims=True)
                     sample_from_probs2(probs, out=observed_samples[:, v])
             return observed_samples
 
@@ -299,7 +300,6 @@ class NumpyServer(ServerBase):
     @profile
     def sample(self, data, mask):
         logger.info('sampling %d rows', data.shape[0])
-        # TODO set seed
         N = data.shape[0]
         V, E, M, C = self._VEMC
         assert data.shape == (N, V)

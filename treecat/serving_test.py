@@ -3,9 +3,11 @@ from __future__ import division
 from __future__ import print_function
 
 import itertools
+from collections import defaultdict
 
 import numpy as np
 import pytest
+from goftests import multinomial_goodness_of_fit
 
 from treecat.serving import make_posterior
 from treecat.serving import serve_model
@@ -138,3 +140,36 @@ def test_server_logprob_is_normalized(engine, model):
     logprob = server.logprob(data, mask)
     logtotal = np.logaddexp.reduce(logprob)
     assert abs(logtotal) < 1e-6, logtotal
+
+
+@pytest.mark.parametrize('engine', [
+    pytest.mark.xfail('numpy'),
+    pytest.mark.xfail('tensorflow'),
+])
+def test_server_gof(engine, model):
+    config = TINY_CONFIG.copy()
+    config['engine'] = engine
+    server = serve_model(model['tree'], model['suffstats'], config)
+
+    # Generate samples.
+    N = 10000  # Number of samples.
+    C = config['num_categories']
+    V = TINY_DATA.shape[1]
+    data = np.zeros([N, V], dtype=np.int32)
+    empty_mask = np.array([False] * V, dtype=np.bool_)
+    full_mask = np.array([True] * V, dtype=np.bool_)
+    samples = server.sample(data, empty_mask)
+    logprob = server.logprob(data, full_mask)
+
+    # Test with goftests.
+    counts = defaultdict(lambda: 0)
+    probs = {}
+    for row_data, row_prob in zip(samples, np.exp(logprob)):
+        row_data = tuple(row_data)
+        counts[row_data] += 1
+        probs[row_data] = row_prob
+    keys = sorted(counts.keys())
+    assert len(keys) == C**V
+    counts = np.array([counts[key] for key in keys])
+    probs = np.array([probs[key] for key in keys])
+    assert 1e-2 < multinomial_goodness_of_fit(probs, counts, total_count=N)
