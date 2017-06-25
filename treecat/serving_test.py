@@ -155,13 +155,13 @@ def test_server_gof(engine, model):
     N = 10000  # Number of samples.
     C = config['num_categories']
     V = TINY_DATA.shape[1]
-    data = np.zeros([N, V], dtype=np.int32)
+    empty_data = np.zeros([N, V], dtype=np.int32)
     empty_mask = np.array([False] * V, dtype=np.bool_)
     full_mask = np.array([True] * V, dtype=np.bool_)
-    samples = server.sample(data, empty_mask)
-    logprob = server.logprob(data, full_mask)
+    samples = server.sample(empty_data, empty_mask)
+    logprob = server.logprob(samples, full_mask)
 
-    # Test with goftests.
+    # Check that each row was sampled at least once.
     counts = defaultdict(lambda: 0)
     probs = {}
     for row_data, row_prob in zip(samples, np.exp(logprob)):
@@ -170,6 +170,8 @@ def test_server_gof(engine, model):
         probs[row_data] = row_prob
     keys = sorted(counts.keys())
     assert len(keys) == C**V
+
+    # Check accuracy using Pearson's chi-squared test.
     counts = np.array([counts[key] for key in keys])
     probs = np.array([probs[key] for key in keys])
     assert 1e-2 < multinomial_goodness_of_fit(probs, counts, total_count=N)
