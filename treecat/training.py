@@ -106,6 +106,8 @@ def train_model(data, mask, config):
         from treecat.np_engine import NumpyTrainer as Trainer
     elif config['engine'] == 'tensorflow':
         from treecat.tf_engine import TensorflowTrainer as Trainer
+    elif config['engine'] == 'tensorflow':
+        from treecat.cy_engine import CythonTrainer as Trainer
     else:
         raise ValueError('Unknown engine: {}'.format(config['engine']))
     return Trainer(data, mask, config).train()

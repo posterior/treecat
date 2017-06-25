@@ -19,7 +19,11 @@ def model():
     return train_model(TINY_DATA, TINY_MASK, TINY_CONFIG)
 
 
-@pytest.mark.parametrize('engine', ['tensorflow'])
+@pytest.mark.parametrize('engine', [
+    pytest.mark.xfail('numpy'),
+    'tensorflow',
+    pytest.mark.xfail('cython'),
+])
 def test_server_init(engine, model):
     config = TINY_CONFIG.copy()
     config['engine'] = engine
@@ -27,7 +31,11 @@ def test_server_init(engine, model):
     server._get_session(7)
 
 
-@pytest.mark.parametrize('engine', ['tensorflow'])
+@pytest.mark.parametrize('engine', [
+    pytest.mark.xfail('numpy'),
+    'tensorflow',
+    pytest.mark.xfail('cython'),
+])
 def test_server_sample_shape(engine, model):
     config = TINY_CONFIG.copy()
     config['engine'] = engine
@@ -44,7 +52,11 @@ def test_server_sample_shape(engine, model):
         assert np.allclose(samples[:, mask], TINY_DATA[:, mask])
 
 
-@pytest.mark.parametrize('engine', [pytest.mark.xfail('tensorflow')])
+@pytest.mark.parametrize('engine', [
+    pytest.mark.xfail('numpy'),
+    pytest.mark.xfail('tensorflow'),
+    pytest.mark.xfail('cython'),
+])
 def test_server_logprob_shape(engine, model):
     config = TINY_CONFIG.copy()
     config['engine'] = engine
@@ -61,7 +73,11 @@ def test_server_logprob_shape(engine, model):
         assert (logprob < 0.0).all()  # Assuming features are discrete.
 
 
-@pytest.mark.parametrize('engine', [pytest.mark.xfail('tensorflow')])
+@pytest.mark.parametrize('engine', [
+    pytest.mark.xfail('numpy'),
+    pytest.mark.xfail('tensorflow'),
+    pytest.mark.xfail('cython'),
+])
 def test_server_logprob_is_normalized(engine, model):
     config = TINY_CONFIG.copy()
     config['engine'] = engine

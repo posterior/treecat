@@ -23,7 +23,11 @@ def test_get_annealing_schedule():
             assert 0 <= row_id and row_id < num_rows
 
 
-@pytest.mark.parametrize('engine', ['numpy', 'tensorflow'])
+@pytest.mark.parametrize('engine', [
+    'numpy',
+    'tensorflow',
+    pytest.mark.xfail('cython'),
+])
 def test_train_model(engine):
     config = TINY_CONFIG.copy()
     config['engine'] = engine
