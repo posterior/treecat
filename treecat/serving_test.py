@@ -105,7 +105,7 @@ def test_server_logprob_shape(engine, model):
 
 
 @pytest.mark.parametrize('engine', [
-    pytest.mark.xfail('numpy'),
+    'numpy',
     pytest.mark.xfail('tensorflow'),
 ])
 def test_server_logprob_negative(engine, model):
@@ -119,14 +119,15 @@ def test_server_logprob_negative(engine, model):
     for mask in itertools.product(*factors):
         mask = np.array(mask, dtype=np.bool_)
         logprob = server.logprob(TINY_DATA, mask)
-        assert (logprob < 0.0).all()  # Assuming features are discrete.
+        abstol = 1e-5
+        assert (logprob <= abstol).all()  # Assuming features are discrete.
 
 
 @pytest.mark.parametrize('engine', [
-    pytest.mark.xfail('numpy'),
+    'numpy',
     pytest.mark.xfail('tensorflow'),
 ])
-def test_server_logprob_is_normalized(engine, model):
+def test_server_logprob_normalized(engine, model):
     config = TINY_CONFIG.copy()
     config['engine'] = engine
     server = serve_model(model['tree'], model['suffstats'], config)
@@ -140,6 +141,7 @@ def test_server_logprob_is_normalized(engine, model):
     logprob = server.logprob(data, mask)
     logtotal = np.logaddexp.reduce(logprob)
     assert abs(logtotal) < 1e-6, logtotal
+    assert logtotal == pytest.approx(0.0, abs=1e-5)
 
 
 @pytest.mark.parametrize('engine', [
@@ -152,7 +154,7 @@ def test_server_gof(engine, model):
     server = serve_model(model['tree'], model['suffstats'], config)
 
     # Generate samples.
-    N = 10000  # Number of samples.
+    N = 20000  # Number of samples.
     C = config['num_categories']
     V = TINY_DATA.shape[1]
     empty_data = np.zeros([N, V], dtype=np.int32)
@@ -174,4 +176,5 @@ def test_server_gof(engine, model):
     # Check accuracy using Pearson's chi-squared test.
     counts = np.array([counts[key] for key in keys])
     probs = np.array([probs[key] for key in keys])
+    probs /= probs.sum()  # Test normalization elsewhere.
     assert 1e-2 < multinomial_goodness_of_fit(probs, counts, total_count=N)

@@ -388,6 +388,7 @@ def build_serving_graph(tree, suffstats, config, num_rows):
 
     # Aggregate the total logprob.
     # This is run only during logprob().
+    # FIXME This does not account for feature_observed.
     root, parent, children = schedule[0]
     assert parent is None
     logprob = tf.add(

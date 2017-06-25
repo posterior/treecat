@@ -242,18 +242,20 @@ class NumpyServer(ServerBase):
     def _propagate(self, data, mask, task):
         N = data.shape[0]
         V, E, M, C = self._VEMC
+        factor_observed = self._factors['observed']
         factor_observed_latent = self._factors['observed_latent']
         factor_latent = self._factors['latent']
         factor_latent_latent = self._factors['latent_latent']
 
         messages = np.zeros([V, N, M], dtype=np.float32)
         messages[...] = factor_latent[:, np.newaxis, :]
-        messages_scale = np.zeros([V, N], dtype=np.float32)
+        logprob = np.zeros([N], dtype=np.float32)
         for v, parent, children in reversed(self._schedule):
             message = messages[v, :, :]
             # Propagate upward from observed to latent.
             if mask[v]:
                 message *= factor_observed_latent[v, data[:, v], :]
+                logprob += np.log(factor_observed[v, data[:, v]])
             # Propagate latent state inward from children to v.
             for child in children:
                 e = self._tree.find_tree_edge(child, v)
@@ -262,15 +264,15 @@ class NumpyServer(ServerBase):
                 else:
                     trans = factor_latent_latent[e, :, :].T
                 message *= np.dot(messages[child, :, :], trans)
-            messages_scale[v, :] = message.max(axis=1)
-            message /= messages_scale[v, :, np.newaxis]
+            message_scale = message.max(axis=1)
+            message /= message_scale[:, np.newaxis]
+            logprob += np.log(message_scale)
 
         if task == 'logprob':
             # Aggregate the total logprob.
             root, parent, children = self._schedule[0]
             assert parent is None
-            logprob = np.log(messages[root, :, :].sum(axis=1))
-            logprob += np.log(messages_scale).sum(axis=0)
+            logprob += np.log(messages[root, :, :].sum(axis=1))
             return logprob
 
         elif task == 'sample':
