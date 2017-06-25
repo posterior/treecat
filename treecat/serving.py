@@ -56,7 +56,45 @@ def make_posterior_factors(grid, suffstats):
 
 class ServerBase(object):
     """Base class for serving queries against a trained TreeCat model."""
-    pass
+
+    def sample(self, data, mask):
+        """Sample from the posterior conditional distribution.
+
+        Let V be the number of features and N be the number of rows in input
+        data. This function draws in parallel N samples, each sample
+        conditioned on one of the input data rows.
+
+        Args:
+          data: An [N, V] numpy array of data on which to condition.
+            Masked data values should be set to 0.
+          mask: An [V] numpy array of presence/absence of conditioning data.
+            The mask is constant across rows.
+            To sample from the unconditional posterior, set mask to all False.
+
+        Returns:
+          An [N, V] numpy array of sampled data, where the cells that where
+          conditioned on should match the value of input data, and the cells
+          that were not present should be randomly sampled from the conditional
+          posterior.
+        """
+        raise NotImplementedError()
+
+    def logprob(self, data, mask):
+        """Compute log probabilities of each row of data.
+
+        Let V be the number of features and N be the number of rows in input
+        data and mask. This function computes in parallel the logprob of each
+        of the N input data rows.
+
+        Args:
+          data: An [N, V] numpy array of data on which to condition.
+            Masked data values should be set to 0.
+          mask: An [N, V] numpy array of presence/absence of conditioning data.
+
+        Returns:
+          An [N] numpy array of log probabilities.
+        """
+        raise NotImplementedError()
 
 
 def serve_model(tree, suffstats, config):
