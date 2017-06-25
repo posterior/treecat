@@ -263,8 +263,8 @@ class NumpyServer(ServerBase):
                     trans = factor_latent_latent[e, :, :]
                 else:
                     trans = factor_latent_latent[e, :, :].T
-                message *= np.dot(messages[child, :, :], trans)
-            message_scale = message.max(axis=1)
+                message *= np.dot(messages[child, :, :], trans)  # Expensive.
+            message_scale = message.max(axis=1)  # Surprisingly expensive.
             message /= message_scale[:, np.newaxis]
             logprob += np.log(message_scale)
 

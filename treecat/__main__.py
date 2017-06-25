@@ -19,8 +19,10 @@ PYTHON = sys.executable
 
 def run_with_tool(cmd, tool, dirname):
     profile_path = os.path.join(dirname, 'profile_train.prof')
-    if tool == 'pdb':
-        check_call([PYTHON, '-m', 'pdb'] + cmd)
+    if tool == 'timers':
+        env = os.environ.copy()
+        env.setdefault('TREECAT_LOG_LEVEL', '15')
+        Popen([PYTHON, '-O'] + cmd, env=env).wait()
     elif tool == 'time':
         if platform.platform().startswith('Darwin'):
             gnu_time = 'gtime'
@@ -30,13 +32,10 @@ def run_with_tool(cmd, tool, dirname):
     elif tool == 'snakeviz':
         check_call([PYTHON, '-m', 'cProfile', '-o', profile_path] + cmd)
         check_call(['snakeviz', profile_path])
-    elif tool == 'timers':
-        env = os.environ.copy()
-        env.setdefault('TREECAT_LOG_LEVEL', '15')
-        Popen([PYTHON, '-O'] + cmd, env=env).wait()
-
     elif tool == 'line_profiler':
         check_call(['kernprof', '-l', '-v', '-o', profile_path] + cmd)
+    elif tool == 'pdb':
+        check_call([PYTHON, '-m', 'pdb'] + cmd)
     else:
         raise ValueError('Unknown tool: {}'.format(tool))
 
