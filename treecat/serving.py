@@ -2,10 +2,14 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import logging
+
 import numpy as np
 
 from treecat.util import COUNTERS
 from treecat.util import sizeof
+
+logger = logging.getLogger(__name__)
 
 
 def make_posterior(grid, suffstats):
@@ -135,6 +139,7 @@ class ServerBase(object):
         Returns:
           A numpy array of entropy estimates, one estimate per feature set.
         """
+        logger.info('Computing entropy of %d feature sets', len(feature_sets))
         assert isinstance(feature_sets, list)
         assert (cond_data is None) == (cond_mask is None)
         N = self._config['serving_samples']
@@ -153,6 +158,7 @@ class ServerBase(object):
             data[...] = cond_data[np.newaxis, :]
             mask[:] = cond_mask
         samples = self.sample(data, mask)
+        assert samples.shape == (N, V)
 
         # Compte entropies.
         result = np.zeros([len(feature_sets)], dtype=np.float32)

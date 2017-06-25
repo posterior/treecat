@@ -493,7 +493,7 @@ class TensorflowServer(ServerBase):
 
     @profile
     def logprob(self, data, mask):
-        logger.info('computing logprob of %d rows', data.shape[0])
+        logger.debug('computing logprob of %d rows', data.shape[0])
         num_rows = data.shape[0]
         assert data.shape[1] == self._tree.num_vertices
         assert mask.shape[0] == self._tree.num_vertices

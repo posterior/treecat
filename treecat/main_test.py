@@ -10,3 +10,8 @@ import treecat.__main__ as main
 @pytest.mark.parametrize('engine', ['numpy', 'tensorflow'])
 def test_profile_train(engine):
     main.profile_train(10, 10, engine=engine)
+
+
+@pytest.mark.parametrize('engine', ['numpy', 'tensorflow'])
+def test_profile_serve(engine):
+    main.profile_serve(10, 10, engine=engine)

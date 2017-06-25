@@ -9,6 +9,7 @@ from subprocess import Popen
 from subprocess import check_call
 
 from parsable import parsable
+from treecat.config import DEFAULT_CONFIG
 from treecat.persist import pickle_dump
 from treecat.persist import pickle_load
 from treecat.testutil import tempdir
@@ -50,26 +51,50 @@ def train(dataset_path, config_path):
 
 
 @parsable
-def profile_train(rows=100,
-                  cols=10,
-                  cats=4,
-                  epochs=5,
-                  tool='timers',
-                  engine='numpy'):
+def profile_train(rows=100, cols=10, epochs=5, tool='timers', engine='numpy'):
     """Profile TreeCatTrainer.train() on a random dataset.
     Available tools: timers, time, snakeviz, line_profiler, pdb
     """
-    from treecat.config import DEFAULT_CONFIG
-    from treecat.generate import generate_dataset_file
+    from treecat.generate import generate_dataset
     config = DEFAULT_CONFIG.copy()
-    config['num_categories'] = cats
     config['annealing_epochs'] = epochs
     config['engine'] = engine
-    dataset_path = generate_dataset_file(rows, cols, cats)
+    cats = config['num_categories']
+    dataset_path = generate_dataset(rows, cols, cats)
     with tempdir() as dirname:
         config_path = os.path.join(dirname, 'config.pkl.gz')
         pickle_dump(config, config_path)
         cmd = [os.path.abspath(__file__), 'train', dataset_path, config_path]
+        run_with_tool(cmd, tool, dirname)
+
+
+@parsable
+def serve(model_path, config_path):
+    """Train from pickled data, mask, config."""
+    from treecat.serving import serve_model
+    model = pickle_load(model_path)
+    config = pickle_load(config_path)
+    server = serve_model(model['tree'], model['suffstats'], config)
+    V = model['tree'].num_vertices
+    feature_sets = [(v1, v2) for v2 in range(V) for v1 in range(v2)]
+    entropy = server.entropy(feature_sets)
+    assert len(entropy) == len(feature_sets)
+
+
+@parsable
+def profile_serve(rows=100, cols=10, tool='timers', engine='numpy'):
+    """Profile TreeCatTrainer.train() on a random dataset.
+    Available tools: timers, time, snakeviz, line_profiler, pdb
+    """
+    from treecat.generate import generate_model
+    config = DEFAULT_CONFIG.copy()
+    cats = config['num_categories']
+    model_path = generate_model(rows, cols, cats)
+    config['engine'] = engine
+    with tempdir() as dirname:
+        config_path = os.path.join(dirname, 'config.pkl.gz')
+        pickle_dump(config, config_path)
+        cmd = [os.path.abspath(__file__), 'serve', model_path, config_path]
         run_with_tool(cmd, tool, dirname)
 
 

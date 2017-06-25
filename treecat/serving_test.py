@@ -191,6 +191,6 @@ def test_server_entropy(engine, model):
     V = TINY_DATA.shape[1]
     feature_sets = [(v1, v2) for v2 in range(V) for v1 in range(v2)]
     entropies = server.entropy(feature_sets)
-    assert entropies.shape == (len(feature_sets),)
+    assert entropies.shape == (len(feature_sets), )
     assert np.all(np.isfinite(entropies))
     assert np.all(entropies >= 0)

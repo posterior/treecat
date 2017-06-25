@@ -223,7 +223,7 @@ class NumpyTrainer(TrainerBase):
 
 class NumpyServer(ServerBase):
     def __init__(self, tree, suffstats, config):
-        logger.info('TensorflowServer with %d features', tree.num_vertices)
+        logger.info('NumpyServer with %d features', tree.num_vertices)
         assert isinstance(tree, TreeStructure)
         self._tree = tree
         self._config = config
@@ -310,7 +310,7 @@ class NumpyServer(ServerBase):
 
     @profile
     def logprob(self, data, mask):
-        logger.info('computing logprob of %d rows', data.shape[0])
+        logger.debug('computing logprob of %d rows', data.shape[0])
         N = data.shape[0]
         V, E, M, C = self._VEMC
         assert data.shape == (N, V)
