@@ -32,7 +32,7 @@ def profile_train(rows=100,
                   tool='timers',
                   engine='numpy'):
     """Profile TreeCatTrainer.train() on a random dataset.
-    Available tools: timers, time, snakeviz, line_profiler
+    Available tools: timers, time, snakeviz, line_profiler, pdb
     """
     from treecat.config import DEFAULT_CONFIG
     from treecat.generate import generate_dataset
@@ -47,7 +47,9 @@ def profile_train(rows=100,
         profile_path = os.path.join(dirname, 'profile_train.prof')
         pickle_dump(task, task_path)
         cmd = [os.path.abspath(__file__), 'train', task_path]
-        if tool == 'time':
+        if tool == 'pdb':
+            check_call([PYTHON, '-m', 'pdb'] + cmd)
+        elif tool == 'time':
             if platform.platform().startswith('Darwin'):
                 gnu_time = 'gtime'
             else:

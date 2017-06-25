@@ -7,6 +7,7 @@ import logging
 import numpy as np
 from scipy.special import gammaln
 
+from six.moves import xrange
 from treecat.structure import make_propagation_schedule
 from treecat.structure import sample_tree
 from treecat.training import TrainerBase
@@ -15,6 +16,17 @@ from treecat.util import profile
 from treecat.util import sizeof
 
 logger = logging.getLogger(__name__)
+
+
+def sample_from_probs(probs):
+    # Note: np.random.multinomial is faster than np.random.choice,
+    # but np.random.multinomial is pickier about non-normalized probs.
+    try:
+        # This is equivalent to: np.random.choice(M, p=probs)
+        return np.random.multinomial(1, probs).argmax()
+    except ValueError:
+        COUNTERS.np_random_multinomial_value_error += 1
+        return probs.argmax()
 
 
 class NumpyTrainer(TrainerBase):
@@ -92,6 +104,9 @@ class NumpyTrainer(TrainerBase):
         self._feat_ss[mask, data_mask, assignments_mask] += 1
         self._vert_ss[vertices, assignments] += 1
         self._edge_ss[tree_edges, assignments_e[0], assignments_e[1]] += 1
+        self._feat_probs[mask, data_mask, assignments_mask] += 1
+        self._vert_probs[vertices, assignments] += 1
+        self._edge_probs[tree_edges, assignments_e[0], assignments_e[1]] += 1
         if diff > 0:
             self._tree_ss[complete_edges,  #
                           assignments[self.tree.complete_grid[1, :]],  #
@@ -102,7 +117,7 @@ class NumpyTrainer(TrainerBase):
         logger.debug('NumpyTrainer.add_row %d', row_id)
         V, E, K, M, C = self._VEKMC
         feat_probs = self._feat_probs
-        feat_probs_sum = self._feat_probs.sum(axis=1)  # TODO optimize.
+        feat_probs_sum = self._feat_probs.sum(axis=1)
         vert_probs = self._vert_probs
         edge_probs = self._edge_probs
         messages = self._messages
@@ -141,10 +156,11 @@ class NumpyTrainer(TrainerBase):
                 message /= vert_probs[v, :]
                 assert message.shape == (M, )
             message /= message.sum()
-            assignments[v] = np.random.choice(M, p=message)
+            assignments[v] = sample_from_probs(message)
         self._assigned_rows.add(row_id)
         self._update_tensors(row_id, +1)
 
+    @profile
     def remove_row(self, row_id):
         logger.debug('NumpyTrainer.remove_row %d', row_id)
         self._assigned_rows.remove(row_id)
@@ -157,10 +173,10 @@ class NumpyTrainer(TrainerBase):
         # Compute edge logits.
         V, E, K, M, C = self._VEKMC
         edge_logits = np.zeros([K], np.float32)
-        for k in range(K):
+        for k in xrange(K):
             block = self._tree_ss[k, :, :].astype(np.float32)
             block += self._edge_prior
-            edge_logits[k] = gammaln(block).sum()
+            edge_logits[k] = gammaln(block).sum()  # Costs ~8% of total time!
 
         # Sample the tree.
         complete_grid = self.tree.complete_grid
