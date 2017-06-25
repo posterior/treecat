@@ -25,7 +25,12 @@ def train(filename):
 
 
 @parsable
-def profile_train(rows=100, cols=10, cats=4, epochs=5, tool='timers'):
+def profile_train(rows=100,
+                  cols=10,
+                  cats=4,
+                  epochs=5,
+                  tool='timers',
+                  engine='numpy'):
     """Profile TreeCatTrainer.train() on a random dataset.
     Available tools: timers, time, snakeviz, line_profiler
     """
@@ -34,6 +39,7 @@ def profile_train(rows=100, cols=10, cats=4, epochs=5, tool='timers'):
     config = DEFAULT_CONFIG.copy()
     config['num_categories'] = cats
     config['annealing_epochs'] = epochs
+    config['engine'] = engine
     data, mask = generate_dataset(rows, cols, config=config)
     task = (data, mask, config)
     with tempdir() as dirname:

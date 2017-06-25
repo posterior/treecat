@@ -8,7 +8,9 @@ import logging
 import numpy as np
 
 from treecat.structure import TreeStructure
+from treecat.util import COUNTERS
 from treecat.util import art_logger
+from treecat.util import sizeof
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,10 @@ class TrainerBase(object):
         self.assignments = np.zeros(data.shape, dtype=np.int32)
         self.suffstats = {}
         self.tree = TreeStructure(num_features)
+
+        COUNTERS.footprint_training_data = sizeof(self._data)
+        COUNTERS.footprint_training_mask = sizeof(self._mask)
+        COUNTERS.footprint_training_assignments = sizeof(self.assignments)
 
     def add_row(self, row_id):
         raise NotImplementedError()

@@ -9,12 +9,17 @@ from scipy.special import gammaln
 
 from treecat.structure import make_propagation_schedule
 from treecat.structure import sample_tree
+from treecat.training import TrainerBase
+from treecat.util import COUNTERS
 from treecat.util import profile
+from treecat.util import sizeof
 
 logger = logging.getLogger(__name__)
 
 
-class NumpyTrainer(object):
+class NumpyTrainer(TrainerBase):
+    """Class for training a TreeCat model using Numpy."""
+
     def __init__(self, data, mask, config):
         logger.info('NumpyTrainer of %d x %d data', data.shape[0],
                     data.shape[1])
@@ -51,7 +56,17 @@ class NumpyTrainer(object):
         # Temporaries.
         self._messages = np.zeros([V, M], dtype=np.float32)
 
+        COUNTERS.footprint_training_vert_ss = sizeof(self._vert_ss)
+        COUNTERS.footprint_training_edge_ss = sizeof(self._edge_ss)
+        COUNTERS.footprint_training_feat_ss = sizeof(self._feat_ss)
+        COUNTERS.footprint_training_tree_ss = sizeof(self._tree_ss)
+        COUNTERS.footprint_training_vert_probs = sizeof(self._feat_probs)
+        COUNTERS.footprint_training_vert_probs = sizeof(self._vert_probs)
+        COUNTERS.footprint_training_edge_probs = sizeof(self._edge_probs)
+        COUNTERS.footprint_training_messages = sizeof(self._messages)
+
     def _update_tree(self):
+        self._schedule = make_propagation_schedule(self.tree.tree_grid)
         self._tree_ss[...] = 0
         self._feat_probs[...] = self._feat_ss
         self._feat_probs += self._feat_prior
@@ -61,8 +76,11 @@ class NumpyTrainer(object):
         self._edge_probs += self._edge_prior
 
     @profile
-    def _update_tensors(self, data, mask, assignments, diff):
+    def _update_tensors(self, row_id, diff):
         V, E, K, M, C = self._VEKMC
+        data = self._data[row_id]
+        mask = self._mask[row_id]
+        assignments = self.assignments[row_id]
 
         vertices = np.arange(V, dtype=np.int32)
         tree_edges = np.arange(E, dtype=np.int32)
@@ -80,22 +98,17 @@ class NumpyTrainer(object):
                           assignments[self.tree.complete_grid[2, :]]] += 1
 
     @profile
-    def add_row(self, data, mask, assignments_out):
-        logger.debug('add_row')
+    def add_row(self, row_id):
+        logger.debug('NumpyTrainer.add_row %d', row_id)
         V, E, K, M, C = self._VEKMC
-        assert data.dtype == np.int32
-        assert data.shape == (V, )
-        assert mask.dtype == np.bool_
-        assert mask.shape == (V, )
-        assert assignments_out.dtype == np.int32_
-        assert assignments_out.shape == (V, )
-
-        tree = self._tree
         feat_probs = self._feat_probs
         feat_probs_sum = self._feat_probs.sum(axis=1)  # TODO optimize.
         vert_probs = self._vert_probs
         edge_probs = self._edge_probs
         messages = self._messages
+        data = self._data[row_id]
+        mask = self._mask[row_id]
+        assignments = self.assignments[row_id]
 
         for v, parent, children in reversed(self._schedule):
             message = messages[v, :]
@@ -106,41 +119,36 @@ class NumpyTrainer(object):
                 message /= feat_probs_sum[v, :]
             # Propagate latent state inward from children to v.
             for child in children:
-                e = tree.find_edge(v, child)
+                e = self.tree.find_edge(v, child)
                 if v < child:
                     trans = edge_probs[e, :, :]
                 else:
                     trans = np.transpose(edge_probs[e, :, :])
                 message *= np.dot(trans, messages[child, :])
                 message /= vert_probs[v, :]
-            message /= np.reduce_max(message)
+            message /= np.max(message)
 
         # Propagate latent state outward from parent to v.
         for v, parent, children in self._schedule:
             message = messages[v, :]
             if parent is not None:
-                e = tree.find_edge(v, parent)
+                e = self.tree.find_edge(v, parent)
                 if parent < v:
                     trans = edge_probs[e, :, :]
                 else:
                     trans = np.transpose(edge_probs[e, :, :])
-                message *= trans[assignments_out[parent], :]
+                message *= trans[assignments[parent], :]
                 message /= vert_probs[v, :]
                 assert message.shape == (M, )
             message /= message.sum()
-            assignments_out[v] = np.random.choice(M, p=message)
-        self._update_tensors(data, mask, assignments_out, +1)
+            assignments[v] = np.random.choice(M, p=message)
+        self._assigned_rows.add(row_id)
+        self._update_tensors(row_id, +1)
 
-    def remove_row(self, data, mask, assignments_in):
-        logger.debug('remove_row')
-        V, E, K, M, C = self._VEKMC
-        assert data.dtype == np.int32
-        assert data.shape == (V, )
-        assert mask.dtype == np.bool_
-        assert mask.shape == (V, )
-        assert assignments_in.dtype == np.int32_
-        assert assignments_in.shape == (V, )
-        self._update_tensors(data, mask, assignments_in, -1)
+    def remove_row(self, row_id):
+        logger.debug('NumpyTrainer.remove_row %d', row_id)
+        self._assigned_rows.remove(row_id)
+        self._update_tensors(row_id, -1)
 
     @profile
     def sample_tree(self):
@@ -167,3 +175,14 @@ class NumpyTrainer(object):
         self._seed += 1
         self.tree.set_edges(edges)
         self._update_tree()
+
+    def finish(self):
+        logger.info('NumpyTrainer.finish with %d rows',
+                    len(self._assigned_rows))
+        self.suffstats = {
+            'feat_ss': self._feat_ss,
+            'vert_ss': self._vert_ss,
+            'edge_ss': self._edge_ss,
+        }
+        self._tree_ss = None
+        self.tree.gc()

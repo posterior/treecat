@@ -9,5 +9,5 @@ DEFAULT_CONFIG = {
     'sample_tree_steps': 32,
     'annealing_init_rows': 2,
     'annealing_epochs': 100.0,
-    'engine': 'tensorflow',
+    'engine': 'numpy',
 }
