@@ -74,10 +74,7 @@ def serve(model_path, config_path):
     model = pickle_load(model_path)
     config = pickle_load(config_path)
     server = serve_model(model['tree'], model['suffstats'], config)
-    V = model['tree'].num_vertices
-    feature_sets = [(v1, v2) for v2 in range(V) for v1 in range(v2)]
-    entropy = server.entropy(feature_sets)
-    assert len(entropy) == len(feature_sets)
+    server.correlation()
 
 
 @parsable

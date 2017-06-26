@@ -194,3 +194,20 @@ def test_server_entropy(engine, model):
     assert entropies.shape == (len(feature_sets), )
     assert np.all(np.isfinite(entropies))
     assert np.all(entropies >= 0)
+
+
+@pytest.mark.parametrize('engine', [
+    'numpy',
+    'tensorflow',
+])
+def test_server_correlation(engine, model):
+    config = TINY_CONFIG.copy()
+    config['engine'] = engine
+    server = serve_model(model['tree'], model['suffstats'], config)
+    V = TINY_DATA.shape[1]
+    correlation = server.correlation()
+    assert correlation.shape == (V, V)
+    assert np.all(np.isfinite(correlation))
+    assert np.allclose(correlation, correlation.T)
+    assert np.all(0 <= correlation)
+    assert np.all(correlation <= 1.0)

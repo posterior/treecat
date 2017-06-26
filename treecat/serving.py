@@ -133,7 +133,7 @@ class ServerBase(object):
         Args:
           feature_sets: A list of sets of fetaures on which to compute entropy.
           cond_data: An optional row of data on which to condition.
-          cond_mask: An optional row of mask on which to condition.
+          cond_mask: An optional row presence/absence values for cond_row.
             This defaults to all-false and hence unconditioned entropy.
 
         Returns:
@@ -169,6 +169,37 @@ class ServerBase(object):
             result[i] = -np.mean(logprob * np.exp(logprob))
 
         return result
+
+    def correlation(self):
+        """Computes correlation matrix among all features.
+
+        Returns: A symmetrix matrix with entries
+          rho(X,Y) = sqrt(1 - exp(-2 I(X;Y)))
+        """
+        logger.info('Computing among %d feature sets', self._tree.num_vertices)
+
+        # Compute entropy H(X) of features and H(X,Y) of pairs of features.
+        V = self._tree.num_vertices
+        feature_sets = []
+        for v1 in range(V):
+            feature_sets.append([v1])
+            for v2 in range(v1):
+                feature_sets.append([v1, v2])
+        entropies = self.entropy(feature_sets)
+
+        # Compute mutual information I(X;Y) = H(X) + H(Y) - H(X,Y).
+        mutual_information = np.zeros([V, V], np.float32)
+        for feature_set, entropy in zip(feature_sets, entropies):
+            v1 = min(feature_set)
+            v2 = max(feature_set)
+            mutual_information[v1, v2] -= entropy
+            mutual_information[v2, v1] -= entropy
+            if v1 == v2:
+                mutual_information[v1, :] += entropy
+                mutual_information[:, v2] += entropy
+
+        # Copute correlation rho(X,Y) = sqrt(1 - exp(-2 I(X;Y))).
+        return np.sqrt(1.0 - np.exp(-2.0 * mutual_information))
 
 
 def serve_model(tree, suffstats, config):
