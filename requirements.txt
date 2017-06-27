@@ -1,6 +1,4 @@
 # Development requirements.
-cython
-eigency
 flake8
 goftests
 isort

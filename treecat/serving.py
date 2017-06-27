@@ -205,8 +205,6 @@ class ServerBase(object):
 def serve_model(tree, suffstats, config):
     if config['engine'] == 'numpy':
         from treecat.np_engine import NumpyServer as Server
-    elif config['engine'] == 'cython':
-        from treecat.cy_engine import CythonServer as Server
     else:
         raise ValueError('Unknown engine: {}'.format(config['engine']))
     return Server(tree, suffstats, config)

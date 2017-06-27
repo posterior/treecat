@@ -1,22 +1,8 @@
 import sys
 
 import numpy as np
-from Cython.Build import cythonize
 from parsable import parsable
 from setuptools import setup
-from setuptools.extension import Extension
-
-import eigency
-
-extensions = [
-    Extension(
-        'treecat.cTreecat',
-        sources=['treecat/cTreecat.pyx', 'treecat/treecat.cpp'],
-        extra_compile_args=['-std=c++11', '-O3', '-march=native'],
-        include_dirs=(['.', np.get_include()] + eigency.get_includes()),
-        extra_link_args=['-lm'],
-        language='c++'),
-]
 
 try:
     import pypandoc
@@ -34,15 +20,7 @@ setup(
     author='Fritz Obermeyer',
     author_email='fritz.obermeyer@gmail.com',
     packages=['treecat'],
-    ext_modules=cythonize(extensions),
     entry_points=parsable.find_entry_points('treecat'),
-    install_requires=[
-        'cython',
-        'eigency',
-        'numpy',
-        'parsable',
-        'scipy',
-        'six',
-    ],
+    install_requires=['numpy', 'parsable', 'scipy', 'six'],
     tests_require=['pytest', 'flake8', 'goftests'],
     license='Apache License 2.0')
