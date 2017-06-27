@@ -46,8 +46,8 @@ def test_train_model(engine):
     # Check shape.
     N, V = TINY_DATA.shape
     E = V - 1
-    C = config['num_categories']
-    M = config['num_clusters']
+    C = config['model_num_categories']
+    M = config['model_num_clusters']
     assert grid.shape == (3, E)
     assert feat_ss.shape == (V, C, M)
     assert vert_ss.shape == (V, M)

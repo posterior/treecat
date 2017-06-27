@@ -54,7 +54,7 @@ def generate_model(num_rows, num_cols, num_cats, density=0.9):
     dataset_path = generate_dataset(num_rows, num_cols, num_cats, density)
     data, mask = pickle_load(dataset_path)
     config = DEFAULT_CONFIG.copy()
-    config['annealing_epochs'] = 5
+    config['learning_annealing_epochs'] = 5
     model = train_model(data, mask, config)
     pickle_dump(model, path)
     return path

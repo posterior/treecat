@@ -34,8 +34,8 @@ def test_make_posterior(model):
     # Check shape.
     N, V = TINY_DATA.shape
     E = V - 1
-    C = TINY_CONFIG['num_categories']
-    M = TINY_CONFIG['num_clusters']
+    C = TINY_CONFIG['model_num_categories']
+    M = TINY_CONFIG['model_num_clusters']
     assert observed.shape == (V, C)
     assert observed_latent.shape == (V, C, M)
     assert latent.shape == (V, M)
@@ -133,7 +133,7 @@ def test_server_logprob_normalized(engine, model):
     server = serve_model(model['tree'], model['suffstats'], config)
 
     # The total probability of all possible rows should be 1.
-    C = config['num_categories']
+    C = config['model_num_categories']
     N, V = TINY_DATA.shape
     factors = [range(C)] * V
     data = np.array(list(itertools.product(*factors)), dtype=np.int32)
@@ -155,7 +155,7 @@ def test_server_gof(engine, model):
 
     # Generate samples.
     N = 20000  # Number of samples.
-    C = config['num_categories']
+    C = config['model_num_categories']
     V = TINY_DATA.shape[1]
     empty_data = np.zeros([N, V], dtype=np.int32)
     empty_mask = np.array([False] * V, dtype=np.bool_)

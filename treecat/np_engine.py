@@ -55,8 +55,10 @@ class NumpyTrainer(TrainerBase):
         V = self.tree.num_vertices
         E = V - 1  # Number of edges in the tree.
         K = V * (V - 1) // 2  # Number of edges in the complete graph.
-        M = self._config['num_clusters']  # Clusters in each mixture model.
-        C = self._config['num_categories']  # Categories for each feature.
+        M = self._config[
+            'model_num_clusters']  # Clusters in each mixture model.
+        C = self._config[
+            'model_num_categories']  # Categories for each feature.
         self._VEKMC = (V, E, K, M, C)
 
         # Hard-code these hyperparameters.
@@ -204,7 +206,7 @@ class NumpyTrainer(TrainerBase):
             edge_logits,
             edges,
             seed=self._seed,
-            steps=self._config['sample_tree_steps'])
+            steps=self._config['learning_sample_tree_steps'])
         self._seed += 1
         self.tree.set_edges(edges)
         self._update_tree()
@@ -234,8 +236,10 @@ class NumpyServer(ServerBase):
         # These are useful dimensions to import into locals().
         V = self._tree.num_vertices
         E = V - 1  # Number of edges in the tree.
-        M = self._config['num_clusters']  # Clusters in each mixture model.
-        C = self._config['num_categories']  # Categories for each feature.
+        M = self._config[
+            'model_num_clusters']  # Clusters in each mixture model.
+        C = self._config[
+            'model_num_categories']  # Categories for each feature.
         self._VEMC = (V, E, M, C)
 
     @profile

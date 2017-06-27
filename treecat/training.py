@@ -127,10 +127,10 @@ def get_annealing_schedule(num_rows, config):
     row_to_remove = itertools.cycle(row_ids)
 
     # Use a linear annealing schedule.
-    epochs = float(config['annealing_epochs'])
+    epochs = float(config['learning_annealing_epochs'])
     add_rate = epochs
     remove_rate = epochs - 1.0
-    state = epochs * config['annealing_init_rows']
+    state = epochs * config['learning_annealing_init_rows']
 
     # Perform batch operations between batches.
     num_fresh = 0

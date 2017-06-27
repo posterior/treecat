@@ -56,9 +56,9 @@ def profile_train(rows=100, cols=10, epochs=5, tool='timers', engine='numpy'):
     """
     from treecat.generate import generate_dataset
     config = DEFAULT_CONFIG.copy()
-    config['annealing_epochs'] = epochs
+    config['learning_annealing_epochs'] = epochs
     config['engine'] = engine
-    cats = config['num_categories']
+    cats = config['model_num_categories']
     dataset_path = generate_dataset(rows, cols, cats)
     with tempdir() as dirname:
         config_path = os.path.join(dirname, 'config.pkl.gz')
@@ -84,7 +84,7 @@ def profile_serve(rows=100, cols=10, tool='timers', engine='numpy'):
     """
     from treecat.generate import generate_model
     config = DEFAULT_CONFIG.copy()
-    cats = config['num_categories']
+    cats = config['model_num_categories']
     model_path = generate_model(rows, cols, cats)
     config['engine'] = engine
     with tempdir() as dirname:

@@ -61,8 +61,8 @@ def build_training_graph(tree, inits, config):
     V = tree.num_vertices
     E = V - 1  # Number of edges in the tree.
     K = V * (V - 1) // 2  # Number of edges in the complete graph.
-    M = config['num_clusters']  # Clusters in each mixture model.
-    C = config['num_categories']  # Categories possible for each feature.
+    M = config['model_num_clusters']  # Clusters in each mixture model.
+    C = config['model_num_categories']  # Categories possible for each feature.
     vertices = tf.range(V, dtype=tf.int32)
     tree_grid = tf.constant(tree.tree_grid)
     complete_grid = tf.constant(tree.complete_grid)
@@ -295,7 +295,7 @@ class TensorflowTrainer(TrainerBase):
             edge_logits,
             edges,
             seed=self._seed,
-            steps=self._config['sample_tree_steps'])
+            steps=self._config['learning_sample_tree_steps'])
         self._seed += 1
         self.tree.set_edges(edges)
         self._update_tree()
@@ -339,8 +339,8 @@ def build_serving_graph(tree, suffstats, config, num_rows):
     assert isinstance(tree, TreeStructure)
     assert num_rows > 0
     V = tree.num_vertices
-    M = config['num_clusters']  # Clusters in each mixture model.
-    C = config['num_categories']  # Categories possible for each feature.
+    M = config['model_num_clusters']  # Clusters in each mixture model.
+    C = config['model_num_categories']  # Categories possible for each feature.
     N = num_rows  # Number of rows in data.
     schedule = make_propagation_schedule(tree.tree_grid)
     factors = make_posterior_factors(tree.tree_grid, suffstats)

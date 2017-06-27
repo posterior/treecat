@@ -17,7 +17,7 @@ typedef Matrix<bool, Dynamic, 1> VectorXb;
 namespace treecat {
 
 static inline int64_t map_find(const Config& config, const std::string& key,
-                               int64_t default_value) {
+                               int64_t default_value = 0) {
     auto i = config.find(key);
     return (i == config.end()) ? i->second : default_value;
 }
@@ -29,8 +29,11 @@ bool train_model(const Eigen::Map<Eigen::MatrixXi>& data, const Config& config,
     const size_t N = data.rows();
     const size_t V = data.cols();
     const size_t E = V * (V - 1) / 2;
-    const size_t M = map_find(config, "num_clusters", 32);
-    const size_t C = map_find(config, "num_categories", 4);
+    const size_t M = map_find(config, "model_num_clusters");
+    const size_t C = map_find(config, "model_num_categories");
+    TREECAT_ASSERT(M, "Missing config field: model_num_clusters");
+    TREECAT_ASSERT(C, "Missing config field: model_num_categories");
+
     SuffStats& ss = model.suffstats;
     auto& assignments = model.assignments;
 
