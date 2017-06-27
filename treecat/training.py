@@ -94,9 +94,7 @@ def Trainer(data, mask, config):
     """Select among Trainer classes based on config['engine']."""
     if config['engine'] == 'numpy':
         from treecat.np_engine import NumpyTrainer as Trainer
-    elif config['engine'] == 'tensorflow':
-        from treecat.tf_engine import TensorflowTrainer as Trainer
-    elif config['engine'] == 'tensorflow':
+    elif config['engine'] == 'cython':
         from treecat.cy_engine import CythonTrainer as Trainer
     else:
         raise ValueError('Unknown engine: {}'.format(config['engine']))

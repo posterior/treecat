@@ -94,8 +94,5 @@ def profile_serve(rows=100, cols=10, tool='timers', engine='numpy'):
         run_with_tool(cmd, tool, dirname)
 
 
-# TODO Support tensorflow profiling.
-# https://github.com/tensorflow/tensorflow/tree/master/tensorflow/tools/tfprof
-
 if __name__ == '__main__':
     parsable()

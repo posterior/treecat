@@ -9,5 +9,4 @@ line_profiler
 numpy
 pytest
 snakeviz
-tensorflow
 yapf

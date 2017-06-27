@@ -57,7 +57,6 @@ def test_make_posterior(model):
 
 @pytest.mark.parametrize('engine', [
     'numpy',
-    'tensorflow',
 ])
 def test_server_init(engine, model):
     config = TINY_CONFIG.copy()
@@ -67,7 +66,6 @@ def test_server_init(engine, model):
 
 @pytest.mark.parametrize('engine', [
     'numpy',
-    'tensorflow',
 ])
 def test_server_sample_shape(engine, model):
     config = TINY_CONFIG.copy()
@@ -87,7 +85,6 @@ def test_server_sample_shape(engine, model):
 
 @pytest.mark.parametrize('engine', [
     'numpy',
-    'tensorflow',
 ])
 def test_server_logprob_shape(engine, model):
     config = TINY_CONFIG.copy()
@@ -106,7 +103,6 @@ def test_server_logprob_shape(engine, model):
 
 @pytest.mark.parametrize('engine', [
     'numpy',
-    pytest.mark.xfail('tensorflow'),
 ])
 def test_server_logprob_negative(engine, model):
     config = TINY_CONFIG.copy()
@@ -125,7 +121,6 @@ def test_server_logprob_negative(engine, model):
 
 @pytest.mark.parametrize('engine', [
     'numpy',
-    pytest.mark.xfail('tensorflow'),
 ])
 def test_server_logprob_normalized(engine, model):
     config = TINY_CONFIG.copy()
@@ -146,7 +141,6 @@ def test_server_logprob_normalized(engine, model):
 
 @pytest.mark.parametrize('engine', [
     pytest.mark.xfail('numpy'),
-    pytest.mark.xfail('tensorflow'),
 ])
 def test_server_gof(engine, model):
     config = TINY_CONFIG.copy()
@@ -182,7 +176,6 @@ def test_server_gof(engine, model):
 
 @pytest.mark.parametrize('engine', [
     'numpy',
-    pytest.mark.xfail('tensorflow'),
 ])
 def test_server_entropy(engine, model):
     config = TINY_CONFIG.copy()
@@ -198,7 +191,6 @@ def test_server_entropy(engine, model):
 
 @pytest.mark.parametrize('engine', [
     'numpy',
-    'tensorflow',
 ])
 def test_server_correlation(engine, model):
     config = TINY_CONFIG.copy()

@@ -32,7 +32,6 @@ def test_get_annealing_schedule():
 
 @pytest.mark.parametrize('engine', [
     'numpy',
-    'tensorflow',
 ])
 def test_train_model(engine):
     config = TINY_CONFIG.copy()

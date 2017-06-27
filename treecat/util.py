@@ -34,9 +34,9 @@ art_logger = log_art if LOG_ART else (lambda art: None)
 
 
 def sizeof(array):
-    """Computes byte size of numpy.ndarray or tensorflow.Tensors.
+    """Computes byte size of numpy.ndarray.
     Args:
-      array: A numpy array or tensorflow Tensor.
+      array: A numpy ndarray.
 
     Returns:
       Memory footprint in bytes.

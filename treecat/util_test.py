@@ -4,7 +4,6 @@ from __future__ import print_function
 
 import numpy as np
 import pytest
-import tensorflow as tf
 
 from treecat.util import sizeof
 
@@ -21,17 +20,3 @@ from treecat.util import sizeof
 ])
 def test_sizeof_numpy(shape, dtype, expected_size):
     assert sizeof(np.zeros(shape, dtype)) == expected_size
-
-
-@pytest.mark.parametrize('shape,dtype,expected_size', [
-    ([], tf.int8, 1),
-    ([], tf.int32, 4),
-    ([], tf.int64, 8),
-    ([], tf.float32, 4),
-    ([], tf.float64, 8),
-    ([3], tf.int32, 3 * 4),
-    ([3, 5], tf.int32, 3 * 5 * 4),
-    ([3, 5, 7], tf.int32, 3 * 5 * 7 * 4),
-])
-def test_sizeof_tensorflow(shape, dtype, expected_size):
-    assert sizeof(tf.zeros(shape, dtype)) == expected_size
