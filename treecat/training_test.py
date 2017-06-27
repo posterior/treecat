@@ -12,7 +12,7 @@ from treecat.structure import TreeStructure
 from treecat.testutil import TINY_CONFIG
 from treecat.testutil import TINY_DATA
 from treecat.testutil import TINY_MASK
-from treecat.training import Trainer
+from treecat.training import TreeCatTrainer
 from treecat.training import get_annealing_schedule
 from treecat.training import train_model
 
@@ -99,12 +99,11 @@ def hash_assignments(assignments):
 ])
 def test_category_sampler(N, V, C, M):
     config = DEFAULT_CONFIG.copy()
-    config['engine'] = 'numpy'
     config['learning_sample_tree_steps'] = 0  # Disable tree kernel.
     config['model_num_categories'] = C
     config['model_num_clusters'] = M
     data, mask = generate_tiny_dataset(num_rows=N, num_cols=V, num_cats=C)
-    trainer = Trainer(data, mask, config)
+    trainer = TreeCatTrainer(data, mask, config)
     print('Data:')
     print(data)
 

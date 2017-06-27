@@ -6,17 +6,34 @@ import itertools
 import logging
 
 import numpy as np
+from scipy.special import gammaln
 
+from six.moves import xrange
 from treecat.structure import TreeStructure
+from treecat.structure import find_complete_edge
+from treecat.structure import make_propagation_schedule
+from treecat.structure import sample_tree
 from treecat.util import COUNTERS
 from treecat.util import art_logger
+from treecat.util import profile
 from treecat.util import sizeof
 
 logger = logging.getLogger(__name__)
 
 
-class TrainerBase(object):
-    """Base class for training a TreeCat model."""
+def sample_from_probs(probs):
+    # Note: np.random.multinomial is faster than np.random.choice,
+    # but np.random.multinomial is pickier about non-normalized probs.
+    try:
+        # This is equivalent to: np.random.choice(M, p=probs)
+        return np.random.multinomial(1, probs).argmax()
+    except ValueError:
+        COUNTERS.np_random_multinomial_value_error += 1
+        return probs.argmax()
+
+
+class TreeCatTrainer(object):
+    """Class for training a TreeCat model."""
 
     def __init__(self, data, mask, config):
         """Initialize a model in an unassigned state.
@@ -26,6 +43,8 @@ class TrainerBase(object):
             mask: A 2D array of presence/absence, where present = True.
             config: A global config dict.
         """
+        logger.info('TreeCatTrainer of %d x %d data', data.shape[0],
+                    data.shape[1])
         data = np.asarray(data, np.int32)
         mask = np.asarray(mask, np.bool_)
         num_rows, num_features = data.shape
@@ -38,22 +57,189 @@ class TrainerBase(object):
         self.assignments = np.zeros(data.shape, dtype=np.int32)
         self.suffstats = {}
         self.tree = TreeStructure(num_features)
+        self._sampling_tree = (config['learning_sample_tree_steps'] > 0)
+        self._schedule = make_propagation_schedule(self.tree.tree_grid)
+
+        # These are useful dimensions to import into locals().
+        V = self.tree.num_vertices
+        E = V - 1  # Number of edges in the tree.
+        K = V * (V - 1) // 2  # Number of edges in the complete graph.
+        M = self._config[
+            'model_num_clusters']  # Clusters in each mixture model.
+        C = self._config[
+            'model_num_categories']  # Categories for each feature.
+        self._VEKMC = (V, E, K, M, C)
+
+        # Hard-code these hyperparameters.
+        self._feat_prior = 0.5  # Jeffreys prior.
+        self._vert_prior = 1.0 / M  # Nonparametric.
+        self._edge_prior = 1.0 / M**2  # Nonparametric.
+
+        # Sufficient statistics are maintained always.
+        self._vert_ss = np.zeros([V, M], np.int32)
+        self._edge_ss = np.zeros([E, M, M], np.int32)
+        self._feat_ss = np.zeros([V, C, M], np.int32)
+
+        # Sufficient statistics for tree learning are reset after each batch.
+        # This is the most expensive data structure, costing O(V^2 M^2) space.
+        if self._sampling_tree:
+            self._tree_ss = np.zeros([K, M, M], np.int32)
+            COUNTERS.footprint_training_tree_ss = sizeof(self._tree_ss)
+
+        # Non-normalized probabilities are maintained within each batch.
+        self._feat_probs = self._feat_prior + self._feat_ss.astype(np.float32)
+        self._vert_probs = self._vert_prior + self._vert_ss.astype(np.float32)
+        self._edge_probs = self._edge_prior + self._edge_ss.astype(np.float32)
+
+        # Temporaries.
+        self._messages = np.zeros([V, M], dtype=np.float32)
 
         COUNTERS.footprint_training_data = sizeof(self._data)
         COUNTERS.footprint_training_mask = sizeof(self._mask)
         COUNTERS.footprint_training_assignments = sizeof(self.assignments)
+        COUNTERS.footprint_training_vert_ss = sizeof(self._vert_ss)
+        COUNTERS.footprint_training_edge_ss = sizeof(self._edge_ss)
+        COUNTERS.footprint_training_feat_ss = sizeof(self._feat_ss)
+        COUNTERS.footprint_training_vert_probs = sizeof(self._feat_probs)
+        COUNTERS.footprint_training_vert_probs = sizeof(self._vert_probs)
+        COUNTERS.footprint_training_edge_probs = sizeof(self._edge_probs)
+        COUNTERS.footprint_training_messages = sizeof(self._messages)
 
+    def _update_tree(self):
+        assert self._sampling_tree
+        for e, v1, v2 in self.tree.tree_grid.T:
+            k = find_complete_edge(v1, v2)
+            self._edge_ss[e, :, :] = self._tree_ss[k, :, :]
+        self._schedule = make_propagation_schedule(self.tree.tree_grid)
+        self._tree_ss[...] = 0
+        self._feat_probs[...] = self._feat_ss
+        self._feat_probs += self._feat_prior
+        self._vert_probs[...] = self._vert_ss
+        self._vert_probs += self._vert_prior
+        self._edge_probs[...] = self._edge_ss
+        self._edge_probs += self._edge_prior
+
+    @profile
+    def _update_tensors(self, row_id, diff):
+        V, E, K, M, C = self._VEKMC
+        data = self._data[row_id]
+        mask = self._mask[row_id]
+        assignments = self.assignments[row_id]
+
+        vertices = self.tree.vertices
+        tree_edges = self.tree.tree_grid[0, :]
+        complete_edges = self.tree.complete_grid[0, :]
+        data_mask = data[mask]
+        assignments_mask = assignments[mask]
+        assignments_e = (assignments[self.tree.tree_grid[1, :]],
+                         assignments[self.tree.tree_grid[2, :]])
+        self._feat_ss[mask, data_mask, assignments_mask] += diff
+        self._vert_ss[vertices, assignments] += diff
+        self._edge_ss[tree_edges, assignments_e[0], assignments_e[1]] += diff
+        self._feat_probs[mask, data_mask, assignments_mask] += diff
+        self._vert_probs[vertices, assignments] += diff
+        self._edge_probs[tree_edges,  #
+                         assignments_e[0],  #
+                         assignments_e[1]] += diff
+        if self._sampling_tree and diff > 0:
+            self._tree_ss[complete_edges,  #
+                          assignments[self.tree.complete_grid[1, :]],  #
+                          assignments[self.tree.complete_grid[2, :]]] += diff
+
+    @profile
     def add_row(self, row_id):
-        raise NotImplementedError()
+        logger.debug('TreeCatTrainer.add_row %d', row_id)
+        assert row_id not in self._assigned_rows, row_id
+        V, E, K, M, C = self._VEKMC
+        feat_probs = self._feat_probs
+        feat_probs_sum = self._feat_probs.sum(axis=1)
+        vert_probs = self._vert_probs
+        edge_probs = self._edge_probs
+        messages = self._messages
+        data = self._data[row_id]
+        mask = self._mask[row_id]
+        assignments = self.assignments[row_id]
 
+        for v, parent, children in reversed(self._schedule):
+            message = messages[v, :]
+            message[:] = vert_probs[v, :]
+            # Propagate upward from observed to latent.
+            if mask[v]:
+                message *= feat_probs[v, data[v], :]
+                message /= feat_probs_sum[v, :]
+            # Propagate latent state inward from children to v.
+            for child in children:
+                e = self.tree.find_tree_edge(v, child)
+                if v < child:
+                    trans = edge_probs[e, :, :]
+                else:
+                    trans = np.transpose(edge_probs[e, :, :])
+                message *= np.dot(trans, messages[child, :])
+                message /= vert_probs[v, :]
+            message /= np.max(message)
+
+        # Propagate latent state outward from parent to v.
+        for v, parent, children in self._schedule:
+            message = messages[v, :]
+            if parent is not None:
+                e = self.tree.find_tree_edge(v, parent)
+                if parent < v:
+                    trans = edge_probs[e, :, :]
+                else:
+                    trans = np.transpose(edge_probs[e, :, :])
+                message *= trans[assignments[parent], :]
+                message /= vert_probs[v, :]
+                assert message.shape == (M, )
+            message /= message.sum()
+            assignments[v] = sample_from_probs(message)
+        self._assigned_rows.add(row_id)
+        self._update_tensors(row_id, +1)
+
+    @profile
     def remove_row(self, row_id):
-        raise NotImplementedError()
+        logger.debug('TreeCatTrainer.remove_row %d', row_id)
+        assert row_id in self._assigned_rows, row_id
+        self._assigned_rows.remove(row_id)
+        self._update_tensors(row_id, -1)
 
+    @profile
     def sample_tree(self):
-        raise NotImplementedError()
+        logger.info('TreeCatTrainer.sample_tree given %d rows',
+                    len(self._assigned_rows))
+        assert self._sampling_tree
+        # Compute edge logits.
+        V, E, K, M, C = self._VEKMC
+        edge_logits = np.zeros([K], np.float32)
+        block = np.zeros([M, M], dtype=np.float32)
+        for k in xrange(K):
+            block[...] = self._tree_ss[k, :, :]
+            block += self._edge_prior
+            edge_logits[k] = gammaln(block).sum()  # Costs ~8% of total time!
+
+        # Sample the tree.
+        complete_grid = self.tree.complete_grid
+        assert edge_logits.shape[0] == complete_grid.shape[1]
+        edges = self.tree.tree_grid[1:3, :].T
+        edges = sample_tree(
+            complete_grid,
+            edge_logits,
+            edges,
+            seed=self._seed,
+            steps=self._config['learning_sample_tree_steps'])
+        self._seed += 1
+        self.tree.set_edges(edges)
+        self._update_tree()
 
     def finish(self):
-        raise NotImplementedError()
+        logger.info('TreeCatTrainer.finish with %d rows',
+                    len(self._assigned_rows))
+        self.suffstats = {
+            'feat_ss': self._feat_ss,
+            'vert_ss': self._vert_ss,
+            'edge_ss': self._edge_ss,
+        }
+        self._tree_ss = None
+        self.tree.gc()
 
     def train(self):
         """Train a TreeCat model using subsample-annealed MCMC.
@@ -90,15 +276,6 @@ class TrainerBase(object):
         }
 
 
-def Trainer(data, mask, config):
-    """Select among Trainer classes based on config['engine']."""
-    if config['engine'] == 'numpy':
-        from treecat.np_engine import NumpyTrainer as Trainer
-    else:
-        raise ValueError('Unknown engine: {}'.format(config['engine']))
-    return Trainer(data, mask, config)
-
-
 def train_model(data, mask, config):
     """Train a TreeCat model using subsample-annealed MCMC.
 
@@ -112,7 +289,7 @@ def train_model(data, mask, config):
         assignments: An [N, V] numpy array of latent cluster ids for each
           cell in the dataset.
     """
-    return Trainer(data, mask, config).train()
+    return TreeCatTrainer(data, mask, config).train()
 
 
 def get_annealing_schedule(num_rows, config):

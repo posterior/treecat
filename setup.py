@@ -1,6 +1,5 @@
 import sys
 
-import numpy as np
 from parsable import parsable
 from setuptools import setup
 

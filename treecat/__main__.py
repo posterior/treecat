@@ -51,7 +51,7 @@ def train(dataset_path, config_path):
 
 @parsable
 def profile_train(rows=100, cols=10, epochs=5, tool='timers', engine='numpy'):
-    """Profile TreeCatTrainer.train() on a random dataset.
+    """Profile TreeCatTrainer on a random dataset.
     Available tools: timers, time, snakeviz, line_profiler, pdb
     """
     from treecat.generate import generate_dataset
@@ -79,7 +79,7 @@ def serve(model_path, config_path):
 
 @parsable
 def profile_serve(rows=100, cols=10, tool='timers', engine='numpy'):
-    """Profile TreeCatTrainer.train() on a random dataset.
+    """Profile TreeCatServer on a random dataset.
     Available tools: timers, time, snakeviz, line_profiler, pdb
     """
     from treecat.generate import generate_model
