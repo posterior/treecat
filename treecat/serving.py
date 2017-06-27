@@ -105,7 +105,6 @@ class TreeCatServer(object):
         assert isinstance(tree, TreeStructure)
         self._tree = tree
         self._config = config
-        self._seed = config['seed']
         self._factors = make_posterior_factors(tree.tree_grid, suffstats)
         self._schedule = make_propagation_schedule(tree.tree_grid)
 

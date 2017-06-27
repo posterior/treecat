@@ -265,7 +265,7 @@ class MutableTree(object):
 
 
 @profile
-def sample_tree(grid, edge_logits, edges, seed=0, steps=1):
+def sample_tree(grid, edge_logits, edges, steps=1):
     """Sample a random spanning tree of a dense weighted graph using MCMC.
 
     This uses Gibbs sampling on edges. Consider E undirected edges that can
@@ -282,7 +282,6 @@ def sample_tree(grid, edge_logits, edges, seed=0, steps=1):
       grid: A 3 x K array as returned by make_complete_graph().
       edge_logits: A length-K array of nonnormalized log probabilities.
       edges: A list of E initial edges in the form of (vertex,vertex) pairs.
-      seed: Seed for random number generation.
       steps: Number of MCMC steps to take.
 
     Returns:
@@ -290,7 +289,6 @@ def sample_tree(grid, edge_logits, edges, seed=0, steps=1):
     """
     logger.debug('sample_tree sampling a random spanning tree')
     COUNTERS.sample_tree_calls += 1
-    np.random.seed(seed)
     if len(edges) <= 1:
         return edges
     tree = MutableTree(grid, edges)

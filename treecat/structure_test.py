@@ -135,8 +135,8 @@ def test_sample_tree(num_edges):
     total_count = 2000
     counts = defaultdict(lambda: 0)
     edges = [(v, v + 1) for v in range(V - 1)]
-    for seed in range(total_count):
-        edges = sample_tree(grid, edge_logits, edges, seed)
+    for _ in range(total_count):
+        edges = sample_tree(grid, edge_logits, edges)
         counts[tuple(edges)] += 1
     assert len(counts) == NUM_SPANNING_TREES[V]
 

@@ -52,7 +52,6 @@ class TreeCatTrainer(object):
         self._data = data
         self._mask = mask
         self._config = config
-        self._seed = config['seed']
         self._assigned_rows = set()
         self.assignments = np.zeros(data.shape, dtype=np.int32)
         self.suffstats = {}
@@ -224,9 +223,7 @@ class TreeCatTrainer(object):
             complete_grid,
             edge_logits,
             edges,
-            seed=self._seed,
             steps=self._config['learning_sample_tree_steps'])
-        self._seed += 1
         self.tree.set_edges(edges)
         self._update_tree()
 
