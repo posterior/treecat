@@ -116,10 +116,12 @@ def test_server_logprob_normalized(model):
 
 @pytest.mark.xfail
 def test_server_gof(model):
+    np.random.seed(0)
     server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
+    num_samples = 50000
 
     # Generate samples.
-    N = 20000  # Number of samples.
+    N = num_samples
     C = TINY_CONFIG['model_num_categories']
     V = TINY_DATA.shape[1]
     empty_data = np.zeros([N, V], dtype=np.int32)
@@ -142,7 +144,8 @@ def test_server_gof(model):
     counts = np.array([counts[key] for key in keys])
     probs = np.array([probs[key] for key in keys])
     probs /= probs.sum()  # Test normalization elsewhere.
-    assert 1e-2 < multinomial_goodness_of_fit(probs, counts, total_count=N)
+    gof = multinomial_goodness_of_fit(probs, counts, num_samples, plot=True)
+    assert 1e-2 < gof
 
 
 def test_server_entropy(model):

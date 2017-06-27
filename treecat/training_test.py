@@ -99,8 +99,6 @@ def test_category_sampler_gof(N, V, C, M):
     config['model_num_clusters'] = M
     data, mask = generate_tiny_dataset(num_rows=N, num_cols=V, num_cats=C)
     trainer = TreeCatTrainer(data, mask, config)
-    print('Data:')
-    print(data)
 
     # Add all rows.
     for row_id in range(N):
@@ -121,14 +119,12 @@ def test_category_sampler_gof(N, V, C, M):
         else:
             counts[key] = 1
             probs[key] = trainer.logprob()
-    keys = sorted(counts.keys())
+    assert len(counts) == M**(N * V)
+
+    # Check accuracy using Pearson's chi-squared test.
+    keys = counts.keys()
     counts = np.array([counts[k] for k in keys], dtype=np.int32)
     probs = np.array([probs[k] for k in keys])
     probs /= probs.sum()
-
-    print('Count\tExpect.\tAssignments')
-    for count, prob, key in zip(counts, probs, keys):
-        print('{}\t{:0.1f}\t{}'.format(count, num_samples * prob, key))
-
-    assert len(counts) == M**(N * V)
-    assert 1e-2 < multinomial_goodness_of_fit(probs, counts, num_samples)
+    gof = multinomial_goodness_of_fit(probs, counts, num_samples, plot=True)
+    assert 1e-2 < gof

@@ -121,7 +121,7 @@ def test_make_propagation_schedule(edges, root):
 
 
 @pytest.mark.parametrize('num_edges', [1, 2, 3, 4])
-def test_sample_tree(num_edges):
+def test_sample_tree_gof(num_edges):
     np.random.seed(0)
     E = num_edges
     V = 1 + E
@@ -132,10 +132,10 @@ def test_sample_tree(num_edges):
     edge_probs_dict = {(v1, v2): edge_probs[k] for k, v1, v2 in grid.T}
 
     # Generate many samples via MCMC.
-    total_count = 2000
+    num_samples = 2000
     counts = defaultdict(lambda: 0)
     edges = [(v, v + 1) for v in range(V - 1)]
-    for _ in range(total_count):
+    for _ in range(num_samples):
         edges = sample_tree(grid, edge_logits, edges)
         counts[tuple(edges)] += 1
     assert len(counts) == NUM_SPANNING_TREES[V]
@@ -146,4 +146,5 @@ def test_sample_tree(num_edges):
     probs = np.array(
         [np.prod([edge_probs_dict[edge] for edge in key]) for key in keys])
     probs /= probs.sum()
-    assert 1e-2 < multinomial_goodness_of_fit(probs, counts, total_count)
+    gof = multinomial_goodness_of_fit(probs, counts, num_samples, plot=True)
+    assert 1e-2 < gof
