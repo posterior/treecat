@@ -10,5 +10,4 @@ DEFAULT_CONFIG = {
     'learning_annealing_init_rows': 2,
     'learning_annealing_epochs': 100.0,
     'serving_samples': 1024,
-    'engine': 'numpy',
 }

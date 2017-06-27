@@ -30,15 +30,10 @@ def test_get_annealing_schedule():
             assert 0 <= row_id and row_id < num_rows
 
 
-@pytest.mark.parametrize('engine', [
-    'numpy',
-])
-def test_train_model(engine):
-    config = TINY_CONFIG.copy()
-    config['engine'] = engine
-    model = train_model(TINY_DATA, TINY_MASK, config)
+def test_train_model():
+    model = train_model(TINY_DATA, TINY_MASK, TINY_CONFIG)
 
-    assert model['config'] == config
+    assert model['config'] == TINY_CONFIG
     assert isinstance(model['tree'], TreeStructure)
     grid = model['tree'].tree_grid
     feat_ss = model['suffstats']['feat_ss']
@@ -49,8 +44,8 @@ def test_train_model(engine):
     # Check shape.
     N, V = TINY_DATA.shape
     E = V - 1
-    C = config['model_num_categories']
-    M = config['model_num_clusters']
+    C = TINY_CONFIG['model_num_categories']
+    M = TINY_CONFIG['model_num_clusters']
     assert grid.shape == (3, E)
     assert feat_ss.shape == (V, C, M)
     assert vert_ss.shape == (V, M)

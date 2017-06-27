@@ -55,22 +55,12 @@ def test_make_posterior(model):
     assert np.allclose(latent_latent.sum(1), latent[grid[2, :], :], atol=atol)
 
 
-@pytest.mark.parametrize('engine', [
-    'numpy',
-])
-def test_server_init(engine, model):
-    config = TINY_CONFIG.copy()
-    config['engine'] = engine
-    serve_model(model['tree'], model['suffstats'], config)
+def test_server_init(model):
+    serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
 
 
-@pytest.mark.parametrize('engine', [
-    'numpy',
-])
-def test_server_sample_shape(engine, model):
-    config = TINY_CONFIG.copy()
-    config['engine'] = engine
-    server = serve_model(model['tree'], model['suffstats'], config)
+def test_server_sample_shape(model):
+    server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
 
     # Sample all possible mask patterns.
     N, V = TINY_DATA.shape
@@ -83,13 +73,8 @@ def test_server_sample_shape(engine, model):
         assert np.allclose(samples[:, mask], TINY_DATA[:, mask])
 
 
-@pytest.mark.parametrize('engine', [
-    'numpy',
-])
-def test_server_logprob_shape(engine, model):
-    config = TINY_CONFIG.copy()
-    config['engine'] = engine
-    server = serve_model(model['tree'], model['suffstats'], config)
+def test_server_logprob_shape(model):
+    server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
 
     # Sample all possible mask patterns.
     N, V = TINY_DATA.shape
@@ -101,13 +86,8 @@ def test_server_logprob_shape(engine, model):
         assert np.isfinite(logprob).all()
 
 
-@pytest.mark.parametrize('engine', [
-    'numpy',
-])
-def test_server_logprob_negative(engine, model):
-    config = TINY_CONFIG.copy()
-    config['engine'] = engine
-    server = serve_model(model['tree'], model['suffstats'], config)
+def test_server_logprob_negative(model):
+    server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
 
     # Sample all possible mask patterns.
     N, V = TINY_DATA.shape
@@ -119,16 +99,11 @@ def test_server_logprob_negative(engine, model):
         assert (logprob <= abstol).all()  # Assuming features are discrete.
 
 
-@pytest.mark.parametrize('engine', [
-    'numpy',
-])
-def test_server_logprob_normalized(engine, model):
-    config = TINY_CONFIG.copy()
-    config['engine'] = engine
-    server = serve_model(model['tree'], model['suffstats'], config)
+def test_server_logprob_normalized(model):
+    server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
 
     # The total probability of all possible rows should be 1.
-    C = config['model_num_categories']
+    C = TINY_CONFIG['model_num_categories']
     N, V = TINY_DATA.shape
     factors = [range(C)] * V
     data = np.array(list(itertools.product(*factors)), dtype=np.int32)
@@ -139,17 +114,13 @@ def test_server_logprob_normalized(engine, model):
     assert logtotal == pytest.approx(0.0, abs=1e-5)
 
 
-@pytest.mark.parametrize('engine', [
-    pytest.mark.xfail('numpy'),
-])
-def test_server_gof(engine, model):
-    config = TINY_CONFIG.copy()
-    config['engine'] = engine
-    server = serve_model(model['tree'], model['suffstats'], config)
+@pytest.mark.xfail
+def test_server_gof(model):
+    server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
 
     # Generate samples.
     N = 20000  # Number of samples.
-    C = config['model_num_categories']
+    C = TINY_CONFIG['model_num_categories']
     V = TINY_DATA.shape[1]
     empty_data = np.zeros([N, V], dtype=np.int32)
     empty_mask = np.array([False] * V, dtype=np.bool_)
@@ -174,13 +145,8 @@ def test_server_gof(engine, model):
     assert 1e-2 < multinomial_goodness_of_fit(probs, counts, total_count=N)
 
 
-@pytest.mark.parametrize('engine', [
-    'numpy',
-])
-def test_server_entropy(engine, model):
-    config = TINY_CONFIG.copy()
-    config['engine'] = engine
-    server = serve_model(model['tree'], model['suffstats'], config)
+def test_server_entropy(model):
+    server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
     V = TINY_DATA.shape[1]
     feature_sets = [(v1, v2) for v2 in range(V) for v1 in range(v2)]
     entropies = server.entropy(feature_sets)
@@ -189,13 +155,8 @@ def test_server_entropy(engine, model):
     assert np.all(entropies >= 0)
 
 
-@pytest.mark.parametrize('engine', [
-    'numpy',
-])
-def test_server_correlation(engine, model):
-    config = TINY_CONFIG.copy()
-    config['engine'] = engine
-    server = serve_model(model['tree'], model['suffstats'], config)
+def test_server_correlation(model):
+    server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
     V = TINY_DATA.shape[1]
     correlation = server.correlation()
     assert correlation.shape == (V, V)
