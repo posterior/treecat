@@ -8,7 +8,6 @@ import logging
 import numpy as np
 from scipy.special import gammaln
 
-from six.moves import xrange
 from treecat.structure import TreeStructure
 from treecat.structure import find_complete_edge
 from treecat.structure import make_propagation_schedule
@@ -19,6 +18,14 @@ from treecat.util import profile
 from treecat.util import sizeof
 
 logger = logging.getLogger(__name__)
+
+
+def logprob_dm(counts, prior):
+    """Non-normalized log probability of a Dirichlet-Multinomial distribution.
+
+    See https://en.wikipedia.org/wiki/Dirichlet-multinomial_distribution
+    """
+    return gammaln(counts + prior).sum() - gammaln(counts + 1.0).sum()
 
 
 def sample_from_probs(probs):
@@ -206,14 +213,19 @@ class TreeCatTrainer(object):
         logger.info('TreeCatTrainer.sample_tree given %d rows',
                     len(self._assigned_rows))
         assert self._sampling_tree
-        # Compute edge logits.
         V, E, K, M, C = self._VEKMC
+        # Compute vertex logits.
+        vertex_logits = np.zeros([V], np.float32)
+        for v in range(V):
+            vertex_logits[v] = logprob_dm(self._vert_ss[v, :],
+                                          self._vert_prior)
+        # Compute edge logits.
         edge_logits = np.zeros([K], np.float32)
-        block = np.zeros([M, M], dtype=np.float32)
-        for k in xrange(K):
-            block[...] = self._tree_ss[k, :, :]
-            block += self._edge_prior
-            edge_logits[k] = gammaln(block).sum()  # Costs ~8% of total time!
+        for k, v1, v2 in self.tree.tree_grid.T:
+            # This is the most expensive part of tree sampling:
+            edge_logits[k] = (
+                logprob_dm(self._tree_ss[k, :, :], self._edge_prior) -
+                vertex_logits[v1] - vertex_logits[v2])
 
         # Sample the tree.
         complete_grid = self.tree.complete_grid
@@ -226,6 +238,35 @@ class TreeCatTrainer(object):
             steps=self._config['learning_sample_tree_steps'])
         self.tree.set_edges(edges)
         self._update_tree()
+
+    def logprob(self):
+        """Compute non-normalized log probability of data and assignments.
+
+        This is mainly useful for testing goodness of fit of the category
+        kernel.
+        """
+        # This uses inclusion-exclusion on the single and pairwise factors.
+        V, E, K, M, C = self._VEKMC
+        logprob = 0.0
+        # Add contribution of each joint (observed, latent) distribution,
+        # correcting for missing observations.
+        for v in range(V):
+            feat_block = self._feat_ss[v, :, :] + self._feat_prior
+            feat_block *= (feat_block.sum(axis=0, keepdims=True) /
+                           (self._vert_ss[v, :] + self._vert_prior))
+            feat_block -= self._feat_prior
+            logprob += logprob_dm(feat_block, self._feat_prior)
+        # Keep track of logprobs of latent distribution for each vertex.
+        logprobs = {}
+        for v in range(V):
+            logprobs[v] = logprob_dm(self._vert_ss[v, :], self._vert_prior)
+        # Add contribution of each (latent, latent) joint distribution, and
+        # remove the double-counted latent logprob of each of its vertices.
+        for e, v1, v2 in self.tree.tree_grid.T:
+            edge_block = self._edge_probs[e, :, :]
+            logprob += (logprob_dm(edge_block, self._edge_prior) - logprobs[v1]
+                        - logprobs[v2])
+        return logprob
 
     def finish(self):
         logger.info('TreeCatTrainer.finish with %d rows',

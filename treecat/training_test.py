@@ -2,10 +2,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from collections import defaultdict
-
 import numpy as np
 import pytest
+from goftests import multinomial_goodness_of_fit
 
 from treecat.config import DEFAULT_CONFIG
 from treecat.structure import TreeStructure
@@ -86,13 +85,14 @@ def hash_assignments(assignments):
     return tuple(tuple(row) for row in assignments)
 
 
+@pytest.mark.xfail
 @pytest.mark.parametrize('N,V,C,M', [
     (2, 2, 2, 2),
     (2, 2, 2, 3),
     (2, 3, 2, 2),
     (3, 2, 2, 2),
 ])
-def test_category_sampler(N, V, C, M):
+def test_category_sampler_gof(N, V, C, M):
     config = DEFAULT_CONFIG.copy()
     config['learning_sample_tree_steps'] = 0  # Disable tree kernel.
     config['model_num_categories'] = C
@@ -107,14 +107,28 @@ def test_category_sampler(N, V, C, M):
         trainer.add_row(row_id)
 
     # Collect samples.
-    counts = defaultdict(lambda: 0)
-    for _ in range(2000):
+    num_samples = 2000
+    counts = {}
+    probs = {}
+    for _ in range(num_samples):
         for row_id in range(N):
             # This is a single-site Gibbs sampler.
             trainer.remove_row(row_id)
             trainer.add_row(row_id)
-        counts[hash_assignments(trainer.assignments)] += 1
-    print('Count\tAssignments')
-    for key, count in sorted(counts.items()):
-        print('{}\t{}'.format(count, key))
+        key = hash_assignments(trainer.assignments)
+        if key in counts:
+            counts[key] += 1
+        else:
+            counts[key] = 1
+            probs[key] = trainer.logprob()
+    keys = sorted(counts.keys())
+    counts = np.array([counts[k] for k in keys], dtype=np.int32)
+    probs = np.array([probs[k] for k in keys])
+    probs /= probs.sum()
+
+    print('Count\tExpect.\tAssignments')
+    for count, prob, key in zip(counts, probs, keys):
+        print('{}\t{:0.1f}\t{}'.format(count, num_samples * prob, key))
+
     assert len(counts) == M**(N * V)
+    assert 1e-2 < multinomial_goodness_of_fit(probs, counts, num_samples)
