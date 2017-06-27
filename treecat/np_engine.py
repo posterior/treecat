@@ -49,6 +49,7 @@ class NumpyTrainer(TrainerBase):
         logger.info('NumpyTrainer of %d x %d data', data.shape[0],
                     data.shape[1])
         super(NumpyTrainer, self).__init__(data, mask, config)
+        self._sampling_tree = (config['learning_sample_tree_steps'] > 0)
         self._schedule = make_propagation_schedule(self.tree.tree_grid)
 
         # These are useful dimensions to import into locals().
@@ -73,7 +74,9 @@ class NumpyTrainer(TrainerBase):
 
         # Sufficient statistics for tree learning are reset after each batch.
         # This is the most expensive data structure, costing O(V^2 M^2) space.
-        self._tree_ss = np.zeros([K, M, M], np.int32)
+        if self._sampling_tree:
+            self._tree_ss = np.zeros([K, M, M], np.int32)
+            COUNTERS.footprint_training_tree_ss = sizeof(self._tree_ss)
 
         # Non-normalized probabilities are maintained within each batch.
         self._feat_probs = self._feat_prior + self._feat_ss.astype(np.float32)
@@ -86,13 +89,13 @@ class NumpyTrainer(TrainerBase):
         COUNTERS.footprint_training_vert_ss = sizeof(self._vert_ss)
         COUNTERS.footprint_training_edge_ss = sizeof(self._edge_ss)
         COUNTERS.footprint_training_feat_ss = sizeof(self._feat_ss)
-        COUNTERS.footprint_training_tree_ss = sizeof(self._tree_ss)
         COUNTERS.footprint_training_vert_probs = sizeof(self._feat_probs)
         COUNTERS.footprint_training_vert_probs = sizeof(self._vert_probs)
         COUNTERS.footprint_training_edge_probs = sizeof(self._edge_probs)
         COUNTERS.footprint_training_messages = sizeof(self._messages)
 
     def _update_tree(self):
+        assert self._sampling_tree
         for e, v1, v2 in self.tree.tree_grid.T:
             k = find_complete_edge(v1, v2)
             self._edge_ss[e, :, :] = self._tree_ss[k, :, :]
@@ -125,7 +128,7 @@ class NumpyTrainer(TrainerBase):
         self._feat_probs[mask, data_mask, assignments_mask] += 1
         self._vert_probs[vertices, assignments] += 1
         self._edge_probs[tree_edges, assignments_e[0], assignments_e[1]] += 1
-        if diff > 0:
+        if self._sampling_tree and diff > 0:
             self._tree_ss[complete_edges,  #
                           assignments[self.tree.complete_grid[1, :]],  #
                           assignments[self.tree.complete_grid[2, :]]] += 1
@@ -133,6 +136,7 @@ class NumpyTrainer(TrainerBase):
     @profile
     def add_row(self, row_id):
         logger.debug('NumpyTrainer.add_row %d', row_id)
+        assert row_id not in self._assigned_rows, row_id
         V, E, K, M, C = self._VEKMC
         feat_probs = self._feat_probs
         feat_probs_sum = self._feat_probs.sum(axis=1)
@@ -181,6 +185,7 @@ class NumpyTrainer(TrainerBase):
     @profile
     def remove_row(self, row_id):
         logger.debug('NumpyTrainer.remove_row %d', row_id)
+        assert row_id in self._assigned_rows, row_id
         self._assigned_rows.remove(row_id)
         self._update_tensors(row_id, -1)
 
@@ -188,6 +193,7 @@ class NumpyTrainer(TrainerBase):
     def sample_tree(self):
         logger.info('NumpyTrainer.sample_tree given %d rows',
                     len(self._assigned_rows))
+        assert self._sampling_tree
         # Compute edge logits.
         V, E, K, M, C = self._VEKMC
         edge_logits = np.zeros([K], np.float32)

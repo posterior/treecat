@@ -90,6 +90,19 @@ class TrainerBase(object):
         }
 
 
+def Trainer(data, mask, config):
+    """Select among Trainer classes based on config['engine']."""
+    if config['engine'] == 'numpy':
+        from treecat.np_engine import NumpyTrainer as Trainer
+    elif config['engine'] == 'tensorflow':
+        from treecat.tf_engine import TensorflowTrainer as Trainer
+    elif config['engine'] == 'tensorflow':
+        from treecat.cy_engine import CythonTrainer as Trainer
+    else:
+        raise ValueError('Unknown engine: {}'.format(config['engine']))
+    return Trainer(data, mask, config)
+
+
 def train_model(data, mask, config):
     """Train a TreeCat model using subsample-annealed MCMC.
 
@@ -103,21 +116,13 @@ def train_model(data, mask, config):
         assignments: An [N, V] numpy array of latent cluster ids for each
           cell in the dataset.
     """
-    if config['engine'] == 'numpy':
-        from treecat.np_engine import NumpyTrainer as Trainer
-    elif config['engine'] == 'tensorflow':
-        from treecat.tf_engine import TensorflowTrainer as Trainer
-    elif config['engine'] == 'tensorflow':
-        from treecat.cy_engine import CythonTrainer as Trainer
-    else:
-        raise ValueError('Unknown engine: {}'.format(config['engine']))
     return Trainer(data, mask, config).train()
 
 
 def get_annealing_schedule(num_rows, config):
     """Iterator for subsample annealing yielding (action, arg) pairs.
 
-    Actions are one of: 'add_row', 'remove_row', or 'batch'.
+    Actions are one of: 'add_row', 'remove_row', or 'sample_tree'.
     The add and remove actions each provide a row_id arg.
     """
     # Randomly shuffle rows.
@@ -132,7 +137,8 @@ def get_annealing_schedule(num_rows, config):
     remove_rate = epochs - 1.0
     state = epochs * config['learning_annealing_init_rows']
 
-    # Perform batch operations between batches.
+    # Sample the tree after each batch.
+    sampling_tree = (config['learning_sample_tree_steps'] > 0)
     num_fresh = 0
     num_stale = 0
     while num_fresh + num_stale != num_rows:
@@ -144,7 +150,7 @@ def get_annealing_schedule(num_rows, config):
             yield 'remove_row', next(row_to_remove)
             state += add_rate
             num_stale -= 1
-        if num_stale == 0 and num_fresh > 0:
-            yield 'batch', None
+        if sampling_tree and num_stale == 0 and num_fresh > 0:
+            yield 'sample_tree', None
             num_stale = num_fresh
             num_fresh = 0

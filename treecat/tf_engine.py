@@ -63,6 +63,7 @@ def build_training_graph(tree, inits, config):
     K = V * (V - 1) // 2  # Number of edges in the complete graph.
     M = config['model_num_clusters']  # Clusters in each mixture model.
     C = config['model_num_categories']  # Categories possible for each feature.
+    sampling_tree = (config['learning_sample_tree_steps'] > 0)
     vertices = tf.range(V, dtype=tf.int32)
     tree_grid = tf.constant(tree.tree_grid)
     complete_grid = tf.constant(tree.complete_grid)
@@ -82,7 +83,9 @@ def build_training_graph(tree, inits, config):
 
     # Sufficient statistics for tree learning are maintained within each batch.
     # This is the most expensive data structure, costing O(V^2 M^2) space.
-    tree_ss = tf.Variable(tf.zeros([K, M, M], tf.int32), name='tree_ss')
+    if sampling_tree:
+        tree_ss = tf.Variable(tf.zeros([K, M, M], tf.int32), name='tree_ss')
+        COUNTERS.footprint_training_tree_ss = sizeof(tree_ss)
 
     # Non-normalized probabilities are maintained within each batch.
     vert_probs = tf.Variable(
@@ -95,20 +98,20 @@ def build_training_graph(tree, inits, config):
     COUNTERS.footprint_training_vert_ss = sizeof(vert_ss)
     COUNTERS.footprint_training_edge_ss = sizeof(edge_ss)
     COUNTERS.footprint_training_feat_ss = sizeof(feat_ss)
-    COUNTERS.footprint_training_tree_ss = sizeof(tree_ss)
     COUNTERS.footprint_training_vert_probs = sizeof(vert_probs)
     COUNTERS.footprint_training_edge_probs = sizeof(edge_probs)
 
-    # This copies tree_ss to edge_ss after updating the tree structure.
-    edges = tf.placeholder(dtype=tf.int32, shape=[E], name='edges')
-    tf.assign(edge_ss, tf.gather(tree_ss, edges), name='update_tree')
+    if sampling_tree:
+        # This copies tree_ss to edge_ss after updating the tree structure.
+        edges = tf.placeholder(dtype=tf.int32, shape=[E], name='edges')
+        tf.assign(edge_ss, tf.gather(tree_ss, edges), name='update_tree')
 
-    with tf.name_scope('structure'):
-        # This is run to compute edge logits for learning the tree structure.
-        one = tf.constant(1.0, dtype=tf.float32, name='one')
-        weights = tf.cast(tree_ss, tf.float32)
-        logits = tf.lgamma(weights + edge_prior) - tf.lgamma(weights + one)
-        tf.reduce_sum(logits, [1, 2], name='edge_logits')
+        with tf.name_scope('structure'):
+            # This computes edge logits for learning the tree structure.
+            one = tf.constant(1.0, dtype=tf.float32, name='one')
+            weights = tf.cast(tree_ss, tf.float32)
+            logits = tf.lgamma(weights + edge_prior) - tf.lgamma(weights + one)
+            tf.reduce_sum(logits, [1, 2], name='edge_logits')
 
     # Propagate upward from observed to latent.
     # This is run only during add_row().
@@ -177,34 +180,37 @@ def build_training_graph(tree, inits, config):
             tf.gather(assignments, tree_grid[1, :]),
             tf.gather(assignments, tree_grid[2, :]),
         ], 1)
-        tree_indices = tf.stack([
-            complete_grid[0, :],
-            tf.gather(assignments, complete_grid[1, :]),
-            tf.gather(assignments, complete_grid[2, :]),
-        ], 1)
         # Updates are adapted to shape and dtype.
         d_feat_ss = tf.cast(row_mask, tf.int32)
         d_vert_ss = tf.ones([V], tf.int32)
         d_edge_ss = tf.ones([E], tf.int32)
-        d_tree_ss = tf.ones([K], tf.int32)
         d_vert_probs = tf.ones([V], tf.float32)
         d_edge_probs = tf.ones([E], tf.float32)
-        tf.group(
+        add_row = tf.group(
             tf.scatter_nd_add(feat_ss, feat_indices, d_feat_ss, True),
             tf.scatter_nd_add(vert_ss, vert_indices, d_vert_ss, True),
             tf.scatter_nd_add(edge_ss, edge_indices, d_edge_ss, True),
-            tf.scatter_nd_add(tree_ss, tree_indices, d_tree_ss, True),
             tf.scatter_nd_add(vert_probs, vert_indices, d_vert_probs, True),
-            tf.scatter_nd_add(edge_probs, edge_indices, d_edge_probs, True),
-            name='add_row')
-        tf.group(
+            tf.scatter_nd_add(edge_probs, edge_indices, d_edge_probs, True))
+        if sampling_tree:
+            tree_indices = tf.stack([
+                complete_grid[0, :],
+                tf.gather(assignments, complete_grid[1, :]),
+                tf.gather(assignments, complete_grid[2, :]),
+            ], 1)
+            d_tree_ss = tf.ones([K], tf.int32)
+            add_row = tf.group(add_row,
+                               tf.scatter_nd_add(tree_ss, tree_indices,
+                                                 d_tree_ss, True))
+        remove_row = tf.group(
             tf.scatter_nd_sub(feat_ss, feat_indices, d_feat_ss, True),
             tf.scatter_nd_sub(vert_ss, vert_indices, d_vert_ss, True),
             tf.scatter_nd_sub(edge_ss, edge_indices, d_edge_ss, True),
             # Note that tree_ss is not updated during remove_row.
             tf.scatter_nd_sub(vert_probs, vert_indices, d_vert_probs, True),
-            tf.scatter_nd_sub(edge_probs, edge_indices, d_edge_probs, True),
-            name='remove_row')
+            tf.scatter_nd_sub(edge_probs, edge_indices, d_edge_probs, True))
+        tf.group(add_row, name='add_row')
+        tf.group(remove_row, name='remove_row')
 
     # These actions allow saving and loading variables when the graph changes.
     return {
@@ -231,6 +237,7 @@ class TensorflowTrainer(TrainerBase):
         logger.info('TensorflowTrainer of %d x %d data', data.shape[0],
                     data.shape[1])
         super(TensorflowTrainer, self).__init__(data, mask, config)
+        self._sampling_tree = (config['learning_sample_tree_steps'] > 0)
         self._session = None
         self._update_tree()
 
@@ -241,6 +248,7 @@ class TensorflowTrainer(TrainerBase):
     @profile
     def _update_tree(self):
         if self._session is not None:
+            assert self._sampling_tree
             edges = [
                 find_complete_edge(v1, v2)
                 for e, v1, v2 in self.tree.tree_grid.T
@@ -286,6 +294,7 @@ class TensorflowTrainer(TrainerBase):
     def sample_tree(self):
         logger.info('TensorflowTrainer.sample_tree given %d rows',
                     len(self._assigned_rows))
+        assert self._sampling_tree
         edge_logits = self._session.run('structure/edge_logits:0')
         complete_grid = self.tree.complete_grid
         assert edge_logits.shape[0] == complete_grid.shape[1]
