@@ -122,16 +122,18 @@ class NumpyTrainer(TrainerBase):
         assignments_mask = assignments[mask]
         assignments_e = (assignments[self.tree.tree_grid[1, :]],
                          assignments[self.tree.tree_grid[2, :]])
-        self._feat_ss[mask, data_mask, assignments_mask] += 1
-        self._vert_ss[vertices, assignments] += 1
-        self._edge_ss[tree_edges, assignments_e[0], assignments_e[1]] += 1
-        self._feat_probs[mask, data_mask, assignments_mask] += 1
-        self._vert_probs[vertices, assignments] += 1
-        self._edge_probs[tree_edges, assignments_e[0], assignments_e[1]] += 1
+        self._feat_ss[mask, data_mask, assignments_mask] += diff
+        self._vert_ss[vertices, assignments] += diff
+        self._edge_ss[tree_edges, assignments_e[0], assignments_e[1]] += diff
+        self._feat_probs[mask, data_mask, assignments_mask] += diff
+        self._vert_probs[vertices, assignments] += diff
+        self._edge_probs[tree_edges,  #
+                         assignments_e[0],  #
+                         assignments_e[1]] += diff
         if self._sampling_tree and diff > 0:
             self._tree_ss[complete_edges,  #
                           assignments[self.tree.complete_grid[1, :]],  #
-                          assignments[self.tree.complete_grid[2, :]]] += 1
+                          assignments[self.tree.complete_grid[2, :]]] += diff
 
     @profile
     def add_row(self, row_id):

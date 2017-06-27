@@ -92,7 +92,6 @@ def hash_assignments(assignments):
     return tuple(tuple(row) for row in assignments)
 
 
-@pytest.mark.xfail
 @pytest.mark.parametrize('N,V,C,M', [
     (2, 2, 2, 2),
     (2, 2, 2, 3),
@@ -116,7 +115,7 @@ def test_category_sampler(N, V, C, M):
 
     # Collect samples.
     counts = defaultdict(lambda: 0)
-    for _ in range(1000):
+    for _ in range(2000):
         for row_id in range(N):
             # This is a single-site Gibbs sampler.
             trainer.remove_row(row_id)
