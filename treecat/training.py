@@ -92,11 +92,6 @@ class TreeCatTrainer(object):
             self._tree_ss = np.zeros([K, M, M], np.int32)
             COUNTERS.footprint_training_tree_ss = sizeof(self._tree_ss)
 
-        # Non-normalized probabilities are maintained within each batch.
-        self._feat_probs = self._feat_prior + self._feat_ss.astype(np.float32)
-        self._vert_probs = self._vert_prior + self._vert_ss.astype(np.float32)
-        self._edge_probs = self._edge_prior + self._edge_ss.astype(np.float32)
-
         # Temporaries.
         self._messages = np.zeros([V, M], dtype=np.float32)
 
@@ -106,9 +101,6 @@ class TreeCatTrainer(object):
         COUNTERS.footprint_training_vert_ss = sizeof(self._vert_ss)
         COUNTERS.footprint_training_edge_ss = sizeof(self._edge_ss)
         COUNTERS.footprint_training_feat_ss = sizeof(self._feat_ss)
-        COUNTERS.footprint_training_vert_probs = sizeof(self._feat_probs)
-        COUNTERS.footprint_training_vert_probs = sizeof(self._vert_probs)
-        COUNTERS.footprint_training_edge_probs = sizeof(self._edge_probs)
         COUNTERS.footprint_training_messages = sizeof(self._messages)
 
     def _update_tree(self):
@@ -118,12 +110,6 @@ class TreeCatTrainer(object):
             self._edge_ss[e, :, :] = self._tree_ss[k, :, :]
         self._schedule = make_propagation_schedule(self.tree.tree_grid)
         self._tree_ss[...] = 0
-        self._feat_probs[...] = self._feat_ss
-        self._feat_probs += self._feat_prior
-        self._vert_probs[...] = self._vert_ss
-        self._vert_probs += self._vert_prior
-        self._edge_probs[...] = self._edge_ss
-        self._edge_probs += self._edge_prior
 
     @profile
     def _update_tensors(self, row_id, diff):
@@ -142,11 +128,6 @@ class TreeCatTrainer(object):
         self._feat_ss[mask, data_mask, assignments_mask] += diff
         self._vert_ss[vertices, assignments] += diff
         self._edge_ss[tree_edges, assignments_e[0], assignments_e[1]] += diff
-        self._feat_probs[mask, data_mask, assignments_mask] += diff
-        self._vert_probs[vertices, assignments] += diff
-        self._edge_probs[tree_edges,  #
-                         assignments_e[0],  #
-                         assignments_e[1]] += diff
         if self._sampling_tree and diff > 0:
             self._tree_ss[complete_edges,  #
                           assignments[self.tree.complete_grid[1, :]],  #
@@ -157,29 +138,26 @@ class TreeCatTrainer(object):
         logger.debug('TreeCatTrainer.add_row %d', row_id)
         assert row_id not in self._assigned_rows, row_id
         V, E, K, M, C = self._VEKMC
-        feat_probs = self._feat_probs
-        feat_probs_sum = self._feat_probs.sum(axis=1)
-        vert_probs = self._vert_probs
-        edge_probs = self._edge_probs
         messages = self._messages
         data = self._data[row_id]
         mask = self._mask[row_id]
         assignments = self.assignments[row_id]
+        vert_probs = self._vert_ss + self._vert_prior
 
         for v, parent, children in reversed(self._schedule):
             message = messages[v, :]
             message[:] = vert_probs[v, :]
             # Propagate upward from observed to latent.
             if mask[v]:
-                message *= feat_probs[v, data[v], :]
-                message /= feat_probs_sum[v, :]
+                feat_probs = self._feat_ss[v, data[v], :] + self._feat_prior
+                message *= feat_probs
+                message /= feat_probs.sum(axis=0)
             # Propagate latent state inward from children to v.
             for child in children:
                 e = self.tree.find_tree_edge(v, child)
-                if v < child:
-                    trans = edge_probs[e, :, :]
-                else:
-                    trans = np.transpose(edge_probs[e, :, :])
+                trans = self._edge_ss[e, :, :] + self._edge_prior
+                if v > child:
+                    trans = trans.T
                 message *= np.dot(trans, messages[child, :])
                 message /= vert_probs[v, :]
             message /= np.max(message)
@@ -189,10 +167,9 @@ class TreeCatTrainer(object):
             message = messages[v, :]
             if parent is not None:
                 e = self.tree.find_tree_edge(v, parent)
-                if parent < v:
-                    trans = edge_probs[e, :, :]
-                else:
-                    trans = np.transpose(edge_probs[e, :, :])
+                trans = self._edge_ss[e, :, :] + self._edge_prior
+                if parent > v:
+                    trans = trans.T
                 message *= trans[assignments[parent], :]
                 message /= vert_probs[v, :]
                 assert message.shape == (M, )
@@ -263,7 +240,7 @@ class TreeCatTrainer(object):
         # Add contribution of each (latent, latent) joint distribution, and
         # remove the double-counted latent logprob of each of its vertices.
         for e, v1, v2 in self.tree.tree_grid.T:
-            edge_block = self._edge_probs[e, :, :]
+            edge_block = self._edge_ss[e, :, :]
             logprob += (logprob_dm(edge_block, self._edge_prior) - logprobs[v1]
                         - logprobs[v2])
         return logprob
