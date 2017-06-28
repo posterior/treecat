@@ -55,8 +55,9 @@ def make_posterior(grid, suffstats):
     latent_latent /= latent_latent.sum(axis=(1, 2), keepdims=True)
     observed_latent /= observed_latent.sum(axis=(1, 2), keepdims=True)
 
-    # Correct observed_latent for partially observed data,
-    # so that its marginals agree with observed and latent.
+    # Correct observed_latent for partially observed data, so that its
+    # latent marginals agree with latent. The observed marginal will reflect
+    # present data plus expected imputed data.
     partial_latent = observed_latent.sum(axis=1)
     observed_latent *= (latent / partial_latent)[:, np.newaxis, :]
     observed = observed_latent.sum(axis=2)
