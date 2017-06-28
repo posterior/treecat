@@ -70,16 +70,14 @@ class TreeCatTrainer(object):
         V = self.tree.num_vertices
         E = V - 1  # Number of edges in the tree.
         K = V * (V - 1) // 2  # Number of edges in the complete graph.
-        M = self._config[
-            'model_num_clusters']  # Clusters in each mixture model.
-        C = self._config[
-            'model_num_categories']  # Categories for each feature.
+        M = self._config['model_num_clusters']  # Clusters per latent.
+        C = self._config['model_num_categories']  # Categories per feature.
         self._VEKMC = (V, E, K, M, C)
 
         # Use Jeffreys priors.
-        self._feat_prior = 0.5 / M
         self._vert_prior = 0.5
         self._edge_prior = 0.5 / M
+        self._feat_prior = 0.5 / M
 
         # Sufficient statistics are maintained always.
         self._vert_ss = np.zeros([V, M], np.int32)
@@ -118,18 +116,13 @@ class TreeCatTrainer(object):
         mask = self._mask[row_id]
         assignments = self.assignments[row_id]
 
-        vertices = self.tree.vertices
-        tree_edges = self.tree.tree_grid[0, :]
-        complete_edges = self.tree.complete_grid[0, :]
-        data_mask = data[mask]
-        assignments_mask = assignments[mask]
-        assignments_e = (assignments[self.tree.tree_grid[1, :]],
-                         assignments[self.tree.tree_grid[2, :]])
-        self._feat_ss[mask, data_mask, assignments_mask] += diff
-        self._vert_ss[vertices, assignments] += diff
-        self._edge_ss[tree_edges, assignments_e[0], assignments_e[1]] += diff
+        self._feat_ss[mask, data[mask], assignments[mask]] += diff
+        self._vert_ss[self.tree.vertices, assignments] += diff
+        self._edge_ss[self.tree.tree_grid[0, :],  #
+                      assignments[self.tree.tree_grid[1, :]],  #
+                      assignments[self.tree.tree_grid[2, :]]] += diff
         if self._sampling_tree and diff > 0:
-            self._tree_ss[complete_edges,  #
+            self._tree_ss[self.tree.complete_grid[0, :],  #
                           assignments[self.tree.complete_grid[1, :]],  #
                           assignments[self.tree.complete_grid[2, :]]] += diff
 

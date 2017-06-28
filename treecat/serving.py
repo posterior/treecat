@@ -43,9 +43,9 @@ def make_posterior(grid, suffstats):
     assert suffstats['edge_ss'].shape == (E, M, M)
 
     # Use Jeffreys priors.
-    feat_prior = 0.5 / M
     vert_prior = 0.5
     edge_prior = 0.5 / M
+    feat_prior = 0.5 / M
 
     # First compute overlapping joint posteriors.
     latent = vert_prior + suffstats['vert_ss'].astype(np.float32)
@@ -139,10 +139,9 @@ class TreeCatServer(object):
             # Propagate latent state inward from children to v.
             for child in children:
                 e = self._tree.find_tree_edge(child, v)
-                if child < v:
-                    trans = factor_latent_latent[e, :, :]
-                else:
-                    trans = factor_latent_latent[e, :, :].T
+                trans = factor_latent_latent[e, :, :]
+                if child > v:
+                    trans = trans.T
                 message *= np.dot(messages[child, :, :], trans)  # Expensive.
             message_scale = message.max(axis=1)  # Surprisingly expensive.
             message /= message_scale[:, np.newaxis]
@@ -163,10 +162,9 @@ class TreeCatServer(object):
                 # Propagate latent state outward from parent to v.
                 if parent is not None:
                     e = self._tree.find_tree_edge(parent, v)
-                    if parent < v:
-                        trans = factor_latent_latent[e, :, :]
-                    else:
-                        trans = factor_latent_latent[e, :, :].T
+                    trans = factor_latent_latent[e, :, :]
+                    if parent > v:
+                        trans = trans.T
                     message *= trans[latent_samples[parent, :], :]
                 sample_from_probs2(message, out=latent_samples[v, :])
                 # Propagate downward from latent to observed.
