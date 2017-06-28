@@ -15,6 +15,7 @@ from treecat.persist import pickle_load
 from treecat.testutil import tempdir
 
 PYTHON = sys.executable
+FILE = os.path.abspath(__file__)
 
 
 def run_with_tool(cmd, tool, dirname):
@@ -41,8 +42,8 @@ def run_with_tool(cmd, tool, dirname):
 
 
 @parsable
-def train(dataset_path, config_path):
-    """Train from pickled data, mask, config."""
+def train_files(dataset_path, config_path):
+    """INTERNAL Train from pickled data, mask, config."""
     from treecat.training import train_model
     data, mask = pickle_load(dataset_path)
     config = pickle_load(config_path)
@@ -50,7 +51,17 @@ def train(dataset_path, config_path):
 
 
 @parsable
-def profile_train(rows=100, cols=10, epochs=5, tool='timers'):
+def serve_files(model_path, config_path):
+    """INTERNAL Train from pickled data, mask, config."""
+    from treecat.serving import serve_model
+    model = pickle_load(model_path)
+    config = pickle_load(config_path)
+    server = serve_model(model['tree'], model['suffstats'], config)
+    server.correlation()
+
+
+@parsable
+def train(rows=100, cols=10, epochs=5, tool='timers'):
     """Profile TreeCatTrainer on a random dataset.
     Available tools: timers, time, snakeviz, line_profiler, pdb
     """
@@ -62,22 +73,12 @@ def profile_train(rows=100, cols=10, epochs=5, tool='timers'):
     with tempdir() as dirname:
         config_path = os.path.join(dirname, 'config.pkl.gz')
         pickle_dump(config, config_path)
-        cmd = [os.path.abspath(__file__), 'train', dataset_path, config_path]
+        cmd = [FILE, 'train_files', dataset_path, config_path]
         run_with_tool(cmd, tool, dirname)
 
 
 @parsable
-def serve(model_path, config_path):
-    """Train from pickled data, mask, config."""
-    from treecat.serving import serve_model
-    model = pickle_load(model_path)
-    config = pickle_load(config_path)
-    server = serve_model(model['tree'], model['suffstats'], config)
-    server.correlation()
-
-
-@parsable
-def profile_serve(rows=100, cols=10, tool='timers'):
+def serve(rows=100, cols=10, tool='timers'):
     """Profile TreeCatServer on a random dataset.
     Available tools: timers, time, snakeviz, line_profiler, pdb
     """
@@ -88,7 +89,7 @@ def profile_serve(rows=100, cols=10, tool='timers'):
     with tempdir() as dirname:
         config_path = os.path.join(dirname, 'config.pkl.gz')
         pickle_dump(config, config_path)
-        cmd = [os.path.abspath(__file__), 'serve', model_path, config_path]
+        cmd = [FILE, 'serve_files', model_path, config_path]
         run_with_tool(cmd, tool, dirname)
 
 
