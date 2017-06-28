@@ -42,10 +42,10 @@ def make_posterior(grid, suffstats):
     assert suffstats['vert_ss'].shape == (V, M)
     assert suffstats['edge_ss'].shape == (E, M, M)
 
-    # Hard-code these hyperparameters.
-    feat_prior = 0.5  # Jeffreys prior.
-    vert_prior = 1.0 / M  # Nonparametric.
-    edge_prior = 1.0 / M**2  # Nonparametric.
+    # Use Jeffreys priors.
+    feat_prior = 0.5 / M
+    vert_prior = 0.5
+    edge_prior = 0.5 / M
 
     # First compute overlapping joint posteriors.
     latent = vert_prior + suffstats['vert_ss'].astype(np.float32)
@@ -298,7 +298,7 @@ class TreeCatServer(object):
                 mutual_information[v1, :] += entropy
                 mutual_information[:, v2] += entropy
 
-        # Copute correlation rho(X,Y) = sqrt(1 - exp(-2 I(X;Y))).
+        # Compute correlation rho(X,Y) = sqrt(1 - exp(-2 I(X;Y))).
         return np.sqrt(1.0 - np.exp(-2.0 * mutual_information))
 
 

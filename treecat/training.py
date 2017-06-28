@@ -76,10 +76,10 @@ class TreeCatTrainer(object):
             'model_num_categories']  # Categories for each feature.
         self._VEKMC = (V, E, K, M, C)
 
-        # Hard-code these hyperparameters.
-        self._feat_prior = 0.5  # Jeffreys prior.
-        self._vert_prior = 1.0 / M  # Nonparametric.
-        self._edge_prior = 1.0 / M**2  # Nonparametric.
+        # Use Jeffreys priors.
+        self._feat_prior = 0.5 / M
+        self._vert_prior = 0.5
+        self._edge_prior = 0.5 / M
 
         # Sufficient statistics are maintained always.
         self._vert_ss = np.zeros([V, M], np.int32)
