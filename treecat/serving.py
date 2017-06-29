@@ -63,7 +63,7 @@ def make_posterior(grid, suffstats):
         # latent marginals agree with latent. The observed marginal will
         # reflect present data plus expected imputed data.
         observed_latent[v] *= (latent[v, np.newaxis, :] /
-                               observed_latent[v].sum(axis=1, keepdims=True))
+                               observed_latent[v].sum(axis=0, keepdims=True))
         observed[v] = observed_latent[v].sum(axis=1)
 
     return {

@@ -21,7 +21,6 @@ def model():
     return train_model(TINY_DATA, TINY_CONFIG)
 
 
-@pytest.mark.xfail
 def test_make_posterior(model):
     data = TINY_DATA
     grid = model['tree'].tree_grid
