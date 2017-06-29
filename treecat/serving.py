@@ -8,9 +8,7 @@ import numpy as np
 
 from treecat.structure import TreeStructure
 from treecat.structure import make_propagation_schedule
-from treecat.util import COUNTERS
 from treecat.util import profile
-from treecat.util import sizeof
 
 logger = logging.getLogger(__name__)
 
@@ -61,11 +59,6 @@ def make_posterior(grid, suffstats):
     partial_latent = observed_latent.sum(axis=1)
     observed_latent *= (latent / partial_latent)[:, np.newaxis, :]
     observed = observed_latent.sum(axis=2)
-
-    COUNTERS.footprint_serving_observed = sizeof(observed)
-    COUNTERS.footprint_serving_observed_latent = sizeof(observed_latent)
-    COUNTERS.footprint_serving_latent = sizeof(latent)
-    COUNTERS.footprint_serving_latent_latent = sizeof(latent_latent)
 
     return {
         'observed': observed,

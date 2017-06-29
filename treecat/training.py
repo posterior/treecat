@@ -9,13 +9,11 @@ import numpy as np
 from scipy.special import gammaln
 
 from treecat.structure import TreeStructure
-from treecat.structure import find_complete_edge
 from treecat.structure import make_propagation_schedule
 from treecat.structure import sample_tree
 from treecat.util import COUNTERS
 from treecat.util import art_logger
 from treecat.util import profile
-from treecat.util import sizeof
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +61,6 @@ class TreeCatTrainer(object):
         self.assignments = np.zeros(data.shape, dtype=np.int32)
         self.suffstats = {}
         self.tree = TreeStructure(num_features)
-        self._sampling_tree = (config['learning_sample_tree_steps'] > 0)
         self._schedule = make_propagation_schedule(self.tree.tree_grid)
 
         # These are useful dimensions to import into locals().
@@ -84,30 +81,17 @@ class TreeCatTrainer(object):
         self._edge_ss = np.zeros([E, M, M], np.int32)
         self._feat_ss = np.zeros([V, C, M], np.int32)
 
-        # Sufficient statistics for tree learning are reset after each batch.
-        # This is the most expensive data structure, costing O(V^2 M^2) space.
-        if self._sampling_tree:
-            self._tree_ss = np.zeros([K, M, M], np.int32)
-            COUNTERS.footprint_training_tree_ss = sizeof(self._tree_ss)
-
         # Temporaries.
         self._messages = np.zeros([V, M], dtype=np.float32)
 
-        COUNTERS.footprint_training_data = sizeof(self._data)
-        COUNTERS.footprint_training_mask = sizeof(self._mask)
-        COUNTERS.footprint_training_assignments = sizeof(self.assignments)
-        COUNTERS.footprint_training_vert_ss = sizeof(self._vert_ss)
-        COUNTERS.footprint_training_edge_ss = sizeof(self._edge_ss)
-        COUNTERS.footprint_training_feat_ss = sizeof(self._feat_ss)
-        COUNTERS.footprint_training_messages = sizeof(self._messages)
-
     def _update_tree(self):
-        assert self._sampling_tree
+        V, E, K, M, C = self._VEKMC
+        assignments = self.assignments[sorted(self._assigned_rows), :]
         for e, v1, v2 in self.tree.tree_grid.T:
-            k = find_complete_edge(v1, v2)
-            self._edge_ss[e, :, :] = self._tree_ss[k, :, :]
+            pairs = assignments[:, v1] * M + assignments[:, v2]
+            counts = np.bincount(pairs, minlength=M * M)
+            self._edge_ss[e, :, :] = counts.reshape((M, M))
         self._schedule = make_propagation_schedule(self.tree.tree_grid)
-        self._tree_ss[...] = 0
 
     @profile
     def _update_tensors(self, row_id, diff):
@@ -121,10 +105,6 @@ class TreeCatTrainer(object):
         self._edge_ss[self.tree.tree_grid[0, :],  #
                       assignments[self.tree.tree_grid[1, :]],  #
                       assignments[self.tree.tree_grid[2, :]]] += diff
-        if self._sampling_tree and diff > 0:
-            self._tree_ss[self.tree.complete_grid[0, :],  #
-                          assignments[self.tree.complete_grid[1, :]],  #
-                          assignments[self.tree.complete_grid[2, :]]] += diff
 
     @profile
     def add_row(self, row_id):
@@ -182,7 +162,6 @@ class TreeCatTrainer(object):
     def sample_tree(self):
         logger.info('TreeCatTrainer.sample_tree given %d rows',
                     len(self._assigned_rows))
-        assert self._sampling_tree
         V, E, K, M, C = self._VEKMC
         # Compute vertex logits.
         vertex_logits = np.zeros([V], np.float32)
@@ -190,12 +169,14 @@ class TreeCatTrainer(object):
             vertex_logits[v] = logprob_dm(self._vert_ss[v, :],
                                           self._vert_prior)
         # Compute edge logits.
+        assignments = self.assignments[sorted(self._assigned_rows), :]
         edge_logits = np.zeros([K], np.float32)
         for k, v1, v2 in self.tree.tree_grid.T:
             # This is the most expensive part of tree sampling:
-            edge_logits[k] = (
-                logprob_dm(self._tree_ss[k, :, :], self._edge_prior) -
-                vertex_logits[v1] - vertex_logits[v2])
+            pairs = assignments[:, v1] * M + assignments[:, v2]
+            counts = np.bincount(pairs, minlength=M * M)
+            edge_logits[k] = (logprob_dm(counts, self._edge_prior) -
+                              vertex_logits[v1] - vertex_logits[v2])
 
         # Sample the tree.
         complete_grid = self.tree.complete_grid
@@ -246,7 +227,6 @@ class TreeCatTrainer(object):
             'vert_ss': self._vert_ss,
             'edge_ss': self._edge_ss,
         }
-        self._tree_ss = None
         self.tree.gc()
 
     def train(self):
