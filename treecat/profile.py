@@ -51,16 +51,6 @@ def train_files(dataset_path, config_path):
 
 
 @parsable
-def serve_files(model_path, config_path):
-    """INTERNAL Train from pickled data, mask, config."""
-    from treecat.serving import serve_model
-    model = pickle_load(model_path)
-    config = pickle_load(config_path)
-    server = serve_model(model['tree'], model['suffstats'], config)
-    server.correlation()
-
-
-@parsable
 def train(rows=100, cols=10, epochs=5, tool='timers'):
     """Profile TreeCatTrainer on a random dataset.
     Available tools: timers, time, snakeviz, line_profiler, pdb
@@ -68,28 +58,11 @@ def train(rows=100, cols=10, epochs=5, tool='timers'):
     from treecat.generate import generate_dataset
     config = DEFAULT_CONFIG.copy()
     config['learning_annealing_epochs'] = epochs
-    cats = config['model_num_categories']
-    dataset_path = generate_dataset(rows, cols, cats)
+    dataset_path = generate_dataset(rows, cols)
     with tempdir() as dirname:
         config_path = os.path.join(dirname, 'config.pkl.gz')
         pickle_dump(config, config_path)
         cmd = [FILE, 'train_files', dataset_path, config_path]
-        run_with_tool(cmd, tool, dirname)
-
-
-@parsable
-def serve(rows=100, cols=10, tool='timers'):
-    """Profile TreeCatServer on a random dataset.
-    Available tools: timers, time, snakeviz, line_profiler, pdb
-    """
-    from treecat.generate import generate_model
-    config = DEFAULT_CONFIG.copy()
-    cats = config['model_num_categories']
-    model_path = generate_model(rows, cols, cats)
-    with tempdir() as dirname:
-        config_path = os.path.join(dirname, 'config.pkl.gz')
-        pickle_dump(config, config_path)
-        cmd = [FILE, 'serve_files', model_path, config_path]
         run_with_tool(cmd, tool, dirname)
 
 

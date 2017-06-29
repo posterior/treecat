@@ -7,7 +7,6 @@ import shutil
 import tempfile
 
 import numpy as np
-import pytest
 
 from treecat.config import DEFAULT_CONFIG
 
@@ -15,23 +14,38 @@ TINY_CONFIG = DEFAULT_CONFIG.copy()
 TINY_CONFIG['learning_annealing_epochs'] = 2
 TINY_CONFIG['model_num_clusters'] = 7
 
-TINY_DATA = np.array(
-    [
-        [0, 1, 1, 0, 2],
-        [0, 0, 0, 0, 1],
-        [1, 0, 2, 2, 2],
-        [1, 0, 0, 0, 1],
-    ],
-    dtype=np.int32)
-
-TINY_MASK = np.array(
-    [
-        [1, 1, 1, 0, 1],
-        [0, 0, 1, 1, 1],
-        [1, 0, 1, 1, 1],
-        [1, 1, 0, 0, 1],
-    ],
-    dtype=np.int32)
+TINY_DATA = [
+    np.array([
+        [1, 0],
+        [0, 0],
+        [0, 1],
+        [0, 1],
+    ], dtype=np.int8),
+    np.array([
+        [0, 1],
+        [0, 0],
+        [0, 0],
+        [1, 0],
+    ], dtype=np.int8),
+    np.array([
+        [0, 1, 0],
+        [1, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0],
+    ], dtype=np.int8),
+    np.array([
+        [0, 0, 0],
+        [1, 0, 0],
+        [0, 0, 1],
+        [0, 0, 0],
+    ], dtype=np.int8),
+    np.array([
+        [0, 0, 1],
+        [0, 1, 0],
+        [0, 0, 1],
+        [0, 1, 0],
+    ], dtype=np.int8),
+]
 
 
 @contextlib.contextmanager
@@ -53,11 +67,3 @@ def assert_equal(x, y):
         np.testing.assert_array_equal(x, y)
     else:
         assert x == y, (x, y)
-
-
-@contextlib.contextmanager
-def xfail_if_not_implemented():
-    try:
-        yield
-    except NotImplementedError as e:
-        pytest.xfail(reason=str(e))

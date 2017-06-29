@@ -40,25 +40,24 @@ def sample_from_probs(probs):
 class TreeCatTrainer(object):
     """Class for training a TreeCat model."""
 
-    def __init__(self, data, mask, config):
+    def __init__(self, data, config):
         """Initialize a model in an unassigned state.
 
         Args:
-            data: A 2D array of categorical data.
-            mask: A 2D array of presence/absence, where present = True.
-            config: A global config dict.
+          data: A list of numpy arrays, where each array is an N x _ column of
+            counts of multinomial data.
+          config: A global config dict.
         """
-        logger.info('TreeCatTrainer of %d x %d data', data.shape[0],
-                    data.shape[1])
-        data = np.asarray(data, np.int32)
-        mask = np.asarray(mask, np.bool_)
-        num_rows, num_features = data.shape
-        assert data.shape == mask.shape
+        logger.info('TreeCatTrainer of %d x %d data', data[0].shape[0],
+                    len(data))
+        data = [np.asarray(column, np.int8) for column in data]
+        num_features = len(data)
+        num_rows = len(data[0])
+        assert all(column.shape[0] == num_rows for column in data)
         self._data = data
-        self._mask = mask
         self._config = config
         self._assigned_rows = set()
-        self.assignments = np.zeros(data.shape, dtype=np.int32)
+        self.assignments = np.zeros([num_rows, num_features], dtype=np.int32)
         self.suffstats = {}
         self.tree = TreeStructure(num_features)
         self._schedule = make_propagation_schedule(self.tree.tree_grid)
@@ -68,8 +67,7 @@ class TreeCatTrainer(object):
         E = V - 1  # Number of edges in the tree.
         K = V * (V - 1) // 2  # Number of edges in the complete graph.
         M = self._config['model_num_clusters']  # Clusters per latent.
-        C = self._config['model_num_categories']  # Categories per feature.
-        self._VEKMC = (V, E, K, M, C)
+        self._VEKM = (V, E, K, M)
 
         # Use Jeffreys priors.
         self._vert_prior = 0.5
@@ -79,13 +77,15 @@ class TreeCatTrainer(object):
         # Sufficient statistics are maintained always.
         self._vert_ss = np.zeros([V, M], np.int32)
         self._edge_ss = np.zeros([E, M, M], np.int32)
-        self._feat_ss = np.zeros([V, C, M], np.int32)
+        self._feat_ss = [
+            np.zeros([column.shape[1], M], np.int32) for column in data
+        ]
 
         # Temporaries.
         self._messages = np.zeros([V, M], dtype=np.float32)
 
     def _update_tree(self):
-        V, E, K, M, C = self._VEKMC
+        V, E, K, M = self._VEKM
         assignments = self.assignments[sorted(self._assigned_rows), :]
         for e, v1, v2 in self.tree.tree_grid.T:
             pairs = assignments[:, v1] * M + assignments[:, v2]
@@ -95,25 +95,20 @@ class TreeCatTrainer(object):
 
     @profile
     def _update_tensors(self, row_id, diff):
-        V, E, K, M, C = self._VEKMC
-        data = self._data[row_id]
-        mask = self._mask[row_id]
-        assignments = self.assignments[row_id]
-
-        self._feat_ss[mask, data[mask], assignments[mask]] += diff
+        assignments = self.assignments[row_id, :]
         self._vert_ss[self.tree.vertices, assignments] += diff
         self._edge_ss[self.tree.tree_grid[0, :],  #
                       assignments[self.tree.tree_grid[1, :]],  #
                       assignments[self.tree.tree_grid[2, :]]] += diff
+        for v, column in enumerate(self._data):
+            self._feat_ss[v][:, assignments[v]] += diff * column[row_id]
 
     @profile
     def add_row(self, row_id):
         logger.debug('TreeCatTrainer.add_row %d', row_id)
         assert row_id not in self._assigned_rows, row_id
-        V, E, K, M, C = self._VEKMC
+        V, E, K, M = self._VEKM
         messages = self._messages
-        data = self._data[row_id]
-        mask = self._mask[row_id]
         assignments = self.assignments[row_id]
         vert_probs = self._vert_ss + self._vert_prior
 
@@ -121,10 +116,11 @@ class TreeCatTrainer(object):
             message = messages[v, :]
             message[:] = vert_probs[v, :]
             # Propagate upward from observed to latent.
-            if mask[v]:
-                feat_probs = self._feat_ss[v, data[v], :] + self._feat_prior
-                message *= feat_probs
-                message /= feat_probs.sum(axis=0)
+            feat_probs = self._feat_ss[v].astype(np.float32) + self._feat_prior
+            feat_probs /= feat_probs.sum(axis=0)
+            for c, count in enumerate(self._data[v][row_id, :]):
+                if count:
+                    message *= feat_probs[c, :]**count
             # Propagate latent state inward from children to v.
             for child in children:
                 e = self.tree.find_tree_edge(v, child)
@@ -162,7 +158,7 @@ class TreeCatTrainer(object):
     def sample_tree(self):
         logger.info('TreeCatTrainer.sample_tree given %d rows',
                     len(self._assigned_rows))
-        V, E, K, M, C = self._VEKMC
+        V, E, K, M = self._VEKM
         # Compute vertex logits.
         vertex_logits = np.zeros([V], np.float32)
         for v in range(V):
@@ -197,16 +193,15 @@ class TreeCatTrainer(object):
         kernel.
         """
         # This uses inclusion-exclusion on the single and pairwise factors.
-        V, E, K, M, C = self._VEKMC
+        V, E, K, M = self._VEKM
         logprob = 0.0
         # Add contribution of each joint (observed, latent) distribution,
-        # correcting for missing observations.
+        # and remove the contribution of its marginal on the latent.
         for v in range(V):
-            feat_block = self._feat_ss[v, :, :] + self._feat_prior
-            feat_block *= (feat_block.sum(axis=0, keepdims=True) /
-                           (self._vert_ss[v, :] + self._vert_prior))
-            feat_block -= self._feat_prior
-            logprob += logprob_dm(feat_block, self._feat_prior)
+            logprob += logprob_dm(self._feat_ss[v], self._feat_prior)
+            logprob -= logprob_dm(
+                self._feat_ss[v].sum(axis=0), self._vert_prior)
+
         # Keep track of logprobs of latent distribution for each vertex.
         logprobs = {}
         for v in range(V):
@@ -214,9 +209,8 @@ class TreeCatTrainer(object):
         # Add contribution of each (latent, latent) joint distribution, and
         # remove the double-counted latent logprob of each of its vertices.
         for e, v1, v2 in self.tree.tree_grid.T:
-            edge_block = self._edge_ss[e, :, :]
-            logprob += (logprob_dm(edge_block, self._edge_prior) - logprobs[v1]
-                        - logprobs[v2])
+            logprob += logprob_dm(self._edge_ss[e, :, :], self._edge_prior)
+            logprob -= logprobs[v1] + logprobs[v2]
         return logprob
 
     def finish(self):
@@ -244,7 +238,7 @@ class TreeCatTrainer(object):
         """
         logger.info('train()')
         np.random.seed(self._config['seed'])
-        num_rows = self._data.shape[0]
+        num_rows = self.assignments.shape[0]
         for action, row_id in get_annealing_schedule(num_rows, self._config):
             if action == 'add_row':
                 art_logger('+')
@@ -264,10 +258,15 @@ class TreeCatTrainer(object):
         }
 
 
-def train_model(data, mask, config):
+def train_model(data, config):
     """Train a TreeCat model using subsample-annealed MCMC.
 
     Let N be the number of data rows and V be the number of features.
+
+    Args:
+      data: A list of numpy arrays, where each array is an N x _ column of
+        counts of multinomial data.
+      config: A global config dict.
 
     Returns:
       A trained model as a dictionary with keys:
@@ -277,7 +276,7 @@ def train_model(data, mask, config):
         assignments: An [N, V] numpy array of latent cluster ids for each
           cell in the dataset.
     """
-    return TreeCatTrainer(data, mask, config).train()
+    return TreeCatTrainer(data, config).train()
 
 
 def get_annealing_schedule(num_rows, config):

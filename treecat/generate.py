@@ -17,52 +17,56 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(REPO, 'data', 'generated')
 
 
-def generate_dataset(num_rows, num_cols, num_cats, density=0.9):
+def generate_dataset(num_rows, num_cols, num_cats=4, rate=1.0):
     """Generate a random dataset.
 
     Returns:
-      The path to a gzipped pickled (data, mask) pair.
+      The path to a gzipped pickled data table.
     """
     path = os.path.join(DATA, '{}-{}-{}-{:0.1f}.dataset.pkl.gz'.format(
-        num_rows, num_cols, num_cats, density))
+        num_rows, num_cols, num_cats, rate))
     if os.path.exists(path):
         return path
     print('Generating {}'.format(path))
     if not os.path.exists(DATA):
         os.makedirs(DATA)
     np.random.seed(0)
-    shape = [num_rows, num_cols]
-    data = np.random.randint(num_cats, size=shape, dtype=np.int32)
-    mask = np.random.random(size=shape) < density
-    pickle_dump((data, mask), path)
+    data = [None] * num_cols
+    for v in range(num_cols):
+        probs = np.random.dirichlet(np.zeros(num_cats) + 0.5)
+        data[v] = np.zeros((num_rows, num_cats), dtype=np.int8)
+        for n in range(num_rows):
+            count = np.random.poisson(rate)
+            data[v][n, :] = np.random.multinomial(count, probs)
+    pickle_dump(data, path)
     return path
 
 
-def generate_model(num_rows, num_cols, num_cats, density=0.9):
+def generate_model(num_rows, num_cols, num_cats=4, rate=1.0):
     """Generate a random model.
 
     Returns:
       The path to a gzipped pickled model.
     """
     path = os.path.join(DATA, '{}-{}-{}-{:0.1f}.model.pkl.gz'.format(
-        num_rows, num_cols, num_cats, density))
+        num_rows, num_cols, num_cats, rate))
     if os.path.exists(path):
         return path
     print('Generating {}'.format(path))
     if not os.path.exists(DATA):
         os.makedirs(DATA)
-    dataset_path = generate_dataset(num_rows, num_cols, num_cats, density)
-    data, mask = pickle_load(dataset_path)
+    dataset_path = generate_dataset(num_rows, num_cols, num_cats, rate)
+    data = pickle_load(dataset_path)
     config = DEFAULT_CONFIG.copy()
     config['learning_annealing_epochs'] = 5
-    model = train_model(data, mask, config)
+    model = train_model(data, config)
     pickle_dump(model, path)
     return path
 
 
 @parsable
-def clear():
-    """Clear cache of generated datasets."""
+def clean():
+    """Clean out cache of generated datasets."""
     if os.path.exists(DATA):
         shutil.rmtree(DATA)
 

@@ -10,7 +10,6 @@ from treecat.config import DEFAULT_CONFIG
 from treecat.structure import TreeStructure
 from treecat.testutil import TINY_CONFIG
 from treecat.testutil import TINY_DATA
-from treecat.testutil import TINY_MASK
 from treecat.training import TreeCatTrainer
 from treecat.training import get_annealing_schedule
 from treecat.training import train_model
@@ -30,44 +29,48 @@ def test_get_annealing_schedule():
 
 
 def test_train_model():
-    model = train_model(TINY_DATA, TINY_MASK, TINY_CONFIG)
+    data = TINY_DATA
+    config = TINY_CONFIG
+    model = train_model(data, config)
 
-    assert model['config'] == TINY_CONFIG
+    assert model['config'] == config
     assert isinstance(model['tree'], TreeStructure)
     grid = model['tree'].tree_grid
-    feat_ss = model['suffstats']['feat_ss']
+    assignments = model['assignments']
     vert_ss = model['suffstats']['vert_ss']
     edge_ss = model['suffstats']['edge_ss']
-    assignments = model['assignments']
+    feat_ss = model['suffstats']['feat_ss']
 
     # Check shape.
-    N, V = TINY_DATA.shape
+    V = len(data)
+    N = data[0].shape[0]
     E = V - 1
-    C = TINY_CONFIG['model_num_categories']
-    M = TINY_CONFIG['model_num_clusters']
+    M = config['model_num_clusters']
     assert grid.shape == (3, E)
-    assert feat_ss.shape == (V, C, M)
+    assert assignments.shape == (N, V)
     assert vert_ss.shape == (V, M)
     assert edge_ss.shape == (E, M, M)
-    assert assignments.shape == (N, V)
+    assert len(feat_ss) == V
+    for v in range(V):
+        assert feat_ss[v].shape == (data[v].shape[1], M)
 
     # Check bounds.
-    assert np.all(0 <= feat_ss)
+    assert np.all(assignments < M)
     assert np.all(0 <= vert_ss)
     assert np.all(0 <= edge_ss)
     assert np.all(0 <= assignments)
-    assert np.all(assignments < M)
+    for v in range(V):
+        assert np.all(0 <= feat_ss[v])
 
     # Check totals.
-    assert feat_ss.sum() == TINY_MASK.sum()
-    assert np.all(feat_ss.sum((1, 2)) == TINY_MASK.sum(0))
     assert vert_ss.sum() == N * V
     assert np.all(vert_ss.sum(1) == N)
     assert edge_ss.sum() == N * E
     assert np.all(edge_ss.sum((1, 2)) == N)
+    for v in range(V):
+        assert feat_ss[v].sum() == data[v].sum()
 
     # Check marginals.
-    assert np.all(feat_ss.sum(1) <= vert_ss)
     assert np.all(edge_ss.sum(2) == vert_ss[grid[1, :]])
     assert np.all(edge_ss.sum(1) == vert_ss[grid[2, :]])
 

@@ -4,7 +4,6 @@ from __future__ import print_function
 
 DEFAULT_CONFIG = {
     'seed': 0,
-    'model_num_categories': 4,
     'model_num_clusters': 32,
     'learning_sample_tree_steps': 10,
     'learning_annealing_init_rows': 2,

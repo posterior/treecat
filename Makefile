@@ -14,5 +14,8 @@ lint: FORCE
 test: lint FORCE
 	cd treecat ; py.test -v
 
+clean:
+	treecat.generate clean
+
 FORCE:
 
