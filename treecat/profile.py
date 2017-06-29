@@ -5,6 +5,7 @@ from __future__ import print_function
 import os
 import platform
 import sys
+from subprocess import CalledProcessError
 from subprocess import Popen
 from subprocess import check_call
 
@@ -23,7 +24,10 @@ def run_with_tool(cmd, tool, dirname):
     if tool == 'timers':
         env = os.environ.copy()
         env.setdefault('TREECAT_LOG_LEVEL', '15')
-        Popen([PYTHON, '-O'] + cmd, env=env).wait()
+        cmd = [PYTHON, '-O'] + cmd
+        ret = Popen(cmd, env=env).wait()
+        if ret:
+            raise CalledProcessError(returncode=ret, cmd=cmd)
     elif tool == 'time':
         if platform.platform().startswith('Darwin'):
             gnu_time = 'gtime'
@@ -42,12 +46,12 @@ def run_with_tool(cmd, tool, dirname):
 
 
 @parsable
-def train_files(dataset_path, config_path):
+def train_files(data_path, config_path):
     """INTERNAL Train from pickled data, mask, config."""
     from treecat.training import train_model
-    data, mask = pickle_load(dataset_path)
+    data = pickle_load(data_path)
     config = pickle_load(config_path)
-    train_model(data, mask, config)
+    train_model(data, config)
 
 
 @parsable
@@ -58,11 +62,11 @@ def train(rows=100, cols=10, epochs=5, tool='timers'):
     from treecat.generate import generate_dataset
     config = DEFAULT_CONFIG.copy()
     config['learning_annealing_epochs'] = epochs
-    dataset_path = generate_dataset(rows, cols)
+    data_path = generate_dataset(rows, cols)
     with tempdir() as dirname:
         config_path = os.path.join(dirname, 'config.pkl.gz')
         pickle_dump(config, config_path)
-        cmd = [FILE, 'train_files', dataset_path, config_path]
+        cmd = [FILE, 'train_files', data_path, config_path]
         run_with_tool(cmd, tool, dirname)
 
 
