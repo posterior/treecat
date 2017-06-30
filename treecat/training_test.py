@@ -85,8 +85,14 @@ def hash_assignments(assignments):
     (1, 1, 1, 1),
     (1, 2, 2, 2),
     (2, 1, 1, 1),
+    (2, 1, 1, 2),
+    (2, 1, 1, 2),
+    pytest.mark.xfail((2, 2, 1, 2)),
     (2, 2, 2, 1),
-    pytest.mark.xfail((2, 1, 1, 2)),
+    pytest.mark.xfail((2, 2, 2, 2)),
+    (2, 3, 2, 1),
+    pytest.mark.xfail((2, 3, 2, 2)),
+    pytest.mark.xfail((3, 1, 2, 2)),
 ])
 def test_assignment_sampler_gof(N, V, C, M):
     config = DEFAULT_CONFIG.copy()
@@ -94,6 +100,7 @@ def test_assignment_sampler_gof(N, V, C, M):
     config['model_num_clusters'] = M
     data = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
     trainer = TreeCatTrainer(data, config)
+    print('Data:')
     print(data)
 
     # Add all rows.
@@ -101,7 +108,7 @@ def test_assignment_sampler_gof(N, V, C, M):
         trainer.add_row(row_id)
 
     # Collect samples.
-    num_samples = 2000
+    num_samples = 100 * M**(N * V)
     counts = {}
     logprobs = {}
     for _ in range(num_samples):
@@ -115,7 +122,9 @@ def test_assignment_sampler_gof(N, V, C, M):
         else:
             counts[key] = 1
             logprobs[key] = trainer.logprob()
-    print(logprobs)
+    print('logprobs:')
+    for key, val in sorted(logprobs.items()):
+        print('{:0.3g}\t{}'.format(val, key))
     assert len(counts) == M**(N * V)
 
     # Check accuracy using Pearson's chi-squared test.

@@ -93,7 +93,6 @@ class TreeCatTrainer(object):
             self._edge_ss[e, :, :] = counts.reshape((M, M))
         self._schedule = make_propagation_schedule(self.tree.tree_grid)
 
-    @profile
     def _update_tensors(self, row_id, diff):
         assignments = self.assignments[row_id, :]
         self._vert_ss[self.tree.vertices, assignments] += diff
@@ -117,14 +116,12 @@ class TreeCatTrainer(object):
             message[:] = vert_probs[v, :]
             # Propagate upward from observed to latent.
             obs_lat = self._feat_ss[v].astype(np.float32) + self._feat_prior
-            obs = obs_lat.sum(axis=1)
             lat = obs_lat.sum(axis=0)
             for c, count in enumerate(self._data[v][row_id, :]):
                 for _ in range(count):
-                    message *= obs_lat[c, :] / obs[c]
+                    message *= obs_lat[c, :] / lat
                     message /= message.sum()
                     obs_lat[c, :] += message  # This is approximate.
-                    obs[c] += 1.0
                     lat += message
             # Propagate latent state inward from children to v.
             for child in children:
@@ -211,6 +208,7 @@ class TreeCatTrainer(object):
         logprobs = {}
         for v in range(V):
             logprobs[v] = logprob_dm(self._vert_ss[v, :], self._vert_prior)
+            logprob += logprobs[v]
         # Add contribution of each (latent, latent) joint distribution, and
         # remove the double-counted latent logprob of each of its vertices.
         for e, v1, v2 in self.tree.tree_grid.T:
