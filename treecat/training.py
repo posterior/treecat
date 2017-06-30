@@ -116,11 +116,16 @@ class TreeCatTrainer(object):
             message = messages[v, :]
             message[:] = vert_probs[v, :]
             # Propagate upward from observed to latent.
-            feat_probs = self._feat_ss[v].astype(np.float32) + self._feat_prior
-            feat_probs /= feat_probs.sum(axis=0)
+            obs_lat = self._feat_ss[v].astype(np.float32) + self._feat_prior
+            obs = obs_lat.sum(axis=1)
+            lat = obs_lat.sum(axis=0)
             for c, count in enumerate(self._data[v][row_id, :]):
-                if count:
-                    message *= feat_probs[c, :]**count
+                for _ in range(count):
+                    message *= obs_lat[c, :] / obs[c]
+                    message /= message.sum()
+                    obs_lat[c, :] += message  # This is approximate.
+                    obs[c] += 1.0
+                    lat += message
             # Propagate latent state inward from children to v.
             for child in children:
                 e = self.tree.find_tree_edge(v, child)
@@ -129,7 +134,7 @@ class TreeCatTrainer(object):
                     trans = trans.T
                 message *= np.dot(trans, messages[child, :])
                 message /= vert_probs[v, :]
-            message /= np.max(message)
+            message /= np.sum(message)
 
         # Propagate latent state outward from parent to v.
         for v, parent, children in self._schedule:

@@ -7,6 +7,7 @@ import pytest
 from goftests import multinomial_goodness_of_fit
 
 from treecat.config import DEFAULT_CONFIG
+from treecat.generate import generate_dataset
 from treecat.structure import TreeStructure
 from treecat.testutil import TINY_CONFIG
 from treecat.testutil import TINY_DATA
@@ -75,14 +76,6 @@ def test_train_model():
     assert np.all(edge_ss.sum(1) == vert_ss[grid[2, :]])
 
 
-def generate_tiny_dataset(num_rows, num_cols, num_cats):
-    np.random.seed(0)
-    shape = (num_rows, num_cols)
-    data = np.random.randint(num_cats, size=shape, dtype=np.int32)
-    mask = np.ones(shape, dtype=np.bool_)
-    return data, mask
-
-
 def hash_assignments(assignments):
     assert isinstance(assignments, np.ndarray)
     return tuple(tuple(row) for row in assignments)
@@ -95,13 +88,13 @@ def hash_assignments(assignments):
     (2, 3, 2, 2),
     (3, 2, 2, 2),
 ])
-def test_category_sampler_gof(N, V, C, M):
+def test_assignment_sampler_gof(N, V, C, M):
     config = DEFAULT_CONFIG.copy()
     config['learning_sample_tree_steps'] = 0  # Disable tree kernel.
     config['model_num_categories'] = C
     config['model_num_clusters'] = M
-    data, mask = generate_tiny_dataset(num_rows=N, num_cols=V, num_cats=C)
-    trainer = TreeCatTrainer(data, mask, config)
+    data = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
+    trainer = TreeCatTrainer(data, config)
 
     # Add all rows.
     for row_id in range(N):
