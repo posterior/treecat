@@ -213,7 +213,7 @@ class MutableTree(object):
         self.VEK = (V, E, K)
         self.grid = grid
         self.k2e = {}
-        self.e2k = [None] * E
+        self.e2k = {}
         self.neighbors = [set() for _ in range(V)]
         for e, (v1, v2) in enumerate(edges):
             k = find_complete_edge(v1, v2)
@@ -225,18 +225,15 @@ class MutableTree(object):
         assert len(self.e2k) == self.VEK[1]
         assert len(self.k2e) == self.VEK[1]
 
-    def remove_edge(self, k):
-        """Remove edge k from tree and update data structures."""
+    def remove_edge(self, e):
+        """Remove edge at position e from tree and update data structures."""
         assert len(self.e2k) == self.VEK[1]
         assert len(self.k2e) == self.VEK[1]
         neighbors = self.neighbors
         components = self.components
-        e = self.k2e.pop(k)
-        k2 = self.e2k.pop()
-        if e != len(self.e2k):
-            self.k2e[k2] = e
-            self.e2k[e] = k2
-        k, v1, v2 = self.grid[:, k]
+        k = self.e2k.pop(e)
+        self.k2e.pop(k)
+        v1, v2 = self.grid[1:, k]
         neighbors[v1].remove(v2)
         neighbors[v2].remove(v1)
         stack = [v1]
@@ -248,15 +245,16 @@ class MutableTree(object):
                     stack.append(v2)
         assert len(self.e2k) == self.VEK[1] - 1
         assert len(self.k2e) == self.VEK[1] - 1
+        return k
 
-    def add_edge(self, k):
-        """Remove edge k and update data structures."""
+    def add_edge(self, e, k):
+        """Add edge k at location e and update data structures."""
         assert len(self.e2k) == self.VEK[1] - 1
         assert len(self.k2e) == self.VEK[1] - 1
-        k, v1, v2 = self.grid[:, k]
+        v1, v2 = self.grid[1:, k]
         assert self.components[v1] != self.components[v2]
-        self.k2e[k] = len(self.e2k)
-        self.e2k.append(k)
+        self.k2e[k] = e
+        self.e2k[e] = k
         self.neighbors[v1].add(v2)
         self.neighbors[v2].add(v1)
         self.components[:] = False
@@ -294,29 +292,29 @@ def sample_tree(grid, edge_logits, edges, steps=1):
     tree = MutableTree(grid, edges)
     V, E, K = tree.VEK
 
-    for step in range(steps * E):
-        logger.debug('sample_tree step %d', step)
-        k1 = tree.e2k[np.random.randint(E)]
-        tree.remove_edge(k1)
-        valid_edges = np.where(
-            tree.components[grid[1, :]] != tree.components[grid[2, :]])[0]
-        valid_probs = edge_logits[valid_edges]
-        valid_probs -= valid_probs.max()
-        np.exp(valid_probs, out=valid_probs)
-        total_prob = valid_probs.sum()
-        if total_prob > 0:
-            valid_probs /= total_prob
-            k2 = np.random.choice(valid_edges, p=valid_probs)
-        else:
-            k2 = k1
-            COUNTERS.sample_tree_infeasible += 1
-        tree.add_edge(k2)
+    for step in range(steps):
+        for e in range(E):
+            e = np.random.randint(E)  # Sequential scanning doesn't work.
+            k1 = tree.remove_edge(e)
+            valid_edges = np.where(
+                tree.components[grid[1, :]] != tree.components[grid[2, :]])[0]
+            valid_probs = edge_logits[valid_edges]
+            valid_probs -= valid_probs.max()
+            np.exp(valid_probs, out=valid_probs)
+            total_prob = valid_probs.sum()
+            if total_prob > 0:
+                valid_probs /= total_prob
+                k2 = np.random.choice(valid_edges, p=valid_probs)
+            else:
+                k2 = k1
+                COUNTERS.sample_tree_infeasible += 1
+            tree.add_edge(e, k2)
 
-        COUNTERS.sample_tree_propose += 1
-        COUNTERS.sample_tree_accept += (k1 != k2)
-        HISTOGRAMS.sample_tree_log2_choices.update(
-            [len(valid_edges).bit_length()])
+            COUNTERS.sample_tree_propose += 1
+            COUNTERS.sample_tree_accept += (k1 != k2)
+            HISTOGRAMS.sample_tree_log2_choices.update(
+                [len(valid_edges).bit_length()])
 
-    edges = sorted((grid[1, k], grid[2, k]) for k in tree.e2k)
+    edges = sorted((grid[1, k], grid[2, k]) for k in tree.e2k.values())
     assert len(edges) == E
     return edges
