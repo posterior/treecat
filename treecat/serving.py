@@ -13,7 +13,7 @@ from treecat.util import profile
 logger = logging.getLogger(__name__)
 
 
-def sample_from_probs2(probs, out):
+def sample_from_probs(probs, out):
     """Vectorized sampler from categorical distribution."""
     # Adapted from https://stackoverflow.com/questions/40474436
     assert len(probs.shape) == 2
@@ -117,64 +117,61 @@ class TreeCatServer(object):
         self._VEM = (V, E, M)
 
     @profile
-    def _propagate(self, task, data, totals=None):
-        N = data[0].shape[0]
+    def _propagate(self, task, data, counts=None):
         V, E, M = self._VEM
         factor_observed = self._factors['observed']
         factor_observed_latent = self._factors['observed_latent']
         factor_latent = self._factors['latent']
         factor_latent_latent = self._factors['latent_latent']
 
-        # TODO
-        mask = None
-
-        messages = np.zeros([V, N, M], dtype=np.float32)
-        messages[...] = factor_latent[:, np.newaxis, :]
-        logprob = np.zeros([N], dtype=np.float32)
+        messages = factor_latent.copy()
+        logprob = 0.0
         for v, parent, children in reversed(self._schedule):
-            message = messages[v, :, :]
+            message = messages[v, :]
             # Propagate upward from observed to latent.
-            if mask[v]:
-                message *= factor_observed_latent[v][data[:, v], :]
-                logprob += np.log(factor_observed[v][data[:, v]])
+            for c, count in enumerate(data[v]):
+                if count:
+                    message[:] *= factor_observed_latent[v][c, :] ** count
+                    logprob += np.log(factor_observed[v][c]) * count
             # Propagate latent state inward from children to v.
             for child in children:
                 e = self._tree.find_tree_edge(child, v)
                 trans = factor_latent_latent[e, :, :]
                 if child > v:
                     trans = trans.T
-                message *= np.dot(messages[child, :, :], trans)  # Expensive.
-            message_scale = message.max(axis=1)  # Surprisingly expensive.
-            message /= message_scale[:, np.newaxis]
-            logprob += np.log(message_scale)
+                message *= np.dot(messages[child, :], trans)
+            message_sum = message.sum()
+            message /= message_sum
+            logprob += np.log(message_sum)
 
         if task == 'logprob':
             # Aggregate the total logprob.
             root, parent, children = self._schedule[0]
             assert parent is None
-            logprob += np.log(messages[root, :, :].sum(axis=1))
+            logprob += np.log(messages[root, :].sum())
             return logprob
 
         elif task == 'sample':
-            latent_samples = np.zeros([V, N], np.int8)
-            observed_samples = data.copy()
+            latent_sample = np.zeros([V], np.int32)
+            observed_sample = [np.zeros_like(col) for col in data]
             for v, parent, children in self._schedule:
-                message = messages[v, :, :]
+                message = messages[v, :]
                 # Propagate latent state outward from parent to v.
                 if parent is not None:
                     e = self._tree.find_tree_edge(parent, v)
                     trans = factor_latent_latent[e, :, :]
                     if parent > v:
                         trans = trans.T
-                    message *= trans[latent_samples[parent, :], :]
-                sample_from_probs2(message, out=latent_samples[v, :])
+                    message *= trans[latent_sample[parent], :]
+                sample_from_probs(message, out=latent_sample[v, :])
                 # Propagate downward from latent to observed.
-                if not mask[v]:
-                    probs = factor_observed_latent[v][:, latent_samples[v, :]]
-                    assert probs.shape[0] == N
-                    probs /= probs.sum(axis=1, keepdims=True)
-                    sample_from_probs2(probs, out=observed_samples[:, v])
-            return observed_samples
+                if counts[v]:
+                    probs = factor_observed_latent[v][:, latent_sample[v]]
+                    assert probs.shape == data[v].shape
+                    probs /= probs.sum()
+                    observed_sample[v][:] = np.random.multinomial(
+                        counts[v], probs)
+            return observed_sample
 
         raise ValueError('Unknown task: {}'.format(task))
 
@@ -205,7 +202,7 @@ class TreeCatServer(object):
         return self._propagate('sample', cond_data, counts)
 
     def logprob(self, data):
-        """Compute log probabilities of each row of data.
+        """Compute log probability of a row of data.
 
         Let V be the number of features and N be the number of rows in input
         data. This function computes in the logprob of each of the N input

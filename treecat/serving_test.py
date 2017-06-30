@@ -83,34 +83,23 @@ def test_server_sample_shape(model):
 
 
 @pytest.mark.xfail
-def test_server_logprob_shape(model):
+def test_server_logprob_runs(model):
     data = TINY_DATA
     server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
 
     # Sample all possible mask patterns.
     V = len(data)
     N = data[0].shape[0]
+    abstol = 1e-5
     factors = [[0, 1, 2]] * V
     for counts in itertools.product(*factors):
         counts = np.array(counts, dtype=np.int8)
-        logprob = server.logprob(data, counts)
-        assert logprob.shape == (N, )
-        assert np.isfinite(logprob).all()
-
-
-@pytest.mark.xfail
-def test_server_logprob_negative(model):
-    data = TINY_DATA
-    server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
-
-    # Sample all possible mask patterns.
-    V = len(data)
-    factors = [[0, 1, 2]] * V
-    for counts in itertools.product(*factors):
-        counts = np.array(counts, dtype=np.int8)
-        logprob = server.logprob(data)
-        abstol = 1e-5
-        assert (logprob <= abstol).all()  # Assuming features are discrete.
+        for n in range(N):
+            row = [col[n, :] for col in data]
+            logprob = server.logprob(row, counts)
+            assert isinstance(logprob, float)
+            assert np.isfinite(logprob)
+            assert logprob < abstol
 
 
 @pytest.mark.xfail
@@ -118,7 +107,7 @@ def test_server_logprob_normalized(model):
     data = TINY_DATA
     server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
 
-    # The total probability of all categorical rows should be 1.
+    # The total probability of all rows should be 1.
     V = len(data)
     factors = [range(column.shape[1]) for column in data]
     pytest.mark.xfail(reason='TODO')

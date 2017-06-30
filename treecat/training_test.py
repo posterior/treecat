@@ -87,19 +87,14 @@ def hash_assignments(assignments):
     (2, 1, 1, 1),
     (2, 2, 2, 1),
     pytest.mark.xfail((2, 1, 1, 2)),
-    pytest.mark.xfail((2, 1, 2, 2)),
-    pytest.mark.xfail((2, 2, 2, 2)),
-    pytest.mark.xfail((2, 2, 2, 3)),
-    pytest.mark.xfail((2, 3, 2, 2)),
-    pytest.mark.xfail((3, 2, 2, 2)),
 ])
 def test_assignment_sampler_gof(N, V, C, M):
     config = DEFAULT_CONFIG.copy()
     config['learning_sample_tree_steps'] = 0  # Disable tree kernel.
-    config['model_num_categories'] = C
     config['model_num_clusters'] = M
     data = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
     trainer = TreeCatTrainer(data, config)
+    print(data)
 
     # Add all rows.
     for row_id in range(N):
@@ -120,6 +115,7 @@ def test_assignment_sampler_gof(N, V, C, M):
         else:
             counts[key] = 1
             logprobs[key] = trainer.logprob()
+    print(logprobs)
     assert len(counts) == M**(N * V)
 
     # Check accuracy using Pearson's chi-squared test.
