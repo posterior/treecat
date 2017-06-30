@@ -84,15 +84,16 @@ def hash_assignments(assignments):
 @pytest.mark.parametrize('N,V,C,M', [
     (1, 1, 1, 1),
     (1, 2, 2, 2),
-    (2, 1, 1, 1),
-    (2, 1, 1, 2),
-    (2, 1, 1, 2),
+    (1, 2, 2, 3),
+    (1, 3, 2, 2),
+    (1, 4, 2, 2),
+    (2, 1, 2, 2),
+    pytest.mark.xfail((2, 1, 2, 3)),
     pytest.mark.xfail((2, 2, 1, 2)),
-    (2, 2, 2, 1),
     pytest.mark.xfail((2, 2, 2, 2)),
-    (2, 3, 2, 1),
     pytest.mark.xfail((2, 3, 2, 2)),
     pytest.mark.xfail((3, 1, 2, 2)),
+    pytest.mark.xfail((4, 1, 1, 2)),
 ])
 def test_assignment_sampler_gof(N, V, C, M):
     config = DEFAULT_CONFIG.copy()
@@ -101,7 +102,8 @@ def test_assignment_sampler_gof(N, V, C, M):
     data = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
     trainer = TreeCatTrainer(data, config)
     print('Data:')
-    print(data)
+    for col in data:
+        print(col)
 
     # Add all rows.
     for row_id in range(N):

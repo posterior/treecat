@@ -81,9 +81,6 @@ class TreeCatTrainer(object):
             np.zeros([column.shape[1], M], np.int32) for column in data
         ]
 
-        # Temporaries.
-        self._messages = np.zeros([V, M], dtype=np.float32)
-
     def _update_tree(self):
         V, E, K, M = self._VEKM
         assignments = self.assignments[sorted(self._assigned_rows), :]
@@ -107,13 +104,13 @@ class TreeCatTrainer(object):
         logger.debug('TreeCatTrainer.add_row %d', row_id)
         assert row_id not in self._assigned_rows, row_id
         V, E, K, M = self._VEKM
-        messages = self._messages
         assignments = self.assignments[row_id]
-        vert_probs = self._vert_ss + self._vert_prior
+        edge_probs = self._edge_ss.astype(np.float32) + self._edge_prior
+        vert_probs = self._vert_ss.astype(np.float32) + self._vert_prior
+        messages = vert_probs.copy()
 
         for v, parent, children in reversed(self._schedule):
             message = messages[v, :]
-            message[:] = vert_probs[v, :]
             # Propagate upward from observed to latent.
             obs_lat = self._feat_ss[v].astype(np.float32) + self._feat_prior
             lat = obs_lat.sum(axis=0)
@@ -126,10 +123,11 @@ class TreeCatTrainer(object):
             # Propagate latent state inward from children to v.
             for child in children:
                 e = self.tree.find_tree_edge(v, child)
-                trans = self._edge_ss[e, :, :] + self._edge_prior
+                trans = edge_probs[e, :, :]
                 if v > child:
                     trans = trans.T
-                message *= np.dot(trans, messages[child, :])
+                message *= np.dot(
+                    trans, messages[child, :] / vert_probs[child, :])
                 message /= vert_probs[v, :]
             message /= np.sum(message)
 
@@ -138,7 +136,7 @@ class TreeCatTrainer(object):
             message = messages[v, :]
             if parent is not None:
                 e = self.tree.find_tree_edge(v, parent)
-                trans = self._edge_ss[e, :, :] + self._edge_prior
+                trans = edge_probs[e, :, :]
                 if parent > v:
                     trans = trans.T
                 message *= trans[assignments[parent], :]

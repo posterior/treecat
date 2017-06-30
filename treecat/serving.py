@@ -131,7 +131,7 @@ class TreeCatServer(object):
             # Propagate upward from observed to latent.
             for c, count in enumerate(data[v]):
                 if count:
-                    message[:] *= factor_observed_latent[v][c, :] ** count
+                    message[:] *= factor_observed_latent[v][c, :]**count
                     logprob += np.log(factor_observed[v][c]) * count
             # Propagate latent state inward from children to v.
             for child in children:
