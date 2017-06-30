@@ -81,12 +81,17 @@ def hash_assignments(assignments):
     return tuple(tuple(row) for row in assignments)
 
 
-@pytest.mark.xfail
 @pytest.mark.parametrize('N,V,C,M', [
-    (2, 2, 2, 2),
-    (2, 2, 2, 3),
-    (2, 3, 2, 2),
-    (3, 2, 2, 2),
+    (1, 1, 1, 1),
+    (1, 2, 2, 2),
+    (2, 1, 1, 1),
+    (2, 2, 2, 1),
+    pytest.mark.xfail((2, 1, 1, 2)),
+    pytest.mark.xfail((2, 1, 2, 2)),
+    pytest.mark.xfail((2, 2, 2, 2)),
+    pytest.mark.xfail((2, 2, 2, 3)),
+    pytest.mark.xfail((2, 3, 2, 2)),
+    pytest.mark.xfail((3, 2, 2, 2)),
 ])
 def test_assignment_sampler_gof(N, V, C, M):
     config = DEFAULT_CONFIG.copy()
@@ -103,7 +108,7 @@ def test_assignment_sampler_gof(N, V, C, M):
     # Collect samples.
     num_samples = 2000
     counts = {}
-    probs = {}
+    logprobs = {}
     for _ in range(num_samples):
         for row_id in range(N):
             # This is a single-site Gibbs sampler.
@@ -114,13 +119,13 @@ def test_assignment_sampler_gof(N, V, C, M):
             counts[key] += 1
         else:
             counts[key] = 1
-            probs[key] = trainer.logprob()
+            logprobs[key] = trainer.logprob()
     assert len(counts) == M**(N * V)
 
     # Check accuracy using Pearson's chi-squared test.
     keys = counts.keys()
     counts = np.array([counts[k] for k in keys], dtype=np.int32)
-    probs = np.array([probs[k] for k in keys])
+    probs = np.exp(np.array([logprobs[k] for k in keys]))
     probs /= probs.sum()
     gof = multinomial_goodness_of_fit(probs, counts, num_samples, plot=True)
     assert 1e-2 < gof
