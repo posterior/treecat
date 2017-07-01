@@ -6,8 +6,8 @@ import os
 import shutil
 
 import numpy as np
-from parsable import parsable
 
+from parsable import parsable
 from treecat.config import DEFAULT_CONFIG
 from treecat.persist import pickle_dump
 from treecat.persist import pickle_load

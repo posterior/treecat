@@ -34,20 +34,19 @@ def count_pairs(assignments, v1, v2, M):
     return np.bincount(pairs, minlength=M * M).reshape((M, M))
 
 
-def logprob_dm(counts, prior, axis=None):
-    """Non-normalized log probability of a Dirichlet-Multinomial distribution.
+def logprob_dc(counts, prior, axis=None):
+    """Non-normalized log probability of a Dirichlet-Categorical distribution.
 
     See https://en.wikipedia.org/wiki/Dirichlet-multinomial_distribution
     """
-    return (gammaln(counts + prior).sum(axis) -
-            gammaln(counts + 1.0).sum(axis))
+    return gammaln(counts + prior).sum(axis)
 
 
 def sample_from_probs(probs):
     # Note: np.random.multinomial is faster than np.random.choice,
     # but np.random.multinomial is pickier about non-normalized probs.
     try:
-        # This is equivalent to: np.random.choice(M, p=probs)
+        # This is equivalent to: np.random.choice(len(probs), p=probs)
         return np.random.multinomial(1, probs).argmax()
     except ValueError:
         COUNTERS.np_random_multinomial_value_error += 1
@@ -141,8 +140,8 @@ class TreeCatTrainer(object):
                 trans = edge_probs[e, :, :]
                 if v > child:
                     trans = trans.T
-                message *= np.dot(
-                    trans, messages[child, :] / vert_probs[child, :])
+                message *= np.dot(trans,
+                                  messages[child, :] / vert_probs[child, :])
                 message /= vert_probs[v, :]
                 message /= message.sum()  # For numerical stability only.
 
@@ -174,12 +173,12 @@ class TreeCatTrainer(object):
                     len(self._assigned_rows))
         V, E, K, M = self._VEKM
         assignments = self.assignments[sorted(self._assigned_rows), :]
-        vertex_logits = logprob_dm(self._vert_ss, self._vert_prior, axis=1)
+        vertex_logits = logprob_dc(self._vert_ss, self._vert_prior, axis=1)
         edge_logits = np.zeros([K], np.float32)
         for k, v1, v2 in self.tree.tree_grid.T:
             counts = count_pairs(assignments, v1, v2, M)
             # This is the most expensive part of tree sampling:
-            edge_logits[k] = (logprob_dm(counts, self._edge_prior) -
+            edge_logits[k] = (logprob_dc(counts, self._edge_prior) -
                               vertex_logits[v1] - vertex_logits[v2])
 
         # Sample the tree.
@@ -200,14 +199,16 @@ class TreeCatTrainer(object):
         This is mainly useful for testing goodness of fit of the category
         kernel.
         """
+        assert len(self._assigned_rows) == self.assignments.shape[0]
         V, E, K, M = self._VEKM
-        vertex_logits = logprob_dm(self._vert_ss, self._vert_prior, axis=1)
+        vertex_logits = logprob_dc(self._vert_ss, self._vert_prior, axis=1)
         logprob = vertex_logits.sum()
         for e, v1, v2 in self.tree.tree_grid.T:
-            logprob += (logprob_dm(self._edge_ss[e, :, :], self._edge_prior) -
+            logprob += (logprob_dc(self._edge_ss[e, :, :], self._edge_prior) -
                         vertex_logits[v1] - vertex_logits[v2])
         for v in range(V):
-            logprob += logprob_dm(self._feat_ss[v], self._feat_prior)
+            logprob += logprob_dc(self._feat_ss[v], self._feat_prior)
+            logprob -= logprob_dc(self._feat_ss[v].sum(0), self._vert_prior)
         return logprob
 
     def finish(self):
