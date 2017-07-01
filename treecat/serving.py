@@ -135,7 +135,7 @@ class TreeCatServer(object):
                     logprob += np.log(factor_observed[v][c]) * count
             # Propagate latent state inward from children to v.
             for child in children:
-                e = self._tree.find_tree_edge(child, v)
+                e = self._tree.find_tree_edge[child, v]
                 trans = factor_latent_latent[e, :, :]
                 if child > v:
                     trans = trans.T
@@ -158,7 +158,7 @@ class TreeCatServer(object):
                 message = messages[v, :]
                 # Propagate latent state outward from parent to v.
                 if parent is not None:
-                    e = self._tree.find_tree_edge(parent, v)
+                    e = self._tree.find_tree_edge[parent, v]
                     trans = factor_latent_latent[e, :, :]
                     if parent > v:
                         trans = trans.T

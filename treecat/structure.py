@@ -66,9 +66,10 @@ class TreeStructure(object):
     def vertices(self):
         return self._vertices
 
-    def find_tree_edge(self, v1, v2):
+    @property
+    def find_tree_edge(self):
         """Find the edge index e of an unsorted pair of vertices (v1, v2)."""
-        return self._tree_edges[v1, v2]
+        return self._tree_edges
 
     def gc(self):
         """Garbage collect temporary cached data structures."""

@@ -74,7 +74,6 @@ class TreeCatTrainer(object):
         self._config = config
         self._assigned_rows = set()
         self.assignments = np.zeros([num_rows, num_features], dtype=np.int8)
-        self.suffstats = {}
         self.tree = TreeStructure(num_features)
         self._schedule = make_propagation_schedule(self.tree.tree_grid)
 
@@ -98,6 +97,14 @@ class TreeCatTrainer(object):
             np.zeros([column.shape[1], M], np.int32) for column in data
         ]
 
+    @property
+    def suffstats(self):
+        return {
+            'feat_ss': self._feat_ss,
+            'vert_ss': self._vert_ss,
+            'edge_ss': self._edge_ss,
+        }
+
     def _update_tree(self):
         V, E, K, M = self._VEKM
         assignments = self.assignments[sorted(self._assigned_rows), :]
@@ -118,7 +125,6 @@ class TreeCatTrainer(object):
     def add_row(self, row_id):
         logger.debug('TreeCatTrainer.add_row %d', row_id)
         assert row_id not in self._assigned_rows, row_id
-        V, E, K, M = self._VEKM
         assignments = self.assignments[row_id, :]
         edge_probs = self._edge_ss.astype(np.float32) + self._edge_prior
         vert_probs = self._vert_ss.astype(np.float32) + self._vert_prior
@@ -136,7 +142,7 @@ class TreeCatTrainer(object):
                     lat += 1.0
             # Propagate latent state inward from children to v.
             for child in children:
-                e = self.tree.find_tree_edge(v, child)
+                e = self.tree.find_tree_edge[v, child]
                 trans = edge_probs[e, :, :]
                 if v > child:
                     trans = trans.T
@@ -149,7 +155,7 @@ class TreeCatTrainer(object):
         for v, parent, children in self._schedule:
             message = messages[v, :]
             if parent is not None:
-                e = self.tree.find_tree_edge(parent, v)
+                e = self.tree.find_tree_edge[parent, v]
                 trans = edge_probs[e, :, :]
                 if parent > v:
                     trans = trans.T
@@ -214,11 +220,6 @@ class TreeCatTrainer(object):
     def finish(self):
         logger.info('TreeCatTrainer.finish with %d rows',
                     len(self._assigned_rows))
-        self.suffstats = {
-            'feat_ss': self._feat_ss,
-            'vert_ss': self._vert_ss,
-            'edge_ss': self._edge_ss,
-        }
         self.tree.gc()
 
     def train(self):
