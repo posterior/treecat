@@ -92,8 +92,8 @@ def hash_assignments(assignments):
     pytest.mark.xfail((2, 2, 1, 2)),
     pytest.mark.xfail((2, 2, 2, 2)),
     pytest.mark.xfail((2, 3, 2, 2)),
-    pytest.mark.xfail((3, 1, 2, 2)),
-    pytest.mark.xfail((4, 1, 1, 2)),
+    (3, 1, 2, 2),
+    (4, 1, 1, 2),
 ])
 def test_assignment_sampler_gof(N, V, C, M):
     config = DEFAULT_CONFIG.copy()

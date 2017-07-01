@@ -70,7 +70,7 @@ class TreeCatTrainer(object):
         self._VEKM = (V, E, K, M)
 
         # Use Jeffreys priors.
-        self._vert_prior = 0.5
+        self._vert_prior = 0.5  # FIXME Should be 0.5 / C. TODO Learn this.
         self._edge_prior = 0.5 / M
         self._feat_prior = 0.5 / M
 
@@ -117,9 +117,8 @@ class TreeCatTrainer(object):
             for c, count in enumerate(self._data[v][row_id, :]):
                 for _ in range(count):
                     message *= obs_lat[c, :] / lat
-                    message /= message.sum()
-                    obs_lat[c, :] += message  # This is approximate.
-                    lat += message
+                    obs_lat[c, :] += 1.0
+                    lat += 1.0
             # Propagate latent state inward from children to v.
             for child in children:
                 e = self.tree.find_tree_edge(v, child)
@@ -192,16 +191,11 @@ class TreeCatTrainer(object):
         This is mainly useful for testing goodness of fit of the category
         kernel.
         """
-        # This uses inclusion-exclusion on the single and pairwise factors.
         V, E, K, M = self._VEKM
         logprob = 0.0
-        # Add contribution of each joint (observed, latent) distribution,
-        # and remove the contribution of its marginal on the latent.
+        # Add contribution of data likelihood.
         for v in range(V):
             logprob += logprob_dm(self._feat_ss[v], self._feat_prior)
-            logprob -= logprob_dm(
-                self._feat_ss[v].sum(axis=0), self._vert_prior)
-
         # Keep track of logprobs of latent distribution for each vertex.
         logprobs = {}
         for v in range(V):
