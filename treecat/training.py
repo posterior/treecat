@@ -84,6 +84,7 @@ class TreeCatTrainer(object):
         E = V - 1  # Number of edges in the tree.
         K = V * (V - 1) // 2  # Number of edges in the complete graph.
         M = self._config['model_num_clusters']  # Clusters per latent.
+        assert M <= 128, 'Invalid model_num_clusters > 128: {}'.format(M)
         self._VEKM = (V, E, K, M)
 
         # Use Jeffreys priors.
@@ -113,10 +114,6 @@ class TreeCatTrainer(object):
                       assignments[self.tree.tree_grid[2, :]]] += diff
         for v, column in enumerate(self._data):
             self._feat_ss[v][:, assignments[v]] += diff * column[row_id, :]
-        assert np.all(self._edge_ss.sum(axis=2) ==
-                      self._vert_ss[self.tree.tree_grid[1, :]])
-        assert np.all(self._edge_ss.sum(axis=1) ==
-                      self._vert_ss[self.tree.tree_grid[2, :]])
 
     @profile
     def add_row(self, row_id):
@@ -188,7 +185,7 @@ class TreeCatTrainer(object):
         # Sample the tree.
         complete_grid = self.tree.complete_grid
         assert edge_logits.shape[0] == complete_grid.shape[1]
-        edges = self.tree.tree_grid[1:3, :].T
+        edges = [tuple(edge) for edge in self.tree.tree_grid[1:3, :].T]
         edges = sample_tree(
             complete_grid,
             edge_logits,

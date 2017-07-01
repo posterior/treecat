@@ -10,7 +10,6 @@ from treecat.config import DEFAULT_CONFIG
 from treecat.generate import generate_dataset
 from treecat.structure import TreeStructure
 from treecat.testutil import TINY_CONFIG
-from treecat.testutil import TINY_DATA
 from treecat.training import TreeCatTrainer
 from treecat.training import get_annealing_schedule
 from treecat.training import train_model
@@ -29,9 +28,18 @@ def test_get_annealing_schedule():
             assert 0 <= row_id and row_id < num_rows
 
 
-def test_train_model():
-    data = TINY_DATA
-    config = TINY_CONFIG
+@pytest.mark.parametrize('N,V,C,M', [
+    (1, 1, 1, 1),
+    (2, 2, 2, 2),
+    (3, 3, 3, 3),
+    (4, 4, 4, 4),
+    (5, 5, 5, 5),
+    (6, 6, 6, 6),
+])
+def test_train_model(N, V, C, M):
+    config = DEFAULT_CONFIG.copy()
+    config['model_num_clusters'] = M
+    data = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
     model = train_model(data, config)
 
     assert model['config'] == config
@@ -56,24 +64,39 @@ def test_train_model():
         assert feat_ss[v].shape == (data[v].shape[1], M)
 
     # Check bounds.
-    assert np.all(assignments < M)
     assert np.all(0 <= vert_ss)
+    assert np.all(vert_ss <= N)
     assert np.all(0 <= edge_ss)
+    assert np.all(edge_ss <= N)
     assert np.all(0 <= assignments)
+    assert np.all(assignments < M)
     for v in range(V):
         assert np.all(0 <= feat_ss[v])
 
-    # Check totals.
+    # Check marginals.
     assert vert_ss.sum() == N * V
     assert np.all(vert_ss.sum(1) == N)
     assert edge_ss.sum() == N * E
     assert np.all(edge_ss.sum((1, 2)) == N)
-    for v in range(V):
-        assert feat_ss[v].sum() == data[v].sum()
-
-    # Check marginals.
     assert np.all(edge_ss.sum(2) == vert_ss[grid[1, :]])
     assert np.all(edge_ss.sum(1) == vert_ss[grid[2, :]])
+    for v in range(V):
+        assert feat_ss[v].sum() == data[v].sum()
+        assert np.all(feat_ss[v].sum(1) == data[v].sum(0))
+
+    # Check computation from scratch.
+    for v in range(V):
+        counts = np.bincount(assignments[:, v], minlength=M)
+        assert np.all(vert_ss[v, :] == counts)
+    for e, v1, v2 in grid.T:
+        pairs = assignments[:, v1].astype(np.int32) * M + assignments[:, v2]
+        counts = np.bincount(pairs, minlength=M * M).reshape((M, M))
+        assert np.all(edge_ss[e, :, :] == counts)
+    for v in range(V):
+        counts = np.zeros_like(feat_ss[v])
+        for n in range(N):
+            counts[:, assignments[n, v]] += data[v][n, :]
+        assert np.all(feat_ss[v] == counts)
 
 
 def hash_assignments(assignments):
