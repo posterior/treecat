@@ -18,12 +18,13 @@ from treecat.util import profile
 logger = logging.getLogger(__name__)
 
 
-def logprob_dm(counts, prior):
+def logprob_dm(counts, prior, axis=None):
     """Non-normalized log probability of a Dirichlet-Multinomial distribution.
 
     See https://en.wikipedia.org/wiki/Dirichlet-multinomial_distribution
     """
-    return gammaln(counts + prior).sum() - gammaln(counts + 1.0).sum()
+    return (gammaln(counts + prior).sum(axis) -
+            gammaln(counts + 1.0).sum(axis))
 
 
 def sample_from_probs(probs):
@@ -158,18 +159,13 @@ class TreeCatTrainer(object):
         logger.info('TreeCatTrainer.sample_tree given %d rows',
                     len(self._assigned_rows))
         V, E, K, M = self._VEKM
-        # Compute vertex logits.
-        vertex_logits = np.zeros([V], np.float32)
-        for v in range(V):
-            vertex_logits[v] = logprob_dm(self._vert_ss[v, :],
-                                          self._vert_prior)
-        # Compute edge logits.
         assignments = self.assignments[sorted(self._assigned_rows), :]
+        vertex_logits = logprob_dm(self._vert_ss, self._vert_prior, axis=1)
         edge_logits = np.zeros([K], np.float32)
         for k, v1, v2 in self.tree.tree_grid.T:
-            # This is the most expensive part of tree sampling:
             pairs = assignments[:, v1] * M + assignments[:, v2]
             counts = np.bincount(pairs, minlength=M * M)
+            # This is the most expensive part of tree sampling:
             edge_logits[k] = (logprob_dm(counts, self._edge_prior) -
                               vertex_logits[v1] - vertex_logits[v2])
 
@@ -192,20 +188,13 @@ class TreeCatTrainer(object):
         kernel.
         """
         V, E, K, M = self._VEKM
-        logprob = 0.0
-        # Add contribution of data likelihood.
+        vertex_logits = logprob_dm(self._vert_ss, self._vert_prior, axis=1)
+        logprob = vertex_logits.sum()
+        for e, v1, v2 in self.tree.tree_grid.T:
+            logprob += (logprob_dm(self._edge_ss[e, :, :], self._edge_prior) -
+                        vertex_logits[v1] - vertex_logits[v2])
         for v in range(V):
             logprob += logprob_dm(self._feat_ss[v], self._feat_prior)
-        # Keep track of logprobs of latent distribution for each vertex.
-        logprobs = {}
-        for v in range(V):
-            logprobs[v] = logprob_dm(self._vert_ss[v, :], self._vert_prior)
-            logprob += logprobs[v]
-        # Add contribution of each (latent, latent) joint distribution, and
-        # remove the double-counted latent logprob of each of its vertices.
-        for e, v1, v2 in self.tree.tree_grid.T:
-            logprob += logprob_dm(self._edge_ss[e, :, :], self._edge_prior)
-            logprob -= logprobs[v1] + logprobs[v2]
         return logprob
 
     def finish(self):
