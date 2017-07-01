@@ -1,8 +1,9 @@
 # Development requirements.
+# jupyter
+# numba
 flake8
 goftests
 isort
-jupyter
 line_profiler
 numpy
 pytest

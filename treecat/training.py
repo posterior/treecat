@@ -71,7 +71,7 @@ class TreeCatTrainer(object):
         self._VEKM = (V, E, K, M)
 
         # Use Jeffreys priors.
-        self._vert_prior = 0.5  # FIXME Should be 0.5 / C. TODO Learn this.
+        self._vert_prior = 0.5
         self._edge_prior = 0.5 / M
         self._feat_prior = 0.5 / M
 
@@ -105,7 +105,7 @@ class TreeCatTrainer(object):
         logger.debug('TreeCatTrainer.add_row %d', row_id)
         assert row_id not in self._assigned_rows, row_id
         V, E, K, M = self._VEKM
-        assignments = self.assignments[row_id]
+        assignments = self.assignments[row_id, :]
         edge_probs = self._edge_ss.astype(np.float32) + self._edge_prior
         vert_probs = self._vert_ss.astype(np.float32) + self._vert_prior
         messages = vert_probs.copy()
@@ -129,19 +129,18 @@ class TreeCatTrainer(object):
                 message *= np.dot(
                     trans, messages[child, :] / vert_probs[child, :])
                 message /= vert_probs[v, :]
-            message /= np.sum(message)
+                message /= message.sum()  # For numerical stability only.
 
         # Propagate latent state outward from parent to v.
         for v, parent, children in self._schedule:
             message = messages[v, :]
             if parent is not None:
-                e = self.tree.find_tree_edge(v, parent)
+                e = self.tree.find_tree_edge(parent, v)
                 trans = edge_probs[e, :, :]
                 if parent > v:
                     trans = trans.T
                 message *= trans[assignments[parent], :]
                 message /= vert_probs[v, :]
-                assert message.shape == (M, )
             message /= message.sum()
             assignments[v] = sample_from_probs(message)
         self._assigned_rows.add(row_id)

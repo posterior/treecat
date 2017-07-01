@@ -11,6 +11,15 @@ from collections import Counter
 from collections import defaultdict
 from timeit import default_timer
 
+try:
+    from numba import jit
+except ImportError:
+
+    def jit(*args, **kwargs):
+        if not kwargs and len(args) == 1 and callable(args[0]):
+            return args[0]
+        return jit
+
 DEBUG_LEVEL = int(os.environ.get('TREECAT_DEBUG_LEVEL', 0))
 LOG_LEVEL = int(os.environ.get('TREECAT_LOG_LEVEL', logging.CRITICAL))
 LOG_ART = int(os.environ.get('TREECAT_LOG_ART', 0))

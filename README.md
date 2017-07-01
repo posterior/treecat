@@ -1,3 +1,3 @@
 # TreeCat
 
-A tree-of-mixtures nonparametric Bayesian model.
+A Bayesian latent tree model of multivariate multinomial data.
