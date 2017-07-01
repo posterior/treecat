@@ -107,6 +107,7 @@ def test_make_propagation_schedule(edges, root):
         neighbors[v1].add(v2)
         neighbors[v2].add(v1)
 
+    # Check topology.
     schedule = make_propagation_schedule(grid, root)
     if root is not None:
         assert schedule[0][0] == root
@@ -118,6 +119,27 @@ def test_make_propagation_schedule(edges, root):
         if parent is not None:
             actual_neighbors.add(parent)
         assert actual_neighbors == neighbors[v]
+
+    # Check inward ordering.
+    visited = [False] * V
+    for v, parent, children in schedule:
+        assert not visited[v]
+        if parent is not None:
+            assert visited[parent]
+        for child in children:
+            assert not visited[child]
+        visited[v] = True
+    assert all(visited)
+
+    # Check outward ordering.
+    for v, parent, children in reversed(schedule):
+        assert visited[v]
+        if parent is not None:
+            assert visited[parent]
+        for child in children:
+            assert not visited[child]
+        visited[v] = False
+    assert not any(visited)
 
 
 @pytest.mark.parametrize('num_edges', [1, 2, 3, 4])
