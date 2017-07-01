@@ -18,6 +18,22 @@ from treecat.util import profile
 logger = logging.getLogger(__name__)
 
 
+def count_pairs(assignments, v1, v2, M):
+    """Construct sufficient statistics for (v1, v2) pairs.
+
+    Args:
+      assignments: An _ x V assignment matrix with values in range(M).
+      v1, v2: Column ids of the assignments matrix.
+      M: The number of possible assignment bins.
+
+    Returns:
+      And M x M array of counts.
+    """
+    assert v1 != v2
+    pairs = assignments[:, v1].astype(np.int32) * M + assignments[:, v2]
+    return np.bincount(pairs, minlength=M * M).reshape((M, M))
+
+
 def logprob_dm(counts, prior, axis=None):
     """Non-normalized log probability of a Dirichlet-Multinomial distribution.
 
@@ -58,7 +74,7 @@ class TreeCatTrainer(object):
         self._data = data
         self._config = config
         self._assigned_rows = set()
-        self.assignments = np.zeros([num_rows, num_features], dtype=np.int32)
+        self.assignments = np.zeros([num_rows, num_features], dtype=np.int8)
         self.suffstats = {}
         self.tree = TreeStructure(num_features)
         self._schedule = make_propagation_schedule(self.tree.tree_grid)
@@ -86,9 +102,7 @@ class TreeCatTrainer(object):
         V, E, K, M = self._VEKM
         assignments = self.assignments[sorted(self._assigned_rows), :]
         for e, v1, v2 in self.tree.tree_grid.T:
-            pairs = assignments[:, v1] * M + assignments[:, v2]
-            counts = np.bincount(pairs, minlength=M * M)
-            self._edge_ss[e, :, :] = counts.reshape((M, M))
+            self._edge_ss[e, :, :] = count_pairs(assignments, v1, v2, M)
         self._schedule = make_propagation_schedule(self.tree.tree_grid)
 
     def _update_tensors(self, row_id, diff):
@@ -98,7 +112,11 @@ class TreeCatTrainer(object):
                       assignments[self.tree.tree_grid[1, :]],  #
                       assignments[self.tree.tree_grid[2, :]]] += diff
         for v, column in enumerate(self._data):
-            self._feat_ss[v][:, assignments[v]] += diff * column[row_id]
+            self._feat_ss[v][:, assignments[v]] += diff * column[row_id, :]
+        assert np.all(self._edge_ss.sum(axis=2) ==
+                      self._vert_ss[self.tree.tree_grid[1, :]])
+        assert np.all(self._edge_ss.sum(axis=1) ==
+                      self._vert_ss[self.tree.tree_grid[2, :]])
 
     @profile
     def add_row(self, row_id):
@@ -162,8 +180,7 @@ class TreeCatTrainer(object):
         vertex_logits = logprob_dm(self._vert_ss, self._vert_prior, axis=1)
         edge_logits = np.zeros([K], np.float32)
         for k, v1, v2 in self.tree.tree_grid.T:
-            pairs = assignments[:, v1] * M + assignments[:, v2]
-            counts = np.bincount(pairs, minlength=M * M)
+            counts = count_pairs(assignments, v1, v2, M)
             # This is the most expensive part of tree sampling:
             edge_logits[k] = (logprob_dm(counts, self._edge_prior) -
                               vertex_logits[v1] - vertex_logits[v2])

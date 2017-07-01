@@ -87,7 +87,7 @@ def hash_assignments(assignments):
     (1, 2, 2, 3),
     (1, 3, 2, 2),
     (1, 4, 2, 2),
-    (2, 1, 2, 2),
+    (2, 1, 2, 2),  # Flaky.
     pytest.mark.xfail((2, 1, 2, 3)),
     pytest.mark.xfail((2, 2, 1, 2)),
     pytest.mark.xfail((2, 2, 2, 2)),

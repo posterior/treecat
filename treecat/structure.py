@@ -155,7 +155,6 @@ def find_center_of_tree(grid):
     return v
 
 
-@profile
 def make_propagation_schedule(grid, root=None):
     """Makes an efficient schedule for message passing on a tree.
 
@@ -225,6 +224,7 @@ class MutableTree(object):
         assert len(self.e2k) == self.VEK[1]
         assert len(self.k2e) == self.VEK[1]
 
+    @profile
     def remove_edge(self, e):
         """Remove edge at position e from tree and update data structures."""
         assert len(self.e2k) == self.VEK[1]
