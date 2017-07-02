@@ -76,19 +76,25 @@ def generate_fake_model(num_rows, num_cols, num_cats, num_components):
     M = num_components
     vert_ss = np.zeros((V, M), dtype=np.int32)
     edge_ss = np.zeros((E, M, M), dtype=np.int32)
-    feat_ss = np.zeros((V, C, M), dtype=np.int32)
+    feat_ss = np.zeros((V * C, M), dtype=np.int32)
     for v in range(V):
         vert_ss[v, :] = np.bincount(assignments[:, v], minlength=M)
     for e, v1, v2 in tree.tree_grid.T:
         pairs = assignments[:, v1].astype(np.int32) * M + assignments[:, v2]
         edge_ss[e, :, :] = np.bincount(pairs, minlength=M * M).reshape((M, M))
+    ragged_index = np.zeros(V + 1, dtype=np.int32)
     for v in range(V):
+        beg = ragged_index[v]
+        end = beg + C
+        ragged_index[v + 1] = end
+        feat_ss_block = feat_ss[beg:end, :]
         for n in range(N):
-            feat_ss[v][:, assignments[n, v]] += data[v][n, :]
+            feat_ss_block[:, assignments[n, v]] += data[v][n, :]
     model = {
         'tree': tree,
         'assignments': assignments,
         'suffstats': {
+            'ragged_index': ragged_index,
             'vert_ss': vert_ss,
             'edge_ss': edge_ss,
             'feat_ss': feat_ss,

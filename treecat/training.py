@@ -12,6 +12,7 @@ from treecat.structure import TreeStructure
 from treecat.structure import make_propagation_schedule
 from treecat.structure import sample_tree
 from treecat.util import art_logger
+from treecat.util import make_ragged_index
 from treecat.util import profile
 from treecat.util import sample_from_probs
 
@@ -61,6 +62,7 @@ class TreeCatTrainer(object):
         assert all(column.shape[0] == num_rows for column in data)
         self._data = data
         self._config = config
+        self._ragged_index = make_ragged_index(data)
         self._assigned_rows = set()
         self.assignments = np.zeros([num_rows, num_features], dtype=np.int8)
         self.tree = TreeStructure(num_features)
@@ -82,17 +84,7 @@ class TreeCatTrainer(object):
         # Sufficient statistics are maintained always.
         self._vert_ss = np.zeros([V, M], np.int32)
         self._edge_ss = np.zeros([E, M, M], np.int32)
-        self._feat_ss = [
-            np.zeros([column.shape[1], M], np.int32) for column in data
-        ]
-
-    @property
-    def suffstats(self):
-        return {
-            'feat_ss': self._feat_ss,
-            'vert_ss': self._vert_ss,
-            'edge_ss': self._edge_ss,
-        }
+        self._feat_ss = np.zeros([self._ragged_index[-1], M], np.int32)
 
     def _update_tree(self):
         V, E, K, M = self._VEKM
@@ -108,7 +100,8 @@ class TreeCatTrainer(object):
                       assignments[self.tree.tree_grid[1, :]],  #
                       assignments[self.tree.tree_grid[2, :]]] += diff
         for v, column in enumerate(self._data):
-            self._feat_ss[v][:, assignments[v]] += diff * column[row_id, :]
+            beg, end = self._ragged_index[v:v + 2]
+            self._feat_ss[beg:end, assignments[v]] += diff * column[row_id, :]
 
     @profile
     def add_row(self, row_id):
@@ -117,16 +110,15 @@ class TreeCatTrainer(object):
         assignments = self.assignments[row_id, :]
         edge_probs = self._edge_ss.astype(np.float32) + self._edge_prior
         vert_probs = self._vert_ss.astype(np.float32) + self._vert_prior
-        feat_probs = [
-            col.astype(np.float32) + self._feat_prior for col in self._feat_ss
-        ]
+        feat_probs = self._feat_ss.astype(np.float32) + self._feat_prior
         messages = vert_probs.copy()
 
         for op, v, v2, e in self._schedule:
             message = messages[v, :]
             if op == 0:  # OP_UP
                 # Propagate upward from observed to latent.
-                obs_lat = feat_probs[v]
+                beg, end = self._ragged_index[v:v + 2]
+                obs_lat = feat_probs[beg:end, :]
                 lat = obs_lat.sum(axis=0)
                 for c, count in enumerate(self._data[v][row_id, :]):
                     for _ in range(count):
@@ -201,7 +193,8 @@ class TreeCatTrainer(object):
             logprob += (logprob_dc(self._edge_ss[e, :, :] + self._edge_prior) -
                         vertex_logits[v1] - vertex_logits[v2])
         for v in range(V):
-            feat_probs = self._feat_ss[v] + self._feat_prior
+            beg, end = self._ragged_index[v:v + 2]
+            feat_probs = self._feat_ss[beg:end, :] + self._feat_prior
             logprob += logprob_dc(feat_probs) - logprob_dc(feat_probs.sum(0))
         return logprob
 
@@ -219,7 +212,7 @@ class TreeCatTrainer(object):
           A trained model as a dictionary with keys:
             tree: A TreeStructure instance with the learned latent structure.
             suffstats: Sufficient statistics of features, vertices, and
-              edges.
+              edges and a ragged_index for the features array.
             assignments: An [N, V] numpy array of latent cluster ids for each
               cell in the dataset.
         """
@@ -240,8 +233,13 @@ class TreeCatTrainer(object):
         return {
             'config': self._config,
             'tree': self.tree,
-            'suffstats': self.suffstats,
             'assignments': self.assignments,
+            'suffstats': {
+                'ragged_index': self._ragged_index,
+                'feat_ss': self._feat_ss,
+                'vert_ss': self._vert_ss,
+                'edge_ss': self._edge_ss,
+            }
         }
 
 

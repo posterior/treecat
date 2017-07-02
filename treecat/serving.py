@@ -22,11 +22,9 @@ class TreeCatServer(object):
         assert isinstance(tree, TreeStructure)
         self._tree = tree
         self._config = config
+        self._ragged_index = suffstats['ragged_index']
         self._schedule = make_propagation_schedule(tree.tree_grid)
-        self._zero_row = [
-            np.zeros(
-                col.shape[0], dtype=np.int8) for col in suffstats['feat_ss']
-        ]
+        self._zero_row = np.zeros(self._ragged_index[-1], np.int8)
 
         # These are useful dimensions to import into locals().
         V = self._tree.num_vertices
@@ -41,13 +39,14 @@ class TreeCatServer(object):
         feat_prior = 0.5 / M
         self._vert_probs = suffstats['vert_ss'].astype(np.float32) + vert_prior
         self._edge_probs = suffstats['edge_ss'].astype(np.float32) + edge_prior
-        self._feat_probs = [
-            col.astype(np.float32) + feat_prior for col in suffstats['feat_ss']
-        ]
+        self._feat_probs = suffstats['feat_ss'].astype(np.float32) + feat_prior
 
     def zero_row(self):
         """Make an empty data row."""
-        return [col.copy() for col in self._zero_row]
+        return [
+            self._zero_row[beg:end].copy()
+            for beg, end in zip(self._ragged_index, self._ragged_index[1:])
+        ]
 
     @profile
     def sample(self, data, counts):
@@ -72,7 +71,8 @@ class TreeCatServer(object):
         V, E, M = self._VEM
         assert len(data) == V
         for v in range(V):
-            assert data[v].shape == self._zero_row[v].shape
+            C = self._ragged_index[v + 1] - self._ragged_index[v]
+            assert data[v].shape == (C, )
         assert counts.shape == (V, )
 
         feat_probs = self._feat_probs
@@ -80,13 +80,14 @@ class TreeCatServer(object):
         vert_probs = self._vert_probs
         messages = vert_probs.copy()
         vert_sample = np.zeros([V], np.int32)
-        feat_sample = [np.zeros_like(col) for col in data]
+        feat_sample = self._zero_row.copy()
 
         for op, v, v2, e in self._schedule:
             message = messages[v, :]
             if op == 0:  # OP_UP
                 # Propagate upward from observed to latent.
-                obs_lat = feat_probs[v].copy()
+                beg, end = self._ragged_index[v:v + 2]
+                obs_lat = feat_probs[beg:end, :].copy()
                 lat = obs_lat.sum(axis=0)
                 for c, count in enumerate(data[v]):
                     for _ in range(count):
@@ -112,11 +113,16 @@ class TreeCatServer(object):
                 vert_sample[v] = sample_from_probs(message)
                 # Propagate downward from latent to observed.
                 if counts[v]:
-                    probs = feat_probs[v][:, vert_sample[v]]
+                    beg, end = self._ragged_index[v:v + 2]
+                    probs = feat_probs[beg:end, vert_sample[v]].copy()
                     probs /= probs.sum()
-                    feat_sample[v][:] = np.random.multinomial(counts[v], probs)
+                    feat_sample[beg:end] = np.random.multinomial(counts[v],
+                                                                 probs)
 
-        return feat_sample
+        return [
+            feat_sample[self._ragged_index[v]:self._ragged_index[v + 1]]
+            for v in range(V)
+        ]
 
     @profile
     def logprob(self, data):
@@ -136,7 +142,8 @@ class TreeCatServer(object):
         V, E, M = self._VEM
         assert len(data) == V
         for v in range(V):
-            assert data[v].shape == self._zero_row[v].shape
+            C = self._ragged_index[v + 1] - self._ragged_index[v]
+            assert data[v].shape == (C, )
 
         feat_probs = self._feat_probs
         edge_probs = self._edge_probs
@@ -148,7 +155,8 @@ class TreeCatServer(object):
             message = messages[v, :]
             if op == 0:  # OP_UP
                 # Propagate upward from observed to latent.
-                obs_lat = feat_probs[v].copy()
+                beg, end = self._ragged_index[v:v + 2]
+                obs_lat = feat_probs[beg:end, :].copy()
                 lat = obs_lat.sum(axis=0)
                 for c, count in enumerate(data[v]):
                     for _ in range(count):

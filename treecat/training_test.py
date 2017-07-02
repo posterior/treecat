@@ -49,6 +49,7 @@ def test_train_model(N, V, C, M):
     vert_ss = model['suffstats']['vert_ss']
     edge_ss = model['suffstats']['edge_ss']
     feat_ss = model['suffstats']['feat_ss']
+    ragged_index = model['suffstats']['ragged_index']
 
     # Check shape.
     V = len(data)
@@ -59,9 +60,7 @@ def test_train_model(N, V, C, M):
     assert assignments.shape == (N, V)
     assert vert_ss.shape == (V, M)
     assert edge_ss.shape == (E, M, M)
-    assert len(feat_ss) == V
-    for v in range(V):
-        assert feat_ss[v].shape == (data[v].shape[1], M)
+    assert feat_ss.shape == (ragged_index[-1], M)
 
     # Check bounds.
     assert np.all(0 <= vert_ss)
@@ -70,8 +69,7 @@ def test_train_model(N, V, C, M):
     assert np.all(edge_ss <= N)
     assert np.all(0 <= assignments)
     assert np.all(assignments < M)
-    for v in range(V):
-        assert np.all(0 <= feat_ss[v])
+    assert np.all(0 <= feat_ss)
 
     # Check marginals.
     assert vert_ss.sum() == N * V
@@ -81,8 +79,10 @@ def test_train_model(N, V, C, M):
     assert np.all(edge_ss.sum(2) == vert_ss[grid[1, :]])
     assert np.all(edge_ss.sum(1) == vert_ss[grid[2, :]])
     for v in range(V):
-        assert feat_ss[v].sum() == data[v].sum()
-        assert np.all(feat_ss[v].sum(1) == data[v].sum(0))
+        beg, end = ragged_index[v:v + 2]
+        feat_ss_block = feat_ss[beg:end, :]
+        assert feat_ss_block.sum() == data[v].sum()
+        assert np.all(feat_ss_block.sum(1) == data[v].sum(0))
 
     # Check computation from scratch.
     for v in range(V):
@@ -93,10 +93,12 @@ def test_train_model(N, V, C, M):
         counts = np.bincount(pairs, minlength=M * M).reshape((M, M))
         assert np.all(edge_ss[e, :, :] == counts)
     for v in range(V):
-        counts = np.zeros_like(feat_ss[v])
+        beg, end = ragged_index[v:v + 2]
+        feat_ss_block = feat_ss[beg:end, :]
+        counts = np.zeros_like(feat_ss_block)
         for n in range(N):
             counts[:, assignments[n, v]] += data[v][n, :]
-        assert np.all(feat_ss[v] == counts)
+        assert np.all(feat_ss_block == counts)
 
 
 def hash_assignments(assignments):

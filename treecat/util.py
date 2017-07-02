@@ -80,6 +80,22 @@ def sample_from_probs2(probs, out):
     (u < cdf).argmax(axis=1, out=out)
 
 
+def make_ragged_index(columns):
+    """Make an index to hold data in a ragged array.
+
+    Args:
+      columns: A list of numpy arrays of varying size.
+
+    Returns:
+      A [len(columns) + 1]-shaped array of begin,end positions of each column.
+    """
+    ragged_index = np.zeros([len(columns) + 1], dtype=np.int32)
+    ragged_index[0] = 0
+    for v, column in enumerate(columns):
+        ragged_index[v + 1] = ragged_index[v] + column.shape[-1]
+    return ragged_index
+
+
 class ProfilingSet(defaultdict):
     __getattr__ = defaultdict.__getitem__
     __setattr__ = defaultdict.__setitem__
