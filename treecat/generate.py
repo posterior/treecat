@@ -6,11 +6,13 @@ import os
 import shutil
 
 import numpy as np
-
 from parsable import parsable
+
 from treecat.config import DEFAULT_CONFIG
 from treecat.persist import pickle_dump
 from treecat.persist import pickle_load
+from treecat.structure import TreeStructure
+from treecat.structure import sample_tree
 from treecat.training import train_model
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -50,6 +52,22 @@ def generate_dataset_file(num_rows, num_cols, num_cats=4, rate=1.0):
     data = generate_dataset(num_rows, num_cols, num_cats, rate)
     pickle_dump(data, path)
     return path
+
+
+def generate_tree(num_cols):
+    tree = TreeStructure(num_cols)
+    K = tree.complete_grid.shape[1]
+    edge_logits = np.random.random([K])
+    edges = [tuple(edge) for edge in tree.tree_grid[1:3, :].T]
+    edges = sample_tree(tree.complete_grid, edge_logits, edges, steps=10)
+    tree.set_edges(edges)
+    return tree
+
+
+def generate_fake_model(num_rows, num_cols, num_cats=4, rate=1.0):
+    tree = generate_tree(num_cols)
+    raise NotImplementedError()
+    return {'tree': tree, 'suffstats': {}}
 
 
 def generate_model_file(num_rows, num_cols, num_cats=4, rate=1.0):

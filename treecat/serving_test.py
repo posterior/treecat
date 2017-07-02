@@ -3,7 +3,6 @@ from __future__ import division
 from __future__ import print_function
 
 import itertools
-from collections import defaultdict
 
 import numpy as np
 import pytest
@@ -64,59 +63,66 @@ def test_server_init(model):
     serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
 
 
-@pytest.mark.xfail
 def test_server_sample_shape(model):
     data = TINY_DATA
     server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
 
     # Sample many different counts patterns.
     V = len(data)
-    factors = [[0, 1, 2]] * V
-    for counts in itertools.product(*factors):
-        counts = np.array(counts, dtype=np.int8)
-        samples = server.sample(data, counts)
-        assert len(samples) == len(data)
-        for v in range(V):
-            assert samples[v].shape == data[v].shape
-            assert samples[v].dtype == data[v].dtype
-            assert np.all(samples[v].sum(axis=1) == counts[v])
-
-
-@pytest.mark.xfail
-def test_server_logprob_runs(model):
-    data = TINY_DATA
-    server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
-
-    # Sample all possible mask patterns.
-    V = len(data)
     N = data[0].shape[0]
-    abstol = 1e-5
     factors = [[0, 1, 2]] * V
     for counts in itertools.product(*factors):
         counts = np.array(counts, dtype=np.int8)
         for n in range(N):
             row = [col[n, :] for col in data]
-            logprob = server.logprob(row, counts)
-            assert isinstance(logprob, float)
-            assert np.isfinite(logprob)
-            assert logprob < abstol
+            sample = server.sample(row, counts)
+            assert len(sample) == len(row)
+            for v in range(V):
+                assert sample[v].shape == row[v].shape
+                assert sample[v].dtype == row[v].dtype
+                assert np.all(sample[v].sum() == counts[v])
 
 
-@pytest.mark.xfail
+def test_server_logprob_runs(model):
+    data = TINY_DATA
+    server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
+
+    # Sample all possible mask patterns.
+    N = data[0].shape[0]
+    abstol = 1e-5
+    for n in range(N):
+        row = [col[n, :] for col in data]
+        logprob = server.logprob(row)
+        assert isinstance(logprob, float)
+        assert np.isfinite(logprob)
+        assert logprob < abstol
+
+
+def one_hot(c, C):
+    value = np.zeros(C, dtype=np.int8)
+    value[c] = 1
+    return value
+
+
 def test_server_logprob_normalized(model):
     data = TINY_DATA
     server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
 
-    # The total probability of all rows should be 1.
+    # The total probability of all categorical rows should be 1.
     V = len(data)
-    factors = [range(column.shape[1]) for column in data]
-    pytest.mark.xfail(reason='TODO')
-    data = np.array(list(itertools.product(*factors)), dtype=np.int8)
-    mask = np.array([True] * V, dtype=np.bool_)
-    logprob = server.logprob(data, mask)
-    logtotal = np.logaddexp.reduce(logprob)
-    assert abs(logtotal) < 1e-6, logtotal
+    factors = []
+    for v in range(V):
+        C = data[v].shape[1]
+        factors.append([one_hot(c, C) for c in range(C)])
+    logprobs = []
+    for row in itertools.product(*factors):
+        logprobs.append(server.logprob(row))
+    logtotal = np.logaddexp.reduce(logprobs)
     assert logtotal == pytest.approx(0.0, abs=1e-5)
+
+
+def hash_row(row):
+    return tuple(tuple(col) for col in row)
 
 
 @pytest.mark.xfail
@@ -124,30 +130,32 @@ def test_server_gof(model):
     np.random.seed(0)
     data = TINY_DATA
     server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
-    num_samples = 50000
 
     # Generate samples.
-    N = num_samples
-    V = len(data)
-    empty_data = np.zeros([N, V], dtype=np.int8)
-    empty_mask = np.array([False] * V, dtype=np.bool_)
-    full_mask = np.array([True] * V, dtype=np.bool_)
-    samples = server.sample(empty_data, empty_mask)
-    logprob = server.logprob(samples, full_mask)
-
-    # Check that each row was sampled at least once.
-    counts = defaultdict(lambda: 0)
-    probs = {}
-    for row_data, row_prob in zip(samples, np.exp(logprob)):
-        row_data = tuple(row_data)
-        counts[row_data] += 1
-        probs[row_data] = row_prob
-    keys = sorted(counts.keys())
-    assert len(keys) == np.prod([col.shape[1] for col in data])
+    cond_data = [np.zeros_like(col[0, :]) for col in data]
+    expected = np.prod([len(col) for col in cond_data])
+    num_samples = 1000
+    ones = np.ones(len(data), dtype=np.int8)
+    counts = {}
+    logprobs = {}
+    for _ in range(num_samples):
+        sample = server.sample(cond_data, ones)
+        key = hash_row(sample)
+        if key in counts:
+            counts[key] += 1
+        else:
+            counts[key] = 1
+            logprobs[key] = server.logprob(sample)
+    assert len(counts) <= expected
+    assert len(counts) >= expected * 0.8
 
     # Check accuracy using Pearson's chi-squared test.
-    counts = np.array([counts[key] for key in keys])
-    probs = np.array([probs[key] for key in keys])
-    probs /= probs.sum()  # Test normalization elsewhere.
-    gof = multinomial_goodness_of_fit(probs, counts, num_samples, plot=True)
+    keys = sorted(counts.keys(), key=lambda key: -logprobs[key])
+    counts = np.array([counts[k] for k in keys], dtype=np.int32)
+    probs = np.exp(np.array([logprobs[k] for k in keys]))
+    probs /= probs.sum()
+
+    T = 20
+    gof = multinomial_goodness_of_fit(
+        probs[:T], counts[:T], num_samples, plot=True, truncated=True)
     assert 1e-2 < gof

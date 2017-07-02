@@ -11,6 +11,8 @@ from collections import Counter
 from collections import defaultdict
 from timeit import default_timer
 
+import numpy as np
+
 try:
     from numba import jit
 except ImportError:
@@ -56,6 +58,26 @@ def sizeof(array):
     for dim in array.shape:
         size *= int(dim)
     return size
+
+
+def sample_from_probs(probs):
+    """Equivalent to np.random.choice(len(probs), p=probs)."""
+    # Note: np.random.multinomial is faster than np.random.choice,
+    # but np.random.multinomial is pickier about non-normalized probs.
+    try:
+        return np.random.multinomial(1, probs).argmax()
+    except ValueError:
+        COUNTERS.np_random_multinomial_value_error += 1
+        return probs.argmax()
+
+
+def sample_from_probs2(probs, out):
+    """Vectorized sampler from categorical distribution."""
+    # Adapted from https://stackoverflow.com/questions/40474436
+    assert len(probs.shape) == 2
+    u = np.random.rand(probs.shape[0], 1)
+    cdf = probs.cumsum(axis=1)
+    (u < cdf).argmax(axis=1, out=out)
 
 
 class ProfilingSet(defaultdict):

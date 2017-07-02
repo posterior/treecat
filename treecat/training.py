@@ -11,9 +11,9 @@ from scipy.special import gammaln
 from treecat.structure import TreeStructure
 from treecat.structure import make_propagation_schedule
 from treecat.structure import sample_tree
-from treecat.util import COUNTERS
 from treecat.util import art_logger
 from treecat.util import profile
+from treecat.util import sample_from_probs
 
 logger = logging.getLogger(__name__)
 
@@ -40,17 +40,6 @@ def logprob_dc(counts_plus_prior, axis=None):
     See https://en.wikipedia.org/wiki/Dirichlet-multinomial_distribution
     """
     return gammaln(counts_plus_prior).sum(axis)
-
-
-def sample_from_probs(probs):
-    # Note: np.random.multinomial is faster than np.random.choice,
-    # but np.random.multinomial is pickier about non-normalized probs.
-    try:
-        # This is equivalent to: np.random.choice(len(probs), p=probs)
-        return np.random.multinomial(1, probs).argmax()
-    except ValueError:
-        COUNTERS.np_random_multinomial_value_error += 1
-        return probs.argmax()
 
 
 class TreeCatTrainer(object):

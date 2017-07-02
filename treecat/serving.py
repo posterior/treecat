@@ -9,17 +9,9 @@ import numpy as np
 from treecat.structure import TreeStructure
 from treecat.structure import make_propagation_schedule
 from treecat.util import profile
+from treecat.util import sample_from_probs
 
 logger = logging.getLogger(__name__)
-
-
-def sample_from_probs(probs, out):
-    """Vectorized sampler from categorical distribution."""
-    # Adapted from https://stackoverflow.com/questions/40474436
-    assert len(probs.shape) == 2
-    u = np.random.rand(probs.shape[0], 1)
-    cdf = probs.cumsum(axis=1)
-    (u < cdf).argmax(axis=1, out=out)
 
 
 def make_posterior(grid, suffstats):
@@ -74,30 +66,6 @@ def make_posterior(grid, suffstats):
     }
 
 
-def make_posterior_factors(grid, suffstats):
-    """Computes a complete factorization of the posterior.
-
-    Args:
-      grid: a 3 x E grid of (edge, vertex, vertex) triples.
-      suffstats: A dictionary with numpy arrays for sufficient statistics:
-        vert_ss, edge_ss, and feat_ss.
-
-    Returns:
-      A dictionary with numpy arrays for factors of the posterior:
-      observed, observed_latent, latent, latent_latent.
-    """
-    factors = make_posterior(grid, suffstats)
-
-    # Remove duplicated information so that factorization is non-overlapping.
-    factors['latent_latent'] /= factors['latent'][grid[1, :], :, np.newaxis]
-    factors['latent_latent'] /= factors['latent'][grid[2, :], np.newaxis, :]
-    for v in range(len(factors['observed'])):
-        factors['observed_latent'][v] /= factors['observed'][v][:, np.newaxis]
-        factors['observed_latent'][v] /= factors['latent'][v][np.newaxis, :]
-
-    return factors
-
-
 class TreeCatServer(object):
     """Class for serving queries against a trained TreeCat model."""
 
@@ -106,8 +74,12 @@ class TreeCatServer(object):
         assert isinstance(tree, TreeStructure)
         self._tree = tree
         self._config = config
-        self._factors = make_posterior_factors(tree.tree_grid, suffstats)
+        self._posterior = make_posterior(tree.tree_grid, suffstats)
         self._schedule = make_propagation_schedule(tree.tree_grid)
+        self._zero_row = [
+            np.zeros(col.shape, dtype=np.int8)
+            for col in self._posterior['observed']
+        ]
 
         # These are useful dimensions to import into locals().
         V = self._tree.num_vertices
@@ -119,30 +91,34 @@ class TreeCatServer(object):
     @profile
     def _propagate(self, task, data, counts=None):
         V, E, M = self._VEM
-        factor_observed = self._factors['observed']
-        factor_observed_latent = self._factors['observed_latent']
-        factor_latent = self._factors['latent']
-        factor_latent_latent = self._factors['latent_latent']
-
-        messages = factor_latent.copy()
+        feat_probs = self._posterior['observed_latent']
+        edge_probs = self._posterior['latent_latent']
+        vert_probs = self._posterior['latent']
+        messages = vert_probs.copy()
         logprob = 0.0
+
         for v, parent, children in reversed(self._schedule):
             message = messages[v, :]
             # Propagate upward from observed to latent.
+            obs_lat = feat_probs[v].copy()
+            lat = obs_lat.sum(axis=0)
             for c, count in enumerate(data[v]):
-                if count:
-                    message[:] *= factor_observed_latent[v][c, :]**count
-                    logprob += np.log(factor_observed[v][c]) * count
+                for _ in range(count):
+                    message *= obs_lat[c, :] / lat
+                    obs_lat[c, :] += 1.0
+                    lat += 1.0
             # Propagate latent state inward from children to v.
             for child in children:
-                e = self._tree.find_tree_edge[child, v]
-                trans = factor_latent_latent[e, :, :]
-                if child > v:
+                e = self._tree.find_tree_edge[v, child]
+                trans = edge_probs[e, :, :]
+                if v > child:
                     trans = trans.T
-                message *= np.dot(messages[child, :], trans)
-            message_sum = message.sum()
-            message /= message_sum
-            logprob += np.log(message_sum)
+                message *= np.dot(trans,
+                                  messages[child, :] / vert_probs[child, :])
+                message /= vert_probs[v, :]
+                message_sum = message.sum()
+                message /= message_sum
+                logprob += np.log(message_sum)
 
         if task == 'logprob':
             # Aggregate the total logprob.
@@ -152,26 +128,25 @@ class TreeCatServer(object):
             return logprob
 
         elif task == 'sample':
-            latent_sample = np.zeros([V], np.int32)
-            observed_sample = [np.zeros_like(col) for col in data]
+            vert_sample = np.zeros([V], np.int32)
+            feat_sample = [np.zeros_like(col) for col in data]
             for v, parent, children in self._schedule:
                 message = messages[v, :]
                 # Propagate latent state outward from parent to v.
                 if parent is not None:
                     e = self._tree.find_tree_edge[parent, v]
-                    trans = factor_latent_latent[e, :, :]
+                    trans = edge_probs[e, :, :]
                     if parent > v:
                         trans = trans.T
-                    message *= trans[latent_sample[parent], :]
-                sample_from_probs(message, out=latent_sample[v, :])
+                    message *= trans[vert_sample[parent], :]
+                message /= message.sum()
+                vert_sample[v] = sample_from_probs(message)
                 # Propagate downward from latent to observed.
                 if counts[v]:
-                    probs = factor_observed_latent[v][:, latent_sample[v]]
-                    assert probs.shape == data[v].shape
+                    probs = feat_probs[v][:, vert_sample[v]]
                     probs /= probs.sum()
-                    observed_sample[v][:] = np.random.multinomial(
-                        counts[v], probs)
-            return observed_sample
+                    feat_sample[v][:] = np.random.multinomial(counts[v], probs)
+            return feat_sample
 
         raise ValueError('Unknown task: {}'.format(task))
 
@@ -183,21 +158,21 @@ class TreeCatServer(object):
         conditioned on one of the input data rows.
 
         Args:
-          cond_data: An length-V list of numpy arrays of multinomial data on
-            which to condition.
+          cond_data: A single row of conditioning data, as a length-V list of
+            numpy arrays of multinomial data on which to condition.
             To sample from the unconditional posterior, set all data to zero.
           counts: A [V] numpy array of requested counts of multinomials to
             sample.
 
         Returns:
-          An length-V list of numpy arrays of sampled multinomial data, where
-          the cells that where conditioned on should match the value of input
-          data, and the cells that were not present should be randomly sampled
-          from the conditional posterior.
+          A single row of sampled data, as a length-V list of numpy arrays of
+          sampled multinomial data.
         """
         logger.info('sampling %d rows', cond_data[0].shape[0])
         V, E, M = self._VEM
         assert len(cond_data) == V
+        for v in range(V):
+            assert cond_data[v].shape == self._zero_row[v].shape
         assert counts.shape == (V, )
         return self._propagate('sample', cond_data, counts)
 
@@ -214,12 +189,11 @@ class TreeCatServer(object):
         Returns:
           An [N] numpy array of log probabilities.
         """
-        logger.debug('computing logprob of %d rows', data.shape[0])
-        N = data[0].shape[0]
+        logger.debug('computing logprob')
         V, E, M = self._VEM
         assert len(data) == V
         for v in range(V):
-            assert data[v].shape[0] == N
+            assert data[v].shape == self._zero_row[v].shape
         return self._propagate('logprob', data)
 
 

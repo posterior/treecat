@@ -12,23 +12,7 @@ from treecat.structure import TreeStructure
 from treecat.testutil import TINY_CONFIG
 from treecat.training import TreeCatTrainer
 from treecat.training import get_annealing_schedule
-from treecat.training import sample_from_probs
 from treecat.training import train_model
-
-
-@pytest.mark.parametrize('size', range(1, 10))
-def test_sample_from_probs(size):
-    np.random.seed(size)
-    probs = np.exp(2 * np.random.random(size)).astype(np.float32)
-    probs /= probs.sum()
-    counts = np.zeros(size, dtype=np.int32)
-    num_samples = 2000 * size
-    for _ in range(num_samples):
-        counts[sample_from_probs(probs)] += 1
-    print(counts)
-    print(probs * num_samples)
-    gof = multinomial_goodness_of_fit(probs, counts, num_samples, plot=True)
-    assert 1e-2 < gof
 
 
 def test_get_annealing_schedule():
