@@ -88,6 +88,10 @@ class TreeCatServer(object):
             'model_num_clusters']  # Clusters in each mixture model.
         self._VEM = (V, E, M)
 
+    def zero_row(self):
+        """Make an empty data row."""
+        return [col.copy() for col in self._zero_row]
+
     @profile
     def sample(self, data, counts):
         """Sample from the posterior conditional distribution.
@@ -107,7 +111,7 @@ class TreeCatServer(object):
           A single row of sampled data, as a length-V list of numpy arrays of
           sampled multinomial data.
         """
-        logger.info('sampling %d rows', data[0].shape[0])
+        logger.debug('sampling %d rows', data[0].shape[0])
         V, E, M = self._VEM
         assert len(data) == V
         for v in range(V):

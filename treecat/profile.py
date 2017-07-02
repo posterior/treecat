@@ -56,6 +56,21 @@ def train_files(data_path, config_path):
 
 
 @parsable
+def serve_files(model_path, config_path):
+    """INTERNAL Serve from pickled model, config."""
+    from treecat.serving import serve_model
+    import numpy as np
+    model = pickle_load(model_path)
+    config = pickle_load(config_path)
+    server = serve_model(model['tree'], model['suffstats'], config)
+    data_row = server.zero_row()
+    counts = np.ones(len(data_row), np.int8)
+    for _ in range(1000):
+        sample = server.sample(data_row, counts)
+        server.logprob(sample)
+
+
+@parsable
 def train(rows=100, cols=10, epochs=5, tool='timers'):
     """Profile TreeCatTrainer on a random dataset.
     Available tools: timers, time, snakeviz, line_profiler, pdb
@@ -68,6 +83,21 @@ def train(rows=100, cols=10, epochs=5, tool='timers'):
         config_path = os.path.join(dirname, 'config.pkl.gz')
         pickle_dump(config, config_path)
         cmd = [FILE, 'train_files', data_path, config_path]
+        run_with_tool(cmd, tool, dirname)
+
+
+@parsable
+def serve(rows=100, cols=10, cats=4, tool='timers'):
+    """Profile TreeCatServer on a random dataset.
+    Available tools: timers, time, snakeviz, line_profiler, pdb
+    """
+    from treecat.generate import generate_model_file
+    config = DEFAULT_CONFIG.copy()
+    model_path = generate_model_file(rows, cols, cats)
+    with tempdir() as dirname:
+        config_path = os.path.join(dirname, 'config.pkl.gz')
+        pickle_dump(config, config_path)
+        cmd = [FILE, 'serve_files', model_path, config_path]
         run_with_tool(cmd, tool, dirname)
 
 
