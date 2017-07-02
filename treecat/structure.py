@@ -10,6 +10,7 @@ import numpy as np
 from treecat.util import COUNTERS
 from treecat.util import HISTOGRAMS
 from treecat.util import profile
+from treecat.util import sample_from_probs
 
 logger = logging.getLogger(__name__)
 
@@ -325,7 +326,7 @@ def sample_tree(grid, edge_logits, edges, steps=1):
             total_prob = valid_probs.sum()
             if total_prob > 0:
                 valid_probs /= total_prob
-                k2 = np.random.choice(valid_edges, p=valid_probs)
+                k2 = valid_edges[sample_from_probs(valid_probs)]
             else:
                 k2 = k1
                 COUNTERS.sample_tree_infeasible += 1
