@@ -12,8 +12,8 @@ from subprocess import check_call
 from parsable import parsable
 
 from treecat.config import DEFAULT_CONFIG
-from treecat.persist import pickle_dump
-from treecat.persist import pickle_load
+from treecat.format import pickle_dump
+from treecat.format import pickle_load
 from treecat.testutil import tempdir
 
 PYTHON = sys.executable

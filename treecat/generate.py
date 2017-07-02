@@ -9,8 +9,8 @@ import numpy as np
 from parsable import parsable
 
 from treecat.config import DEFAULT_CONFIG
-from treecat.persist import pickle_dump
-from treecat.persist import pickle_load
+from treecat.format import pickle_dump
+from treecat.format import pickle_load
 from treecat.structure import TreeStructure
 from treecat.structure import sample_tree
 from treecat.training import train_model
