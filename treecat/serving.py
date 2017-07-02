@@ -89,8 +89,97 @@ class TreeCatServer(object):
         self._VEM = (V, E, M)
 
     @profile
-    def _propagate(self, task, data, counts=None):
+    def sample(self, data, counts):
+        """Sample from the posterior conditional distribution.
+
+        Let V be the number of features and N be the number of rows in input
+        data. This function draws in parallel N samples, each sample
+        conditioned on one of the input data rows.
+
+        Args:
+          data: A single row of conditioning data, as a length-V list of
+            numpy arrays of multinomial data on which to condition.
+            To sample from the unconditional posterior, set all data to zero.
+          counts: A [V] numpy array of requested counts of multinomials to
+            sample.
+
+        Returns:
+          A single row of sampled data, as a length-V list of numpy arrays of
+          sampled multinomial data.
+        """
+        logger.info('sampling %d rows', data[0].shape[0])
         V, E, M = self._VEM
+        assert len(data) == V
+        for v in range(V):
+            assert data[v].shape == self._zero_row[v].shape
+        assert counts.shape == (V, )
+
+        feat_probs = self._posterior['observed_latent']
+        edge_probs = self._posterior['latent_latent']
+        vert_probs = self._posterior['latent']
+        messages = vert_probs.copy()
+
+        for v, parent, children in reversed(self._schedule):
+            message = messages[v, :]
+            # Propagate upward from observed to latent.
+            obs_lat = feat_probs[v].copy()
+            lat = obs_lat.sum(axis=0)
+            for c, count in enumerate(data[v]):
+                for _ in range(count):
+                    message *= obs_lat[c, :] / lat
+                    obs_lat[c, :] += 1.0
+                    lat += 1.0
+            # Propagate latent state inward from children to v.
+            for child in children:
+                e = self._tree.find_tree_edge[v, child]
+                trans = edge_probs[e, :, :]
+                if v > child:
+                    trans = trans.T
+                message *= np.dot(trans,
+                                  messages[child, :] / vert_probs[child, :])
+                message /= vert_probs[v, :]
+                message /= message.sum()
+
+        vert_sample = np.zeros([V], np.int32)
+        feat_sample = [np.zeros_like(col) for col in data]
+        for v, parent, children in self._schedule:
+            message = messages[v, :]
+            # Propagate latent state outward from parent to v.
+            if parent is not None:
+                e = self._tree.find_tree_edge[parent, v]
+                trans = edge_probs[e, :, :]
+                if parent > v:
+                    trans = trans.T
+                message *= trans[vert_sample[parent], :]
+            message /= message.sum()
+            vert_sample[v] = sample_from_probs(message)
+            # Propagate downward from latent to observed.
+            if counts[v]:
+                probs = feat_probs[v][:, vert_sample[v]]
+                probs /= probs.sum()
+                feat_sample[v][:] = np.random.multinomial(counts[v], probs)
+        return feat_sample
+
+    @profile
+    def logprob(self, data):
+        """Compute log probability of a row of data.
+
+        Let V be the number of features and N be the number of rows in input
+        data. This function computes in the logprob of each of the N input
+        data rows.
+
+        Args:
+          data: An length-V list of numpy arrays of multinomial count data.
+
+        Returns:
+          An [N] numpy array of log probabilities.
+        """
+        logger.debug('computing logprob')
+        V, E, M = self._VEM
+        assert len(data) == V
+        for v in range(V):
+            assert data[v].shape == self._zero_row[v].shape
+
         feat_probs = self._posterior['observed_latent']
         edge_probs = self._posterior['latent_latent']
         vert_probs = self._posterior['latent']
@@ -120,81 +209,11 @@ class TreeCatServer(object):
                 message /= message_sum
                 logprob += np.log(message_sum)
 
-        if task == 'logprob':
-            # Aggregate the total logprob.
-            root, parent, children = self._schedule[0]
-            assert parent is None
-            logprob += np.log(messages[root, :].sum())
-            return logprob
-
-        elif task == 'sample':
-            vert_sample = np.zeros([V], np.int32)
-            feat_sample = [np.zeros_like(col) for col in data]
-            for v, parent, children in self._schedule:
-                message = messages[v, :]
-                # Propagate latent state outward from parent to v.
-                if parent is not None:
-                    e = self._tree.find_tree_edge[parent, v]
-                    trans = edge_probs[e, :, :]
-                    if parent > v:
-                        trans = trans.T
-                    message *= trans[vert_sample[parent], :]
-                message /= message.sum()
-                vert_sample[v] = sample_from_probs(message)
-                # Propagate downward from latent to observed.
-                if counts[v]:
-                    probs = feat_probs[v][:, vert_sample[v]]
-                    probs /= probs.sum()
-                    feat_sample[v][:] = np.random.multinomial(counts[v], probs)
-            return feat_sample
-
-        raise ValueError('Unknown task: {}'.format(task))
-
-    def sample(self, cond_data, counts):
-        """Sample from the posterior conditional distribution.
-
-        Let V be the number of features and N be the number of rows in input
-        data. This function draws in parallel N samples, each sample
-        conditioned on one of the input data rows.
-
-        Args:
-          cond_data: A single row of conditioning data, as a length-V list of
-            numpy arrays of multinomial data on which to condition.
-            To sample from the unconditional posterior, set all data to zero.
-          counts: A [V] numpy array of requested counts of multinomials to
-            sample.
-
-        Returns:
-          A single row of sampled data, as a length-V list of numpy arrays of
-          sampled multinomial data.
-        """
-        logger.info('sampling %d rows', cond_data[0].shape[0])
-        V, E, M = self._VEM
-        assert len(cond_data) == V
-        for v in range(V):
-            assert cond_data[v].shape == self._zero_row[v].shape
-        assert counts.shape == (V, )
-        return self._propagate('sample', cond_data, counts)
-
-    def logprob(self, data):
-        """Compute log probability of a row of data.
-
-        Let V be the number of features and N be the number of rows in input
-        data. This function computes in the logprob of each of the N input
-        data rows.
-
-        Args:
-          data: An length-V list of numpy arrays of multinomial count data.
-
-        Returns:
-          An [N] numpy array of log probabilities.
-        """
-        logger.debug('computing logprob')
-        V, E, M = self._VEM
-        assert len(data) == V
-        for v in range(V):
-            assert data[v].shape == self._zero_row[v].shape
-        return self._propagate('logprob', data)
+        # Aggregate the total logprob.
+        root, parent, children = self._schedule[0]
+        assert parent is None
+        logprob += np.log(messages[root, :].sum())
+        return logprob
 
 
 def serve_model(tree, suffstats, config):
