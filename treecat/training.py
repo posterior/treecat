@@ -144,16 +144,6 @@ class TreeCatTrainer(object):
             self._edge_ss[e, :, :] = count_pairs(assignments, v1, v2, M)
         self._schedule = make_propagation_schedule(self.tree.tree_grid)
 
-    def _update_tensors(self, row_id, diff):
-        assignments = self.assignments[row_id, :]
-        self._vert_ss[self.tree.vertices, assignments] += diff
-        self._edge_ss[self.tree.tree_grid[0, :],  #
-                      assignments[self.tree.tree_grid[1, :]],  #
-                      assignments[self.tree.tree_grid[2, :]]] += diff
-        for v, m in enumerate(assignments):
-            beg, end = self._ragged_index[v:v + 2]
-            self._feat_ss[beg:end, m] += diff * self._data[row_id, beg:end]
-
     @profile
     def add_row(self, row_id):
         logger.debug('TreeCatTrainer.add_row %d', row_id)
@@ -173,15 +163,32 @@ class TreeCatTrainer(object):
             vert_probs,
             feat_probs, )
 
+        assignments = self.assignments[row_id, :]
+        self._vert_ss[self.tree.vertices, assignments] += 1
+        self._edge_ss[self.tree.tree_grid[0, :],  #
+                      assignments[self.tree.tree_grid[1, :]],  #
+                      assignments[self.tree.tree_grid[2, :]]] += 1
+        for v, m in enumerate(assignments):
+            beg, end = self._ragged_index[v:v + 2]
+            self._feat_ss[beg:end, m] += self._data[row_id, beg:end]
+
         self._assigned_rows.add(row_id)
-        self._update_tensors(row_id, +1)
 
     @profile
     def remove_row(self, row_id):
         logger.debug('TreeCatTrainer.remove_row %d', row_id)
         assert row_id in self._assigned_rows, row_id
+        assignments = self.assignments[row_id, :]
+
+        self._vert_ss[self.tree.vertices, assignments] -= 1
+        self._edge_ss[self.tree.tree_grid[0, :],  #
+                      assignments[self.tree.tree_grid[1, :]],  #
+                      assignments[self.tree.tree_grid[2, :]]] -= 1
+        for v, m in enumerate(assignments):
+            beg, end = self._ragged_index[v:v + 2]
+            self._feat_ss[beg:end, m] -= self._data[row_id, beg:end]
+
         self._assigned_rows.remove(row_id)
-        self._update_tensors(row_id, -1)
 
     @profile
     def sample_tree(self):
