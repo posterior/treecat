@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 from goftests import multinomial_goodness_of_fit
 
+from treecat.generate import generate_fake_model
 from treecat.serving import make_posterior
 from treecat.serving import serve_model
 from treecat.testutil import TINY_CONFIG
@@ -125,16 +126,34 @@ def hash_row(row):
     return tuple(tuple(col) for col in row)
 
 
-@pytest.mark.xfail
-def test_server_gof(model):
+@pytest.mark.parametrize('N,V,C,M', [
+    (1, 1, 2, 2),
+    (1, 1, 2, 3),
+    (1, 2, 2, 2),
+    (1, 3, 2, 2),
+    pytest.mark.xfail((1, 4, 2, 2)),
+    (2, 1, 2, 2),
+    pytest.mark.xfail((2, 1, 2, 3)),
+    (2, 2, 2, 2),
+    (2, 3, 2, 2),
+    pytest.mark.xfail((2, 4, 2, 2)),
+    (4, 1, 2, 2),
+    pytest.mark.xfail((4, 1, 2, 3)),
+    (4, 2, 2, 2),
+    (4, 3, 2, 2),
+    pytest.mark.xfail((4, 4, 2, 2)),
+])
+def test_server_gof(N, V, C, M):
     np.random.seed(0)
-    data = TINY_DATA
-    server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
+    data, model = generate_fake_model(N, V, C, M)
+    config = TINY_CONFIG.copy()
+    config['model_num_clusters'] = M
+    server = serve_model(model['tree'], model['suffstats'], config)
 
     # Generate samples.
-    cond_data = [np.zeros_like(col[0, :]) for col in data]
-    expected = np.prod([len(col) for col in cond_data])
-    num_samples = 1000
+    cond_data = [np.zeros(C, np.int8) for col in data]
+    expected = C**V
+    num_samples = 100 * expected
     ones = np.ones(len(data), dtype=np.int8)
     counts = {}
     logprobs = {}
@@ -146,16 +165,12 @@ def test_server_gof(model):
         else:
             counts[key] = 1
             logprobs[key] = server.logprob(sample)
-    assert len(counts) <= expected
-    assert len(counts) >= expected * 0.8
+    assert len(counts) == expected
 
     # Check accuracy using Pearson's chi-squared test.
     keys = sorted(counts.keys(), key=lambda key: -logprobs[key])
     counts = np.array([counts[k] for k in keys], dtype=np.int32)
     probs = np.exp(np.array([logprobs[k] for k in keys]))
     probs /= probs.sum()
-
-    T = 20
-    gof = multinomial_goodness_of_fit(
-        probs[:T], counts[:T], num_samples, plot=True, truncated=True)
+    gof = multinomial_goodness_of_fit(probs, counts, num_samples, plot=True)
     assert 1e-2 < gof

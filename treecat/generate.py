@@ -64,10 +64,37 @@ def generate_tree(num_cols):
     return tree
 
 
-def generate_fake_model(num_rows, num_cols, num_cats=4, rate=1.0):
+def generate_fake_model(num_rows, num_cols, num_cats, num_components):
     tree = generate_tree(num_cols)
-    raise NotImplementedError()
-    return {'tree': tree, 'suffstats': {}}
+    assignments = np.random.choice(num_components, size=(num_rows, num_cols))
+    assignments = assignments.astype(np.int32)
+    data = generate_dataset(num_rows, num_cols, num_cats)
+    N = num_rows
+    V = num_cols
+    E = V - 1
+    C = num_cats
+    M = num_components
+    vert_ss = np.zeros((V, M), dtype=np.int32)
+    edge_ss = np.zeros((E, M, M), dtype=np.int32)
+    feat_ss = np.zeros((V, C, M), dtype=np.int32)
+    for v in range(V):
+        vert_ss[v, :] = np.bincount(assignments[:, v], minlength=M)
+    for e, v1, v2 in tree.tree_grid.T:
+        pairs = assignments[:, v1].astype(np.int32) * M + assignments[:, v2]
+        edge_ss[e, :, :] = np.bincount(pairs, minlength=M * M).reshape((M, M))
+    for v in range(V):
+        for n in range(N):
+            feat_ss[v][:, assignments[n, v]] += data[v][n, :]
+    model = {
+        'tree': tree,
+        'assignments': assignments,
+        'suffstats': {
+            'vert_ss': vert_ss,
+            'edge_ss': edge_ss,
+            'feat_ss': feat_ss,
+        },
+    }
+    return data, model
 
 
 def generate_model_file(num_rows, num_cols, num_cats=4, rate=1.0):
