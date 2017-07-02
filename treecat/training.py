@@ -8,12 +8,13 @@ import logging
 import numpy as np
 from scipy.special import gammaln
 
+from six.moves import xrange
 from treecat.structure import TreeStructure
 from treecat.structure import make_propagation_schedule
 from treecat.structure import sample_tree
 from treecat.util import art_logger
+from treecat.util import jit
 from treecat.util import profile
-from treecat.util import sample_from_probs
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,7 @@ def logprob_dc(counts_plus_prior, axis=None):
 
 
 @profile
+@jit(nopython=True, cache=True)
 def propagate_add_row(
         ragged_index,
         data,
@@ -53,16 +55,18 @@ def propagate_add_row(
         vert_probs,
         feat_probs, ):
     messages = vert_probs.copy()
-    for op, v, v2, e in schedule:
+    for i in xrange(len(schedule)):
+        op, v, v2, e = schedule[i]
         message = messages[v, :]
         if op == 0:  # OP_UP
             # Propagate upward from observed to latent.
             beg, end = ragged_index[v:v + 2]
             obs_lat = feat_probs[beg:end, :]
-            lat = obs_lat.sum(axis=0)
+            lat = obs_lat.sum(0)
             for c, count in enumerate(data[row_id, beg:end]):
                 for _ in range(count):
-                    message *= obs_lat[c, :] / lat
+                    message *= obs_lat[c, :]
+                    message /= lat
                     obs_lat[c, :] += 1.0
                     lat += 1.0
         elif op == 1:  # OP_IN
@@ -80,8 +84,8 @@ def propagate_add_row(
                     trans = trans.T
                 message *= trans[assignments[v2], :]
                 message /= vert_probs[v, :]
-            message /= message.sum()
-            assignments[v] = sample_from_probs(message)
+            message *= 0.999999 / message.sum()  # Avoid np.binom errors.
+            assignments[v] = np.random.multinomial(1, message).argmax()
 
 
 class TreeCatTrainer(object):

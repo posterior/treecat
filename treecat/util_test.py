@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from goftests import multinomial_goodness_of_fit
 
-from treecat.training import sample_from_probs
+from treecat.util import sample_from_probs
 from treecat.util import sizeof
 
 

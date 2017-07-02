@@ -13,16 +13,7 @@ from timeit import default_timer
 
 import numpy as np
 
-try:
-    from numba import jit
-except ImportError:
-
-    def jit(*args, **kwargs):
-        if not kwargs and len(args) == 1 and callable(args[0]):
-            return args[0]
-        return jit
-
-
+TREECAT_JIT = int(os.environ.get('TREECAT_JIT', 0))
 DEBUG_LEVEL = int(os.environ.get('TREECAT_DEBUG_LEVEL', 0))
 LOG_LEVEL = int(os.environ.get('TREECAT_LOG_LEVEL', logging.CRITICAL))
 LOG_ART = int(os.environ.get('TREECAT_LOG_ART', 0))
@@ -31,6 +22,21 @@ LOG_FILENAME = os.environ.get('TREECAT_LOG_FILE')
 LOG_FORMAT = '%(levelname).1s %(name)s %(message)s'
 logging.basicConfig(format=LOG_FORMAT, level=LOG_LEVEL, filename=LOG_FILENAME)
 logger = logging.getLogger(__name__)
+
+
+def no_jit(*args, **kwargs):
+    if not kwargs and len(args) == 1 and callable(args[0]):
+        return args[0]
+    return no_jit
+
+
+if TREECAT_JIT:
+    try:
+        from numba import jit
+    except ImportError:
+        jit = no_jit
+else:
+    jit = no_jit
 
 
 def TODO(message=''):
