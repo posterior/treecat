@@ -8,6 +8,10 @@ import numpy as np
 import pytest
 from goftests import multinomial_goodness_of_fit
 
+from treecat.structure import OP_IN
+from treecat.structure import OP_OUT
+from treecat.structure import OP_ROOT
+from treecat.structure import OP_UP
 from treecat.structure import find_center_of_tree
 from treecat.structure import make_complete_graph
 from treecat.structure import make_propagation_schedule
@@ -100,46 +104,51 @@ EXAMPLE_ROOTED_TREES = [(edges, root)
 
 @pytest.mark.parametrize('edges,root', EXAMPLE_ROOTED_TREES)
 def test_make_propagation_schedule(edges, root):
-    V = len(edges) + 1
+    E = len(edges)
+    V = E + 1
     grid = make_tree(edges)
     neighbors = {v: set() for v in range(V)}
     for e, v1, v2 in grid.T:
         neighbors[v1].add(v2)
         neighbors[v2].add(v1)
 
-    # Check topology.
+    # Generate a schedule.
     schedule = make_propagation_schedule(grid, root)
+    assert schedule.shape == (V + E + 1 + E, 4)
+    assert schedule.dtype == np.int16
+
+    # Check topology.
     if root is not None:
-        assert schedule[0][0] == root
-    assert schedule[0][1] is None, 'root has a parent'
-    assert set(task[0] for task in schedule) == set(range(V)), 'bad vertex set'
-    assert all(task[1] is not None for task in schedule[1:]), 'missing parent'
-    for v, parent, children in schedule:
-        actual_neighbors = set(children)
-        if parent is not None:
-            actual_neighbors.add(parent)
-        assert actual_neighbors == neighbors[v]
+        assert schedule[V + E][0] == OP_ROOT
+        assert schedule[V + E][1] == root
+    assert set(row[1] for row in schedule) == set(range(V)), 'bad vertex set'
+    for op, v, v2, e in schedule:
+        if op == OP_ROOT:
+            if root is not None:
+                assert v == root
+        elif op != OP_UP:
+            assert v != v2
+            assert v2 in neighbors[v]
+            assert grid[1, e] == min(v, v2)
+            assert grid[2, e] == max(v, v2)
 
     # Check inward ordering.
-    visited = [False] * V
-    for v, parent, children in schedule:
-        assert not visited[v]
-        if parent is not None:
-            assert visited[parent]
-        for child in children:
-            assert not visited[child]
-        visited[v] = True
-    assert all(visited)
-
-    # Check outward ordering.
-    for v, parent, children in reversed(schedule):
-        assert visited[v]
-        if parent is not None:
-            assert visited[parent]
-        for child in children:
-            assert not visited[child]
-        visited[v] = False
-    assert not any(visited)
+    state = np.zeros(V, np.int8)
+    for op, v, v2, e in schedule:
+        if op == OP_UP:
+            assert state[v] == 0
+            state[v] = 1
+        elif op == OP_IN:
+            assert state[v] == 1
+            assert state[v2] == 1
+        elif op == OP_ROOT:
+            assert state[v] == 1
+            state[v] = 2
+        elif op == OP_OUT:
+            assert state[v] == 1
+            assert state[v2] == 2
+            state[v] = 2
+    assert np.all(state == 2)
 
 
 @pytest.mark.parametrize('num_edges', [1, 2, 3, 4])

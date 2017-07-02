@@ -37,10 +37,6 @@ class TreeStructure(object):
         """
         assert len(edges) == self._num_edges
         self._tree_grid = make_tree(edges)
-        self._tree_edges = {}
-        for e, v1, v2 in self._tree_grid.T:
-            self._tree_edges[v1, v2] = e
-            self._tree_edges[v2, v1] = e
 
     @property
     def num_vertices(self):
@@ -65,11 +61,6 @@ class TreeStructure(object):
     @property
     def vertices(self):
         return self._vertices
-
-    @property
-    def find_tree_edge(self):
-        """Find the edge index e of an unsorted pair of vertices (v1, v2)."""
-        return self._tree_edges
 
     def gc(self):
         """Garbage collect temporary cached data structures."""
@@ -156,6 +147,13 @@ def find_center_of_tree(grid):
     return v
 
 
+# Op codes.
+OP_UP = 0
+OP_IN = 1
+OP_ROOT = 2
+OP_OUT = 3
+
+
 def make_propagation_schedule(grid, root=None):
     """Makes an efficient schedule for message passing on a tree.
 
@@ -164,33 +162,55 @@ def make_propagation_schedule(grid, root=None):
       root: Optional root vertex, defaults to find_center_of_tree(grid).
 
     Returns:
-      A list of (vertex, parent, children) tuples, where
-        vertex: A vertex id.
-        parent: Either this vertex's parent node, or None at the root.
-        children: List of neighbors deeper in the tree.
-        outbound: List of neighbors shallower in the tree (at most one).
+      A numpy array with rows (opcode, vertex, relative, edge), where
+      opcode: One of 0 = up, 1 = in, 2 = root, 3 = out.
+      vertex: The vertex id of the vertex being operated on.
+      relative: The vertex ide of a relative, either a parent or child.
+      edge: The edge id of the (vertex, relative) pair.
     """
     if root is None:
         root = find_center_of_tree(grid)
     E = grid.shape[1]
     V = 1 + E
     neighbors = [set() for _ in range(V)]
+    edge_dict = {}
     for e, v1, v2 in grid.T:
         neighbors[v1].add(v2)
         neighbors[v2].add(v1)
-    schedule = []
+        edge_dict[v1, v2] = e
+        edge_dict[v2, v1] = e
+
+    # Construct a nested schedule.
+    nested_schedule = []
     queue = deque()
     queue.append((root, None))
     while queue:
         v, parent = queue.popleft()
-        schedule.append((v, parent, []))
+        nested_schedule.append((v, parent, []))
         for v2 in sorted(neighbors[v]):
             if v2 != parent:
                 queue.append((v2, v))
-    for v, parent, children in schedule:
-        for v2 in neighbors[v]:
+    for v, parent, children in nested_schedule:
+        for v2 in sorted(neighbors[v]):
             if v2 != parent:
                 children.append(v2)
+
+    # Construct a flattened schedule.
+    schedule = np.zeros([V + E + V, 4], np.int16)
+    pos = 0
+    for v, parent, children in reversed(nested_schedule):
+        schedule[pos, :] = [OP_UP, v, 0, 0]
+        pos += 1
+        for child in children:
+            schedule[pos, :] = [OP_IN, v, child, edge_dict[v, child]]
+            pos += 1
+    schedule[pos, :] = [OP_ROOT, v, 0, 0]
+    pos += 1
+    for v, parent, children in nested_schedule[1:]:
+        schedule[pos, :] = [OP_OUT, v, parent, edge_dict[v, parent]]
+        pos += 1
+    assert pos == V + E + 1 + E
+
     return schedule
 
 

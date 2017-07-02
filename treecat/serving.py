@@ -118,46 +118,43 @@ class TreeCatServer(object):
         edge_probs = self._posterior['latent_latent']
         vert_probs = self._posterior['latent']
         messages = vert_probs.copy()
-
-        for v, parent, children in reversed(self._schedule):
-            message = messages[v, :]
-            # Propagate upward from observed to latent.
-            obs_lat = feat_probs[v].copy()
-            lat = obs_lat.sum(axis=0)
-            for c, count in enumerate(data[v]):
-                for _ in range(count):
-                    message *= obs_lat[c, :] / lat
-                    obs_lat[c, :] += 1.0
-                    lat += 1.0
-            # Propagate latent state inward from children to v.
-            for child in children:
-                e = self._tree.find_tree_edge[v, child]
-                trans = edge_probs[e, :, :]
-                if v > child:
-                    trans = trans.T
-                message *= np.dot(trans,
-                                  messages[child, :] / vert_probs[child, :])
-                message /= vert_probs[v, :]
-                message /= message.sum()
-
         vert_sample = np.zeros([V], np.int32)
         feat_sample = [np.zeros_like(col) for col in data]
-        for v, parent, children in self._schedule:
+
+        for op, v, v2, e in self._schedule:
             message = messages[v, :]
-            # Propagate latent state outward from parent to v.
-            if parent is not None:
-                e = self._tree.find_tree_edge[parent, v]
+            if op == 0:  # OP_UP
+                # Propagate upward from observed to latent.
+                obs_lat = feat_probs[v].copy()
+                lat = obs_lat.sum(axis=0)
+                for c, count in enumerate(data[v]):
+                    for _ in range(count):
+                        message *= obs_lat[c, :] / lat
+                        obs_lat[c, :] += 1.0
+                        lat += 1.0
+            elif op == 1:  # OP_IN
+                # Propagate latent state inward from v2ren to v.
                 trans = edge_probs[e, :, :]
-                if parent > v:
+                if v > v2:
                     trans = trans.T
-                message *= trans[vert_sample[parent], :]
-            message /= message.sum()
-            vert_sample[v] = sample_from_probs(message)
-            # Propagate downward from latent to observed.
-            if counts[v]:
-                probs = feat_probs[v][:, vert_sample[v]]
-                probs /= probs.sum()
-                feat_sample[v][:] = np.random.multinomial(counts[v], probs)
+                message *= np.dot(trans, messages[v2, :] / vert_probs[v2, :])
+                message /= vert_probs[v, :]
+                message /= message.sum()
+            else:  # OP_ROOT or OP_OUT
+                # Propagate latent state outward from v2 to v.
+                if op == 3:  # OP_OUT
+                    trans = edge_probs[e, :, :]
+                    if v2 > v:
+                        trans = trans.T
+                    message *= trans[vert_sample[v2], :]
+                message /= message.sum()
+                vert_sample[v] = sample_from_probs(message)
+                # Propagate downward from latent to observed.
+                if counts[v]:
+                    probs = feat_probs[v][:, vert_sample[v]]
+                    probs /= probs.sum()
+                    feat_sample[v][:] = np.random.multinomial(counts[v], probs)
+
         return feat_sample
 
     @profile
@@ -186,34 +183,31 @@ class TreeCatServer(object):
         messages = vert_probs.copy()
         logprob = 0.0
 
-        for v, parent, children in reversed(self._schedule):
+        for op, v, v2, e in self._schedule:
             message = messages[v, :]
-            # Propagate upward from observed to latent.
-            obs_lat = feat_probs[v].copy()
-            lat = obs_lat.sum(axis=0)
-            for c, count in enumerate(data[v]):
-                for _ in range(count):
-                    message *= obs_lat[c, :] / lat
-                    obs_lat[c, :] += 1.0
-                    lat += 1.0
-            # Propagate latent state inward from children to v.
-            for child in children:
-                e = self._tree.find_tree_edge[v, child]
+            if op == 0:  # OP_UP
+                # Propagate upward from observed to latent.
+                obs_lat = feat_probs[v].copy()
+                lat = obs_lat.sum(axis=0)
+                for c, count in enumerate(data[v]):
+                    for _ in range(count):
+                        message *= obs_lat[c, :] / lat
+                        obs_lat[c, :] += 1.0
+                        lat += 1.0
+            elif op == 1:  # OP_IN
+                # Propagate latent state inward from v2ren to v.
                 trans = edge_probs[e, :, :]
-                if v > child:
+                if v > v2:
                     trans = trans.T
-                message *= np.dot(trans,
-                                  messages[child, :] / vert_probs[child, :])
+                message *= np.dot(trans, messages[v2, :] / vert_probs[v2, :])
                 message /= vert_probs[v, :]
                 message_sum = message.sum()
                 message /= message_sum
                 logprob += np.log(message_sum)
-
-        # Aggregate the total logprob.
-        root, parent, children = self._schedule[0]
-        assert parent is None
-        logprob += np.log(messages[root, :].sum())
-        return logprob
+            elif op == 2:  # OP_ROOT
+                # Aggregate the total logprob.
+                logprob += np.log(message.sum())
+                return logprob
 
 
 def serve_model(tree, suffstats, config):

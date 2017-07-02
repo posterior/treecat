@@ -117,41 +117,41 @@ class TreeCatTrainer(object):
         assignments = self.assignments[row_id, :]
         edge_probs = self._edge_ss.astype(np.float32) + self._edge_prior
         vert_probs = self._vert_ss.astype(np.float32) + self._vert_prior
+        feat_probs = [
+            col.astype(np.float32) + self._feat_prior
+            for col in self._feat_ss
+        ]
         messages = vert_probs.copy()
 
-        for v, parent, children in reversed(self._schedule):
+        for op, v, v2, e in self._schedule:
             message = messages[v, :]
-            # Propagate upward from observed to latent.
-            obs_lat = self._feat_ss[v].astype(np.float32) + self._feat_prior
-            lat = obs_lat.sum(axis=0)
-            for c, count in enumerate(self._data[v][row_id, :]):
-                for _ in range(count):
-                    message *= obs_lat[c, :] / lat
-                    obs_lat[c, :] += 1.0
-                    lat += 1.0
-            # Propagate latent state inward from children to v.
-            for child in children:
-                e = self.tree.find_tree_edge[v, child]
+            if op == 0:  # OP_UP
+                # Propagate upward from observed to latent.
+                obs_lat = feat_probs[v]
+                lat = obs_lat.sum(axis=0)
+                for c, count in enumerate(self._data[v][row_id, :]):
+                    for _ in range(count):
+                        message *= obs_lat[c, :] / lat
+                        obs_lat[c, :] += 1.0
+                        lat += 1.0
+            elif op == 1:  # OP_IN
+                # Propagate upward from observed to latent.
                 trans = edge_probs[e, :, :]
-                if v > child:
+                if v > v2:
                     trans = trans.T
-                message *= np.dot(trans,
-                                  messages[child, :] / vert_probs[child, :])
+                message *= np.dot(trans, messages[v2, :] / vert_probs[v2, :])
                 message /= vert_probs[v, :]
                 message /= message.sum()  # For numerical stability only.
+            else:  # OP_ROOT or OP_OUT
+                if op == 3:  # OP_OUT
+                    trans = edge_probs[e, :, :]
+                    if v2 > v:
+                        trans = trans.T
+                    message *= trans[assignments[v2], :]
+                    message /= vert_probs[v, :]
+                message /= message.sum()
+                assignments[v] = sample_from_probs(message)
 
-        # Propagate latent state outward from parent to v.
-        for v, parent, children in self._schedule:
-            message = messages[v, :]
-            if parent is not None:
-                e = self.tree.find_tree_edge[parent, v]
-                trans = edge_probs[e, :, :]
-                if parent > v:
-                    trans = trans.T
-                message *= trans[assignments[parent], :]
-                message /= vert_probs[v, :]
-            message /= message.sum()
-            assignments[v] = sample_from_probs(message)
         self._assigned_rows.add(row_id)
         self._update_tensors(row_id, +1)
 
