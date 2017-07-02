@@ -15,6 +15,8 @@ from treecat.structure import TreeStructure
 from treecat.structure import sample_tree
 from treecat.training import train_model
 
+parsable = parsable.Parsable()
+
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(REPO, 'data', 'generated')
 

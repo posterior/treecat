@@ -19,6 +19,8 @@ from treecat.testutil import tempdir
 PYTHON = sys.executable
 FILE = os.path.abspath(__file__)
 
+parsable = parsable.Parsable()
+
 
 def run_with_tool(cmd, tool, dirname):
     profile_path = os.path.join(dirname, 'profile_train.prof')

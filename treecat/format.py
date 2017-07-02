@@ -10,6 +10,8 @@ from parsable import parsable
 
 from six.moves import cPickle as pickle
 
+parsable = parsable.Parsable()
+
 
 def pickle_dump(data, filename):
     """Pickle data to file using gzip compression."""
