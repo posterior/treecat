@@ -325,7 +325,7 @@ def sample_tree(grid, edge_logits, edges, steps=1):
             np.exp(valid_probs, out=valid_probs)
             total_prob = valid_probs.sum()
             if total_prob > 0:
-                valid_probs /= total_prob
+                valid_probs *= 0.9999995 / total_prob  # Avoid np.binom errors.
                 k2 = valid_edges[sample_from_probs(valid_probs)]
             else:
                 k2 = k1
