@@ -42,6 +42,48 @@ def logprob_dc(counts_plus_prior, axis=None):
     return gammaln(counts_plus_prior).sum(axis)
 
 
+@profile
+def propagate_add_row(
+        ragged_index,
+        data,
+        schedule,
+        row_id,
+        assignments,
+        edge_probs,
+        vert_probs,
+        feat_probs, ):
+    messages = vert_probs.copy()
+    for op, v, v2, e in schedule:
+        message = messages[v, :]
+        if op == 0:  # OP_UP
+            # Propagate upward from observed to latent.
+            beg, end = ragged_index[v:v + 2]
+            obs_lat = feat_probs[beg:end, :]
+            lat = obs_lat.sum(axis=0)
+            for c, count in enumerate(data[row_id, beg:end]):
+                for _ in range(count):
+                    message *= obs_lat[c, :] / lat
+                    obs_lat[c, :] += 1.0
+                    lat += 1.0
+        elif op == 1:  # OP_IN
+            # Propagate upward from observed to latent.
+            trans = edge_probs[e, :, :]
+            if v > v2:
+                trans = trans.T
+            message *= np.dot(trans, messages[v2, :] / vert_probs[v2, :])
+            message /= vert_probs[v, :]
+            message /= message.sum()  # For numerical stability only.
+        else:  # OP_ROOT or OP_OUT
+            if op == 3:  # OP_OUT
+                trans = edge_probs[e, :, :]
+                if v2 > v:
+                    trans = trans.T
+                message *= trans[assignments[v2], :]
+                message /= vert_probs[v, :]
+            message /= message.sum()
+            assignments[v] = sample_from_probs(message)
+
+
 class TreeCatTrainer(object):
     """Class for training a TreeCat model."""
 
@@ -116,37 +158,16 @@ class TreeCatTrainer(object):
         edge_probs = self._edge_ss.astype(np.float32) + self._edge_prior
         vert_probs = self._vert_ss.astype(np.float32) + self._vert_prior
         feat_probs = self._feat_ss.astype(np.float32) + self._feat_prior
-        messages = vert_probs.copy()
 
-        for op, v, v2, e in self._schedule:
-            message = messages[v, :]
-            if op == 0:  # OP_UP
-                # Propagate upward from observed to latent.
-                beg, end = self._ragged_index[v:v + 2]
-                obs_lat = feat_probs[beg:end, :]
-                lat = obs_lat.sum(axis=0)
-                for c, count in enumerate(self._data[row_id, beg:end]):
-                    for _ in range(count):
-                        message *= obs_lat[c, :] / lat
-                        obs_lat[c, :] += 1.0
-                        lat += 1.0
-            elif op == 1:  # OP_IN
-                # Propagate upward from observed to latent.
-                trans = edge_probs[e, :, :]
-                if v > v2:
-                    trans = trans.T
-                message *= np.dot(trans, messages[v2, :] / vert_probs[v2, :])
-                message /= vert_probs[v, :]
-                message /= message.sum()  # For numerical stability only.
-            else:  # OP_ROOT or OP_OUT
-                if op == 3:  # OP_OUT
-                    trans = edge_probs[e, :, :]
-                    if v2 > v:
-                        trans = trans.T
-                    message *= trans[assignments[v2], :]
-                    message /= vert_probs[v, :]
-                message /= message.sum()
-                assignments[v] = sample_from_probs(message)
+        propagate_add_row(
+            self._ragged_index,
+            self._data,
+            self._schedule,
+            row_id,
+            assignments,
+            edge_probs,
+            vert_probs,
+            feat_probs, )
 
         self._assigned_rows.add(row_id)
         self._update_tensors(row_id, +1)
