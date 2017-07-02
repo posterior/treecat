@@ -14,58 +14,6 @@ from treecat.util import sample_from_probs
 logger = logging.getLogger(__name__)
 
 
-def make_posterior(grid, suffstats):
-    """Computes a posterior marginals.
-
-    Args:
-      grid: a 3 x E grid of (edge, vertex, vertex) triples.
-      suffstats: A dictionary with numpy arrays for sufficient statistics:
-        vert_ss, edge_ss, and feat_ss.
-
-    Returns:
-      A dictionary with numpy arrays for marginals of the posterior:
-      observed, observed_latent, latent, latent_latent.
-    """
-    V, M = suffstats['vert_ss'].shape
-    E = V - 1
-    assert grid.shape == (3, E)
-    assert suffstats['vert_ss'].shape == (V, M)
-    assert suffstats['edge_ss'].shape == (E, M, M)
-    assert len(suffstats['feat_ss']) == V
-    for v in range(V):
-        assert suffstats['feat_ss'][v].shape[1] == M
-
-    # Use Jeffreys priors.
-    vert_prior = 0.5
-    edge_prior = 0.5 / M
-    feat_prior = 0.5 / M
-
-    # First compute overlapping joint posteriors.
-    latent = vert_prior + suffstats['vert_ss'].astype(np.float32)
-    latent_latent = edge_prior + suffstats['edge_ss'].astype(np.float32)
-    latent /= latent.sum(axis=1, keepdims=True)
-    latent_latent /= latent_latent.sum(axis=(1, 2), keepdims=True)
-    observed_latent = [None] * V
-    observed = [None] * V
-    for v in range(V):
-        observed_latent[v] = (
-            feat_prior + suffstats['feat_ss'][v].astype(np.float32))
-
-        # Correct observed_latent for partially observed data, so that its
-        # latent marginals agree with latent. The observed marginal will
-        # reflect present data plus expected imputed data.
-        observed_latent[v] *= (latent[v, np.newaxis, :] /
-                               observed_latent[v].sum(axis=0, keepdims=True))
-        observed[v] = observed_latent[v].sum(axis=1)
-
-    return {
-        'observed': observed,
-        'observed_latent': observed_latent,
-        'latent': latent,
-        'latent_latent': latent_latent,
-    }
-
-
 class TreeCatServer(object):
     """Class for serving queries against a trained TreeCat model."""
 
@@ -74,11 +22,10 @@ class TreeCatServer(object):
         assert isinstance(tree, TreeStructure)
         self._tree = tree
         self._config = config
-        self._posterior = make_posterior(tree.tree_grid, suffstats)
         self._schedule = make_propagation_schedule(tree.tree_grid)
         self._zero_row = [
-            np.zeros(col.shape, dtype=np.int8)
-            for col in self._posterior['observed']
+            np.zeros(
+                col.shape[0], dtype=np.int8) for col in suffstats['feat_ss']
         ]
 
         # These are useful dimensions to import into locals().
@@ -87,6 +34,16 @@ class TreeCatServer(object):
         M = self._config[
             'model_num_clusters']  # Clusters in each mixture model.
         self._VEM = (V, E, M)
+
+        # Use Jeffreys priors.
+        vert_prior = 0.5
+        edge_prior = 0.5 / M
+        feat_prior = 0.5 / M
+        self._vert_probs = suffstats['vert_ss'].astype(np.float32) + vert_prior
+        self._edge_probs = suffstats['edge_ss'].astype(np.float32) + edge_prior
+        self._feat_probs = [
+            col.astype(np.float32) + feat_prior for col in suffstats['feat_ss']
+        ]
 
     def zero_row(self):
         """Make an empty data row."""
@@ -118,9 +75,9 @@ class TreeCatServer(object):
             assert data[v].shape == self._zero_row[v].shape
         assert counts.shape == (V, )
 
-        feat_probs = self._posterior['observed_latent']
-        edge_probs = self._posterior['latent_latent']
-        vert_probs = self._posterior['latent']
+        feat_probs = self._feat_probs
+        edge_probs = self._edge_probs
+        vert_probs = self._vert_probs
         messages = vert_probs.copy()
         vert_sample = np.zeros([V], np.int32)
         feat_sample = [np.zeros_like(col) for col in data]
@@ -163,7 +120,7 @@ class TreeCatServer(object):
 
     @profile
     def logprob(self, data):
-        """Compute log probability of a row of data.
+        """Compute non-normalized log probability of a row of data.
 
         Let V be the number of features and N be the number of rows in input
         data. This function computes in the logprob of each of the N input
@@ -181,9 +138,9 @@ class TreeCatServer(object):
         for v in range(V):
             assert data[v].shape == self._zero_row[v].shape
 
-        feat_probs = self._posterior['observed_latent']
-        edge_probs = self._posterior['latent_latent']
-        vert_probs = self._posterior['latent']
+        feat_probs = self._feat_probs
+        edge_probs = self._edge_probs
+        vert_probs = self._vert_probs
         messages = vert_probs.copy()
         logprob = 0.0
 

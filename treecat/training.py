@@ -118,8 +118,7 @@ class TreeCatTrainer(object):
         edge_probs = self._edge_ss.astype(np.float32) + self._edge_prior
         vert_probs = self._vert_ss.astype(np.float32) + self._vert_prior
         feat_probs = [
-            col.astype(np.float32) + self._feat_prior
-            for col in self._feat_ss
+            col.astype(np.float32) + self._feat_prior for col in self._feat_ss
         ]
         messages = vert_probs.copy()
 
