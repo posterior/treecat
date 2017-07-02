@@ -12,7 +12,6 @@ from treecat.structure import TreeStructure
 from treecat.structure import make_propagation_schedule
 from treecat.structure import sample_tree
 from treecat.util import art_logger
-from treecat.util import make_ragged_index
 from treecat.util import profile
 from treecat.util import sample_from_probs
 
@@ -46,30 +45,36 @@ def logprob_dc(counts_plus_prior, axis=None):
 class TreeCatTrainer(object):
     """Class for training a TreeCat model."""
 
-    def __init__(self, data, config):
+    def __init__(self, ragged_index, data, config):
         """Initialize a model in an unassigned state.
 
         Args:
-          data: A list of numpy arrays, where each array is an N x _ column of
-            counts of multinomial data.
+          ragged_index: A [V+1]-shaped numpy array of indices into the ragged
+            data array.
+          data: An [N, _]-shaped numpy array of ragged data, where the vth
+            column is stored in data[:, ragged_index[v]:ragged_index[v+1]].
           config: A global config dict.
         """
         logger.info('TreeCatTrainer of %d x %d data', data[0].shape[0],
                     len(data))
-        data = [np.asarray(column, np.int8) for column in data]
-        num_features = len(data)
-        num_rows = len(data[0])
-        assert all(column.shape[0] == num_rows for column in data)
+        ragged_index = np.asarray(ragged_index, np.int32)
+        data = np.asarray(data, np.int8)
+        config = config.copy()
+        V = len(ragged_index) - 1  # Number of features, i.e. vertices.
+        N = data.shape[0]  # Number of rows.
+        assert V <= 32768, 'Invalid # features > 32768: {}'.format(V)
+        assert len(data.shape) == 2
+        assert data.shape[1] == ragged_index[-1]
         self._data = data
         self._config = config
-        self._ragged_index = make_ragged_index(data)
+        self._ragged_index = ragged_index
         self._assigned_rows = set()
-        self.assignments = np.zeros([num_rows, num_features], dtype=np.int8)
-        self.tree = TreeStructure(num_features)
+        self.assignments = np.zeros([N, V], dtype=np.int8)
+        self.tree = TreeStructure(V)
+        assert self.tree.num_vertices == V
         self._schedule = make_propagation_schedule(self.tree.tree_grid)
 
         # These are useful dimensions to import into locals().
-        V = self.tree.num_vertices
         E = V - 1  # Number of edges in the tree.
         K = V * (V - 1) // 2  # Number of edges in the complete graph.
         M = self._config['model_num_clusters']  # Clusters per latent.
@@ -99,9 +104,9 @@ class TreeCatTrainer(object):
         self._edge_ss[self.tree.tree_grid[0, :],  #
                       assignments[self.tree.tree_grid[1, :]],  #
                       assignments[self.tree.tree_grid[2, :]]] += diff
-        for v, column in enumerate(self._data):
+        for v, m in enumerate(assignments):
             beg, end = self._ragged_index[v:v + 2]
-            self._feat_ss[beg:end, assignments[v]] += diff * column[row_id, :]
+            self._feat_ss[beg:end, m] += diff * self._data[row_id, beg:end]
 
     @profile
     def add_row(self, row_id):
@@ -120,7 +125,7 @@ class TreeCatTrainer(object):
                 beg, end = self._ragged_index[v:v + 2]
                 obs_lat = feat_probs[beg:end, :]
                 lat = obs_lat.sum(axis=0)
-                for c, count in enumerate(self._data[v][row_id, :]):
+                for c, count in enumerate(self._data[row_id, beg:end]):
                     for _ in range(count):
                         message *= obs_lat[c, :] / lat
                         obs_lat[c, :] += 1.0
@@ -243,12 +248,16 @@ class TreeCatTrainer(object):
         }
 
 
-def train_model(data, config):
+def train_model(ragged_index, data, config):
     """Train a TreeCat model using subsample-annealed MCMC.
 
     Let N be the number of data rows and V be the number of features.
 
     Args:
+      ragged_index: A [V+1]-shaped numpy array of indices into the ragged
+        data array.
+      data: An [N, _]-shaped numpy array of ragged data, where the vth
+        column is stored in data[:, ragged_index[v]:ragged_index[v+1]].
       data: A list of numpy arrays, where each array is an N x _ column of
         counts of multinomial data.
       config: A global config dict.
@@ -261,7 +270,7 @@ def train_model(data, config):
         assignments: An [N, V] numpy array of latent cluster ids for each
           cell in the dataset.
     """
-    return TreeCatTrainer(data, config).train()
+    return TreeCatTrainer(ragged_index, data, config).train()
 
 
 def get_annealing_schedule(num_rows, config):

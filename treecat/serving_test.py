@@ -12,12 +12,13 @@ from treecat.generate import generate_fake_model
 from treecat.serving import serve_model
 from treecat.testutil import TINY_CONFIG
 from treecat.testutil import TINY_DATA
+from treecat.testutil import TINY_RAGGED_INDEX
 from treecat.training import train_model
 
 
 @pytest.fixture(scope='module')
 def model():
-    return train_model(TINY_DATA, TINY_CONFIG)
+    return train_model(TINY_RAGGED_INDEX, TINY_DATA, TINY_CONFIG)
 
 
 def test_server_init(model):
@@ -25,23 +26,24 @@ def test_server_init(model):
 
 
 def test_server_sample_shape(model):
+    ragged_index = TINY_RAGGED_INDEX
     data = TINY_DATA
     server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
 
     # Sample many different counts patterns.
-    V = len(data)
-    N = data[0].shape[0]
+    V = len(ragged_index) - 1
+    N = data.shape[0]
     factors = [[0, 1, 2]] * V
     for counts in itertools.product(*factors):
         counts = np.array(counts, dtype=np.int8)
         for n in range(N):
-            row = [col[n, :] for col in data]
-            sample = server.sample(row, counts)
-            assert len(sample) == len(row)
+            row = data[n, :]
+            sample = server.sample(counts, row)
+            assert sample.shape == row.shape
+            assert sample.dtype == row.dtype
             for v in range(V):
-                assert sample[v].shape == row[v].shape
-                assert sample[v].dtype == row[v].dtype
-                assert np.all(sample[v].sum() == counts[v])
+                beg, end = ragged_index[v:v + 2]
+                assert np.all(sample[beg:end].sum() == counts[v])
 
 
 def test_server_logprob_runs(model):
@@ -49,10 +51,9 @@ def test_server_logprob_runs(model):
     server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
 
     # Sample all possible mask patterns.
-    N = data[0].shape[0]
+    N = data.shape[0]
     for n in range(N):
-        row = [col[n, :] for col in data]
-        logprob = server.logprob(row)
+        logprob = server.logprob(data[n, :])
         assert isinstance(logprob, float)
         assert np.isfinite(logprob)
 
@@ -65,6 +66,7 @@ def one_hot(c, C):
 
 @pytest.mark.xfail
 def test_server_logprob_normalized(model):
+    ragged_index = TINY_RAGGED_INDEX
     data = TINY_DATA
     server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
 
@@ -72,17 +74,17 @@ def test_server_logprob_normalized(model):
     V = len(data)
     factors = []
     for v in range(V):
-        C = data[v].shape[1]
+        C = ragged_index[v + 1] - ragged_index[v]
         factors.append([one_hot(c, C) for c in range(C)])
     logprobs = []
-    for row in itertools.product(*factors):
+    row = server.zero_row
+    for columns in itertools.product(*factors):
+        for v, column in enumerate(columns):
+            beg, end = ragged_index[v:v + 2]
+            row[beg:end] = column
         logprobs.append(server.logprob(row))
     logtotal = np.logaddexp.reduce(logprobs)
     assert logtotal == pytest.approx(0.0, abs=1e-5)
-
-
-def hash_row(row):
-    return tuple(tuple(col) for col in row)
 
 
 @pytest.mark.parametrize('N,V,C,M', [
@@ -110,15 +112,14 @@ def test_server_gof(N, V, C, M):
     server = serve_model(model['tree'], model['suffstats'], config)
 
     # Generate samples.
-    cond_data = [np.zeros(C, np.int8) for col in data]
     expected = C**V
     num_samples = 100 * expected
-    ones = np.ones(len(data), dtype=np.int8)
+    ones = np.ones(V, dtype=np.int8)
     counts = {}
     logprobs = {}
     for _ in range(num_samples):
-        sample = server.sample(cond_data, ones)
-        key = hash_row(sample)
+        sample = server.sample(ones)
+        key = tuple(sample)
         if key in counts:
             counts[key] += 1
         else:

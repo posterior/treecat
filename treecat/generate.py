@@ -23,17 +23,19 @@ def generate_dataset(num_rows, num_cols, num_cats=4, rate=1.0):
     """Generate a random dataset.
 
     Returns:
-      A [num_cols] list of [num_rows, num_cats] multinomial columns.
+      A pair (ragged_index, data).
     """
     np.random.seed(0)
-    data = [None] * num_cols
+    ragged_index = np.arange(0, num_cats * (num_cols + 1), num_cats, np.int32)
+    data = np.zeros((num_rows, num_cols * num_cats), np.int8)
     for v in range(num_cols):
+        beg, end = ragged_index[v:v + 2]
+        column = data[:, beg:end]
         probs = np.random.dirichlet(np.zeros(num_cats) + 0.5)
-        data[v] = np.zeros((num_rows, num_cats), dtype=np.int8)
         for n in range(num_rows):
             count = np.random.poisson(rate)
-            data[v][n, :] = np.random.multinomial(count, probs)
-    return data
+            column[n, :] = np.random.multinomial(count, probs)
+    return ragged_index, data
 
 
 def generate_dataset_file(num_rows, num_cols, num_cats=4, rate=1.0):
@@ -49,8 +51,8 @@ def generate_dataset_file(num_rows, num_cols, num_cats=4, rate=1.0):
     print('Generating {}'.format(path))
     if not os.path.exists(DATA):
         os.makedirs(DATA)
-    data = generate_dataset(num_rows, num_cols, num_cats, rate)
-    pickle_dump(data, path)
+    dataset = generate_dataset(num_rows, num_cols, num_cats, rate)
+    pickle_dump(dataset, path)
     return path
 
 
@@ -68,7 +70,7 @@ def generate_fake_model(num_rows, num_cols, num_cats, num_components):
     tree = generate_tree(num_cols)
     assignments = np.random.choice(num_components, size=(num_rows, num_cols))
     assignments = assignments.astype(np.int32)
-    data = generate_dataset(num_rows, num_cols, num_cats)
+    ragged_index, data = generate_dataset(num_rows, num_cols, num_cats)
     N = num_rows
     V = num_cols
     E = V - 1
@@ -82,14 +84,12 @@ def generate_fake_model(num_rows, num_cols, num_cats, num_components):
     for e, v1, v2 in tree.tree_grid.T:
         pairs = assignments[:, v1].astype(np.int32) * M + assignments[:, v2]
         edge_ss[e, :, :] = np.bincount(pairs, minlength=M * M).reshape((M, M))
-    ragged_index = np.zeros(V + 1, dtype=np.int32)
     for v in range(V):
-        beg = ragged_index[v]
-        end = beg + C
-        ragged_index[v + 1] = end
+        beg, end = ragged_index[v:v + 2]
+        data_block = data[:, beg:end]
         feat_ss_block = feat_ss[beg:end, :]
         for n in range(N):
-            feat_ss_block[:, assignments[n, v]] += data[v][n, :]
+            feat_ss_block[:, assignments[n, v]] += data_block[n, :]
     model = {
         'tree': tree,
         'assignments': assignments,
@@ -117,10 +117,10 @@ def generate_model_file(num_rows, num_cols, num_cats=4, rate=1.0):
     if not os.path.exists(DATA):
         os.makedirs(DATA)
     dataset_path = generate_dataset_file(num_rows, num_cols, num_cats, rate)
-    data = pickle_load(dataset_path)
+    ragged_index, data = pickle_load(dataset_path)
     config = DEFAULT_CONFIG.copy()
     config['learning_annealing_epochs'] = 5
-    model = train_model(data, config)
+    model = train_model(ragged_index, data, config)
     pickle_dump(model, path)
     return path
 

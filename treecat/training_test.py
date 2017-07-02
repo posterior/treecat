@@ -39,21 +39,21 @@ def test_get_annealing_schedule():
 def test_train_model(N, V, C, M):
     config = DEFAULT_CONFIG.copy()
     config['model_num_clusters'] = M
-    data = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
-    model = train_model(data, config)
+    ragged_index, data = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
+    model = train_model(ragged_index, data, config)
 
     assert model['config'] == config
     assert isinstance(model['tree'], TreeStructure)
+    assert np.all(model['suffstats']['ragged_index'] == ragged_index)
     grid = model['tree'].tree_grid
     assignments = model['assignments']
     vert_ss = model['suffstats']['vert_ss']
     edge_ss = model['suffstats']['edge_ss']
     feat_ss = model['suffstats']['feat_ss']
-    ragged_index = model['suffstats']['ragged_index']
 
     # Check shape.
-    V = len(data)
-    N = data[0].shape[0]
+    V = len(ragged_index) - 1
+    N = data.shape[0]
     E = V - 1
     M = config['model_num_clusters']
     assert grid.shape == (3, E)
@@ -80,9 +80,10 @@ def test_train_model(N, V, C, M):
     assert np.all(edge_ss.sum(1) == vert_ss[grid[2, :]])
     for v in range(V):
         beg, end = ragged_index[v:v + 2]
+        data_block = data[:, beg:end]
         feat_ss_block = feat_ss[beg:end, :]
-        assert feat_ss_block.sum() == data[v].sum()
-        assert np.all(feat_ss_block.sum(1) == data[v].sum(0))
+        assert feat_ss_block.sum() == data_block.sum()
+        assert np.all(feat_ss_block.sum(1) == data_block.sum(0))
 
     # Check computation from scratch.
     for v in range(V):
@@ -97,7 +98,7 @@ def test_train_model(N, V, C, M):
         feat_ss_block = feat_ss[beg:end, :]
         counts = np.zeros_like(feat_ss_block)
         for n in range(N):
-            counts[:, assignments[n, v]] += data[v][n, :]
+            counts[:, assignments[n, v]] += data[n, beg:end]
         assert np.all(feat_ss_block == counts)
 
 
@@ -127,11 +128,10 @@ def test_assignment_sampler_gof(N, V, C, M):
     config = DEFAULT_CONFIG.copy()
     config['learning_sample_tree_steps'] = 0  # Disable tree kernel.
     config['model_num_clusters'] = M
-    data = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
-    trainer = TreeCatTrainer(data, config)
+    ragged_index, data = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
+    trainer = TreeCatTrainer(ragged_index, data, config)
     print('Data:')
-    for col in data:
-        print(col)
+    print(data)
 
     # Add all rows.
     for row_id in range(N):

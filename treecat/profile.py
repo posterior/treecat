@@ -48,11 +48,11 @@ def run_with_tool(cmd, tool, dirname):
 
 @parsable
 def train_files(data_path, config_path):
-    """INTERNAL Train from pickled data, config."""
+    """INTERNAL Train from pickled dataset, config."""
     from treecat.training import train_model
-    data = pickle_load(data_path)
+    ragged_index, data = pickle_load(data_path)
     config = pickle_load(config_path)
-    train_model(data, config)
+    train_model(ragged_index, data, config)
 
 
 @parsable
@@ -63,10 +63,9 @@ def serve_files(model_path, config_path):
     model = pickle_load(model_path)
     config = pickle_load(config_path)
     server = serve_model(model['tree'], model['suffstats'], config)
-    data_row = server.zero_row()
-    counts = np.ones(len(data_row), np.int8)
+    counts = np.ones(model['tree'].num_vertices, np.int8)
     for _ in range(1000):
-        sample = server.sample(data_row, counts)
+        sample = server.sample(counts)
         server.logprob(sample)
 
 

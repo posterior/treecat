@@ -43,13 +43,10 @@ class TreeCatServer(object):
 
     def zero_row(self):
         """Make an empty data row."""
-        return [
-            self._zero_row[beg:end].copy()
-            for beg, end in zip(self._ragged_index, self._ragged_index[1:])
-        ]
+        return self._zero_row.copy()
 
     @profile
-    def sample(self, data, counts):
+    def sample(self, counts, data=None):
         """Sample from the posterior conditional distribution.
 
         Let V be the number of features and N be the number of rows in input
@@ -57,22 +54,21 @@ class TreeCatServer(object):
         conditioned on one of the input data rows.
 
         Args:
-          data: A single row of conditioning data, as a length-V list of
-            numpy arrays of multinomial data on which to condition.
-            To sample from the unconditional posterior, set all data to zero.
           counts: A [V] numpy array of requested counts of multinomials to
             sample.
+          data: An optional single row of conditioning data, as a ragged nummpy
+            array of multinomial counts.
 
         Returns:
           A single row of sampled data, as a length-V list of numpy arrays of
           sampled multinomial data.
         """
-        logger.debug('sampling %d rows', data[0].shape[0])
+        logger.debug('sampling data')
         V, E, M = self._VEM
-        assert len(data) == V
-        for v in range(V):
-            C = self._ragged_index[v + 1] - self._ragged_index[v]
-            assert data[v].shape == (C, )
+        if data is None:
+            data = self._zero_row
+        assert data.shape == self._zero_row.shape
+        assert data.dtype == self._zero_row.dtype
         assert counts.shape == (V, )
 
         feat_probs = self._feat_probs
@@ -89,7 +85,7 @@ class TreeCatServer(object):
                 beg, end = self._ragged_index[v:v + 2]
                 obs_lat = feat_probs[beg:end, :].copy()
                 lat = obs_lat.sum(axis=0)
-                for c, count in enumerate(data[v]):
+                for c, count in enumerate(data[beg:end]):
                     for _ in range(count):
                         message *= obs_lat[c, :] / lat
                         obs_lat[c, :] += 1.0
@@ -119,10 +115,7 @@ class TreeCatServer(object):
                     feat_sample[beg:end] = np.random.multinomial(counts[v],
                                                                  probs)
 
-        return [
-            feat_sample[self._ragged_index[v]:self._ragged_index[v + 1]]
-            for v in range(V)
-        ]
+        return feat_sample
 
     @profile
     def logprob(self, data):
@@ -133,17 +126,14 @@ class TreeCatServer(object):
         data rows.
 
         Args:
-          data: An length-V list of numpy arrays of multinomial count data.
+          data: A ragged nummpy array of multinomial count data.
 
         Returns:
           An [N] numpy array of log probabilities.
         """
         logger.debug('computing logprob')
         V, E, M = self._VEM
-        assert len(data) == V
-        for v in range(V):
-            C = self._ragged_index[v + 1] - self._ragged_index[v]
-            assert data[v].shape == (C, )
+        assert data.shape == (self._ragged_index[-1], )
 
         feat_probs = self._feat_probs
         edge_probs = self._edge_probs
@@ -158,7 +148,7 @@ class TreeCatServer(object):
                 beg, end = self._ragged_index[v:v + 2]
                 obs_lat = feat_probs[beg:end, :].copy()
                 lat = obs_lat.sum(axis=0)
-                for c, count in enumerate(data[v]):
+                for c, count in enumerate(data[beg:end]):
                     for _ in range(count):
                         message *= obs_lat[c, :] / lat
                         obs_lat[c, :] += 1.0

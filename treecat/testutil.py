@@ -14,43 +14,16 @@ TINY_CONFIG = DEFAULT_CONFIG.copy()
 TINY_CONFIG['learning_annealing_epochs'] = 2
 TINY_CONFIG['model_num_clusters'] = 7
 
-TINY_DATA = [
-    np.array(
-        [
-            [1, 0],
-            [0, 0],
-            [0, 1],
-            [0, 1],
-        ], dtype=np.int8),
-    np.array(
-        [
-            [0, 1],
-            [0, 0],
-            [0, 0],
-            [1, 0],
-        ], dtype=np.int8),
-    np.array(
-        [
-            [0, 1, 0],
-            [1, 0, 0],
-            [0, 0, 0],
-            [0, 0, 0],
-        ], dtype=np.int8),
-    np.array(
-        [
-            [0, 0, 0],
-            [1, 0, 0],
-            [0, 0, 1],
-            [0, 0, 0],
-        ], dtype=np.int8),
-    np.array(
-        [
-            [0, 0, 1],
-            [0, 1, 0],
-            [0, 0, 1],
-            [0, 1, 0],
-        ], dtype=np.int8),
-]
+TINY_RAGGED_INDEX = np.array([0, 2, 4, 7, 10, 13], dtype=np.int32)
+TINY_DATA = np.array(
+    [
+        #    |     |        |        |
+        [1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1],
+        [0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0],
+        [0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1],
+        [0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
+    ],
+    dtype=np.int8)
 
 
 @contextlib.contextmanager
