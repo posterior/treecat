@@ -45,14 +45,17 @@ def logprob_dc(counts_plus_prior, axis=None):
 
 @profile
 @jit(nopython=True, cache=True)
-def propagate_add_row(
+def jit_add_row(
         ragged_index,
-        data,
+        data_row,
+        tree_grid,
         schedule,
-        row_id,
         assignments,
-        edge_probs,
+        vert_ss,
+        edge_ss,
+        feat_ss,
         vert_probs,
+        edge_probs,
         feat_probs, ):
     messages = vert_probs.copy()
     for i in xrange(len(schedule)):
@@ -63,8 +66,8 @@ def propagate_add_row(
             beg, end = ragged_index[v:v + 2]
             obs_lat = feat_probs[beg:end, :]
             lat = obs_lat.sum(0)
-            for c, count in enumerate(data[row_id, beg:end]):
-                for _ in range(count):
+            for c, count in enumerate(data_row[beg:end]):
+                for _ in xrange(count):
                     message *= obs_lat[c, :]
                     message /= lat
                     obs_lat[c, :] += 1.0
@@ -86,6 +89,42 @@ def propagate_add_row(
                 message /= vert_probs[v, :]
             message *= 0.999999 / message.sum()  # Avoid np.binom errors.
             assignments[v] = np.random.multinomial(1, message).argmax()
+
+    # Update sufficient statistics.
+    E = tree_grid.shape[1]
+    for v, m in enumerate(assignments):
+        vert_ss[v, m] += 1
+    for e in xrange(E):
+        edge_ss[e,  #
+                assignments[tree_grid[1, e]],  #
+                assignments[tree_grid[2, e]]] += 1
+    for v, m in enumerate(assignments):
+        beg, end = ragged_index[v:v + 2]
+        feat_ss[beg:end, m] += data_row[beg:end]
+
+
+@profile
+@jit(nopython=True, cache=True)
+def jit_remove_row(
+        ragged_index,
+        data_row,
+        tree_grid,
+        assignments,
+        vert_ss,
+        edge_ss,
+        feat_ss, ):
+
+    # Update sufficient statistics.
+    E = tree_grid.shape[1]
+    for v, m in enumerate(assignments):
+        vert_ss[v, m] -= 1
+    for e in xrange(E):
+        edge_ss[e,  #
+                assignments[tree_grid[1, e]],  #
+                assignments[tree_grid[2, e]]] -= 1
+    for v, m in enumerate(assignments):
+        beg, end = ragged_index[v:v + 2]
+        feat_ss[beg:end, m] -= data_row[beg:end]
 
 
 class TreeCatTrainer(object):
@@ -148,29 +187,22 @@ class TreeCatTrainer(object):
     def add_row(self, row_id):
         logger.debug('TreeCatTrainer.add_row %d', row_id)
         assert row_id not in self._assigned_rows, row_id
-        assignments = self.assignments[row_id, :]
-        edge_probs = self._edge_ss.astype(np.float32) + self._edge_prior
         vert_probs = self._vert_ss.astype(np.float32) + self._vert_prior
+        edge_probs = self._edge_ss.astype(np.float32) + self._edge_prior
         feat_probs = self._feat_ss.astype(np.float32) + self._feat_prior
 
-        propagate_add_row(
+        jit_add_row(
             self._ragged_index,
-            self._data,
+            self._data[row_id, :],
+            self.tree.tree_grid,
             self._schedule,
-            row_id,
-            assignments,
-            edge_probs,
+            self.assignments[row_id, :],
+            self._vert_ss,
+            self._edge_ss,
+            self._feat_ss,
             vert_probs,
+            edge_probs,
             feat_probs, )
-
-        assignments = self.assignments[row_id, :]
-        self._vert_ss[self.tree.vertices, assignments] += 1
-        self._edge_ss[self.tree.tree_grid[0, :],  #
-                      assignments[self.tree.tree_grid[1, :]],  #
-                      assignments[self.tree.tree_grid[2, :]]] += 1
-        for v, m in enumerate(assignments):
-            beg, end = self._ragged_index[v:v + 2]
-            self._feat_ss[beg:end, m] += self._data[row_id, beg:end]
 
         self._assigned_rows.add(row_id)
 
@@ -178,15 +210,15 @@ class TreeCatTrainer(object):
     def remove_row(self, row_id):
         logger.debug('TreeCatTrainer.remove_row %d', row_id)
         assert row_id in self._assigned_rows, row_id
-        assignments = self.assignments[row_id, :]
 
-        self._vert_ss[self.tree.vertices, assignments] -= 1
-        self._edge_ss[self.tree.tree_grid[0, :],  #
-                      assignments[self.tree.tree_grid[1, :]],  #
-                      assignments[self.tree.tree_grid[2, :]]] -= 1
-        for v, m in enumerate(assignments):
-            beg, end = self._ragged_index[v:v + 2]
-            self._feat_ss[beg:end, m] -= self._data[row_id, beg:end]
+        jit_remove_row(
+            self._ragged_index,
+            self._data[row_id, :],
+            self.tree.tree_grid,
+            self.assignments[row_id, :],
+            self._vert_ss,
+            self._edge_ss,
+            self._feat_ss, )
 
         self._assigned_rows.remove(row_id)
 
