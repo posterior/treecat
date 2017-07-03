@@ -91,21 +91,21 @@ def test_server_logprob_normalized(model):
 
 
 @pytest.mark.parametrize('N,V,C,M', [
-    (1, 1, 2, 2),
-    (1, 1, 2, 3),
-    (1, 2, 2, 2),
-    pytest.mark.xfail((1, 3, 2, 2)),
-    pytest.mark.xfail((1, 4, 2, 2)),
-    (2, 1, 2, 2),
-    pytest.mark.xfail((2, 1, 2, 3)),
-    (2, 2, 2, 2),
-    (2, 3, 2, 2),
-    pytest.mark.xfail((2, 4, 2, 2)),
-    (4, 1, 2, 2),
-    pytest.mark.xfail((4, 1, 2, 3)),
-    (4, 2, 2, 2),
-    (4, 3, 2, 2),
-    pytest.mark.xfail((4, 4, 2, 2)),
+    (10, 1, 2, 2),
+    (10, 1, 2, 3),
+    (10, 2, 2, 2),
+    (10, 3, 2, 2),
+    pytest.mark.xfail((10, 4, 2, 2)),
+    (20, 1, 2, 2),
+    pytest.mark.xfail((20, 1, 2, 3)),
+    (20, 2, 2, 2),
+    (20, 3, 2, 2),
+    pytest.mark.xfail((20, 4, 2, 2)),
+    (40, 1, 2, 2),
+    (40, 1, 2, 3),
+    (40, 2, 2, 2),
+    (40, 3, 2, 2),
+    pytest.mark.xfail((40, 4, 2, 2)),
 ])
 def test_server_gof(N, V, C, M):
     np.random.seed(0)

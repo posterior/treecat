@@ -51,10 +51,16 @@ class TreeCatServer(object):
             [(ragged_index[v + 1] - ragged_index[v]) for v in range(V)],
             dtype=np.float32).reshape((V, 1))
 
+        # These are posterior marginals for vertices and pairs of vertices.
         self._vert_probs = suffstats['vert_ss'].astype(np.float32) + vert_prior
         self._edge_probs = suffstats['edge_ss'].astype(np.float32) + edge_prior
-        self._feat_probs = suffstats['feat_ss'].astype(np.float32) + feat_prior
-        self._meas_probs = suffstats['meas_ss'].astype(np.float32) + meas_prior
+
+        # This is the conditional distribution of features given latent.
+        self._feat_cond = suffstats['feat_ss'].astype(np.float32) + feat_prior
+        meas_probs = suffstats['meas_ss'].astype(np.float32) + meas_prior
+        for v in range(V):
+            beg, end = ragged_index[v:v + 2]
+            self._feat_cond[beg:end, :] /= meas_probs[v, np.newaxis, :]
 
     def zero_row(self):
         """Make an empty data row."""
@@ -88,8 +94,7 @@ class TreeCatServer(object):
 
         vert_probs = self._vert_probs
         edge_probs = self._edge_probs
-        feat_probs = self._feat_probs
-        meas_probs = self._meas_probs
+        feat_cond = self._feat_cond
 
         messages = vert_probs.copy()
         vert_sample = np.zeros([V], np.int32)
@@ -103,7 +108,7 @@ class TreeCatServer(object):
                 # for categorical data but approximate for multinomial.
                 beg, end = self._ragged_index[v:v + 2]
                 for r in range(beg, end):
-                    message *= (feat_probs[r, :] / meas_probs[v, :])**data[r]
+                    message *= feat_cond[r, :]**data[r]
             elif op == 1:  # OP_IN
                 # Propagate latent state inward from children to v.
                 trans = edge_probs[e, :, :]
@@ -124,8 +129,7 @@ class TreeCatServer(object):
                 # Propagate downward from latent to observed.
                 if counts[v]:
                     beg, end = self._ragged_index[v:v + 2]
-                    probs = feat_probs[beg:end, vert_sample[v]].copy()
-                    probs /= probs.sum()
+                    probs = feat_cond[beg:end, vert_sample[v]]
                     feat_sample[beg:end] = np.random.multinomial(counts[v],
                                                                  probs)
 
@@ -151,8 +155,7 @@ class TreeCatServer(object):
 
         vert_probs = self._vert_probs
         edge_probs = self._edge_probs
-        feat_probs = self._feat_probs
-        meas_probs = self._meas_probs
+        feat_cond = self._feat_cond
 
         messages = vert_probs.copy()
         logprob = 0.0
@@ -165,7 +168,7 @@ class TreeCatServer(object):
                 # for categorical data but approximate for multinomial.
                 beg, end = self._ragged_index[v:v + 2]
                 for r in range(beg, end):
-                    message *= (feat_probs[r, :] / meas_probs[v, :])**data[r]
+                    message *= feat_cond[r, :]**data[r]
             elif op == 1:  # OP_IN
                 # Propagate latent state inward from v2ren to v.
                 trans = edge_probs[e, :, :]
