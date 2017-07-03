@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import itertools
 import logging
+import multiprocessing
 
 import numpy as np
 from scipy.special import gammaln
@@ -41,6 +42,43 @@ def logprob_dc(counts_plus_prior, axis=None):
     See https://en.wikipedia.org/wiki/Dirichlet-multinomial_distribution
     """
     return gammaln(counts_plus_prior).sum(axis)
+
+
+def get_annealing_schedule(num_rows, config):
+    """Iterator for subsample annealing yielding (action, arg) pairs.
+
+    Actions are one of: 'add_row', 'remove_row', or 'sample_tree'.
+    The add and remove actions each provide a row_id arg.
+    """
+    # Randomly shuffle rows.
+    row_ids = list(range(num_rows))
+    np.random.shuffle(row_ids)
+    row_to_add = itertools.cycle(row_ids)
+    row_to_remove = itertools.cycle(row_ids)
+
+    # Use a linear annealing schedule.
+    epochs = float(config['learning_annealing_epochs'])
+    add_rate = epochs
+    remove_rate = epochs - 1.0
+    state = epochs * config['learning_annealing_init_rows']
+
+    # Sample the tree after each batch.
+    sampling_tree = (config['learning_sample_tree_steps'] > 0)
+    num_fresh = 0
+    num_stale = 0
+    while num_fresh + num_stale != num_rows:
+        if state >= 0.0:
+            yield 'add_row', next(row_to_add)
+            state -= remove_rate
+            num_fresh += 1
+        else:
+            yield 'remove_row', next(row_to_remove)
+            state += add_rate
+            num_stale -= 1
+        if sampling_tree and num_stale == 0 and num_fresh > 0:
+            yield 'sample_tree', None
+            num_stale = num_fresh
+            num_fresh = 0
 
 
 @profile
@@ -337,38 +375,37 @@ def train_model(ragged_index, data, config):
     return TreeCatTrainer(ragged_index, data, config).train()
 
 
-def get_annealing_schedule(num_rows, config):
-    """Iterator for subsample annealing yielding (action, arg) pairs.
+def _train_model(task):
+    ragged_index, data, config = task
+    return train_model(ragged_index, data, config)
 
-    Actions are one of: 'add_row', 'remove_row', or 'sample_tree'.
-    The add and remove actions each provide a row_id arg.
+
+def train_ensemble(ragged_index, data, config):
+    """Train a TreeCat ensemble model using subsample-annealed MCMC.
+
+    The ensemble size is controlled by config['model_ensemble_size'].
+    Let N be the number of data rows and V be the number of features.
+
+    Args:
+      ragged_index: A [V+1]-shaped numpy array of indices into the ragged
+        data array.
+      data: An [N, _]-shaped numpy array of ragged data, where the vth
+        column is stored in data[:, ragged_index[v]:ragged_index[v+1]].
+      data: A list of numpy arrays, where each array is an N x _ column of
+        counts of multinomial data.
+      config: A global config dict.
+
+    Returns:
+      A trained model as a dictionary with keys:
+        tree: A TreeStructure instance with the learned latent structure.
+        suffstats: Sufficient statistics of features, vertices, and
+          edges.
+        assignments: An [N, V] numpy array of latent cluster ids for each
+          cell in the dataset.
     """
-    # Randomly shuffle rows.
-    row_ids = list(range(num_rows))
-    np.random.shuffle(row_ids)
-    row_to_add = itertools.cycle(row_ids)
-    row_to_remove = itertools.cycle(row_ids)
-
-    # Use a linear annealing schedule.
-    epochs = float(config['learning_annealing_epochs'])
-    add_rate = epochs
-    remove_rate = epochs - 1.0
-    state = epochs * config['learning_annealing_init_rows']
-
-    # Sample the tree after each batch.
-    sampling_tree = (config['learning_sample_tree_steps'] > 0)
-    num_fresh = 0
-    num_stale = 0
-    while num_fresh + num_stale != num_rows:
-        if state >= 0.0:
-            yield 'add_row', next(row_to_add)
-            state -= remove_rate
-            num_fresh += 1
-        else:
-            yield 'remove_row', next(row_to_remove)
-            state += add_rate
-            num_stale -= 1
-        if sampling_tree and num_stale == 0 and num_fresh > 0:
-            yield 'sample_tree', None
-            num_stale = num_fresh
-            num_fresh = 0
+    tasks = []
+    for sub_seed in range(config['model_ensemble_size']):
+        sub_config = config.copy()
+        sub_config['seed'] += sub_seed
+        tasks.append((ragged_index, data, sub_config))
+    return multiprocessing.Pool().map(_train_model, tasks)

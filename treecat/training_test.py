@@ -10,10 +10,11 @@ from treecat.config import DEFAULT_CONFIG
 from treecat.generate import generate_dataset
 from treecat.structure import TreeStructure
 from treecat.testutil import TINY_CONFIG
+from treecat.testutil import numpy_seterr
 from treecat.training import TreeCatTrainer
 from treecat.training import get_annealing_schedule
+from treecat.training import train_ensemble
 from treecat.training import train_model
-from treecat.testutil import numpy_seterr
 
 numpy_seterr()
 
@@ -31,22 +32,7 @@ def test_get_annealing_schedule():
             assert 0 <= row_id and row_id < num_rows
 
 
-@pytest.mark.parametrize('N,V,C,M', [
-    (1, 1, 1, 1),
-    (2, 2, 2, 2),
-    (3, 3, 3, 3),
-    (4, 4, 4, 4),
-    (5, 5, 5, 5),
-    (6, 6, 6, 6),
-])
-def test_train_model(N, V, C, M):
-    config = DEFAULT_CONFIG.copy()
-    config['model_num_clusters'] = M
-    dataset = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
-    ragged_index = dataset['ragged_index']
-    data = dataset['data']
-    model = train_model(ragged_index, data, config)
-
+def validate_model(ragged_index, data, model, config):
     assert model['config'] == config
     assert isinstance(model['tree'], TreeStructure)
     assert np.all(model['suffstats']['ragged_index'] == ragged_index)
@@ -105,6 +91,47 @@ def test_train_model(N, V, C, M):
         for n in range(N):
             counts[:, assignments[n, v]] += data[n, beg:end]
         assert np.all(feat_ss_block == counts)
+
+
+@pytest.mark.parametrize('N,V,C,M', [
+    (1, 1, 1, 1),
+    (2, 2, 2, 2),
+    (3, 3, 3, 3),
+    (4, 4, 4, 4),
+    (5, 5, 5, 5),
+    (6, 6, 6, 6),
+])
+def test_train_model(N, V, C, M):
+    config = DEFAULT_CONFIG.copy()
+    config['model_num_clusters'] = M
+    dataset = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
+    ragged_index = dataset['ragged_index']
+    data = dataset['data']
+    model = train_model(ragged_index, data, config)
+    validate_model(ragged_index, data, model, config)
+
+
+@pytest.mark.parametrize('N,V,C,M', [
+    (1, 1, 1, 1),
+    (2, 2, 2, 2),
+    (3, 3, 3, 3),
+    (4, 4, 4, 4),
+    (5, 5, 5, 5),
+    (6, 6, 6, 6),
+])
+def test_train_ensemble(N, V, C, M):
+    config = DEFAULT_CONFIG.copy()
+    config['model_num_clusters'] = M
+    dataset = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
+    ragged_index = dataset['ragged_index']
+    data = dataset['data']
+    ensemble = train_ensemble(ragged_index, data, config)
+
+    assert len(ensemble) == config['model_ensemble_size']
+    for sub_seed, model in enumerate(ensemble):
+        sub_config = config.copy()
+        sub_config['seed'] += sub_seed
+        validate_model(ragged_index, data, model, sub_config)
 
 
 def hash_assignments(assignments):

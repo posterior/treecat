@@ -13,8 +13,8 @@ from treecat.serving import serve_model
 from treecat.testutil import TINY_CONFIG
 from treecat.testutil import TINY_DATA
 from treecat.testutil import TINY_RAGGED_INDEX
-from treecat.training import train_model
 from treecat.testutil import numpy_seterr
+from treecat.training import train_model
 
 numpy_seterr()
 
