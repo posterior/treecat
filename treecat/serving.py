@@ -27,7 +27,7 @@ class TreeCatServer(object):
     """Class for serving queries against a trained TreeCat model."""
 
     def __init__(self, tree, suffstats, config):
-        logger.info('NumpyServer with %d features', tree.num_vertices)
+        logger.info('TreeCatServer with %d features', tree.num_vertices)
         assert isinstance(tree, TreeStructure)
         self._tree = tree
         self._config = config
@@ -214,3 +214,28 @@ class TreeCatServer(object):
 
 def serve_model(tree, suffstats, config):
     return TreeCatServer(tree, suffstats, config)
+
+
+class EnsembleServer(object):
+    """Class for serving queries against a trained TreeCat ensemble model."""
+
+    def __init__(self, ensemble):
+        logger.info('EnsembleServer of size %d', len(ensemble))
+        self._ensemble = [
+            TreeCatServer(model['tree'], model['suffstats'], model['config'])
+            for model in ensemble
+        ]
+
+    def sample(self, counts, data=None):
+        server = np.random.choice(self._ensemble)
+        return server.sample(counts, data)
+
+    def logprob(self, data):
+        logprobs = [server.logprob(data) for server in self._ensemble]
+        logprob = np.logaddexp.reduce(logprobs)
+        logprob -= np.log(len(self._ensemble))
+        return logprob
+
+
+def serve_ensemble(ensemble):
+    return EnsembleServer(ensemble)
