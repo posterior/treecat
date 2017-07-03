@@ -103,7 +103,12 @@ def jit_add_row(
             # Propagate upward from observed to latent.
             beg, end = ragged_index[v:v + 2]
             obs_lat = feat_probs[beg:end, :]
-            lat = obs_lat.sum(0)
+
+            # FIXME numba cannot reduce over one axis. See:
+            # https://github.com/numba/numba/issues/1269
+            # https://github.com/numba/numba/issues/2446
+            lat = np.sum(obs_lat, 0)
+
             for c, count in enumerate(data_row[beg:end]):
                 for _ in xrange(count):
                     message *= obs_lat[c, :]
