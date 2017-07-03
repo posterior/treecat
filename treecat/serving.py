@@ -5,6 +5,7 @@ from __future__ import print_function
 import logging
 
 import numpy as np
+from scipy.stats import entropy
 
 from treecat.structure import TreeStructure
 from treecat.structure import make_propagation_schedule
@@ -12,6 +13,14 @@ from treecat.util import profile
 from treecat.util import sample_from_probs
 
 logger = logging.getLogger(__name__)
+
+
+def correlation(probs):
+    """Compute correlation rho(X,Y) = sqrt(1 - exp(-2 I(X;Y)))."""
+    assert probs.shape[0] == probs.shape[1]
+    mutual_information = (entropy(probs.sum(0)) + entropy(probs.sum(1)) -
+                          entropy(probs.flatten()))
+    return np.sqrt(1.0 - np.exp(-2.0 * mutual_information))
 
 
 class TreeCatServer(object):
@@ -167,6 +176,40 @@ class TreeCatServer(object):
                 # Aggregate the total logprob.
                 logprob += np.log(message.sum())
                 return logprob
+
+    @profile
+    def correlation(self):
+        """Compute correlation matrix among latent features.
+
+        This computes the generalization of Pearson's correlation to discrete
+        data. Let I(X;Y) be the mutual information. Then define correlation as
+
+          rho(X,Y) = sqrt(1 - exp(-2 I(X;Y)))
+
+        Returns:
+          An [V, V] numpy array of feature-feature correlations.
+        """
+        logger.debug('computing correlation')
+        V, E, M = self._VEM
+        edge_probs = self._edge_probs
+        vert_probs = self._vert_probs
+        result = np.zeros([V, V], np.float32)
+        for root in range(V):
+            messages = np.empty([V, M, M])
+            schedule = make_propagation_schedule(self._tree.tree_grid, root)
+            for op, v, v2, e in schedule:
+                if op == 2:  # OP_ROOT
+                    messages[v, :, :] = np.diagflat(vert_probs[v, :])
+                elif op == 3:  # OP_OUT
+                    trans = edge_probs[e, :, :]
+                    if v > v2:
+                        trans = trans.T
+                    messages[v, :, :] = np.dot(
+                        trans / vert_probs[v2, np.newaxis, :],
+                        messages[v2, :, :])
+            for v in range(V):
+                result[root, v] = correlation(messages[v, :, :])
+        return result
 
 
 def serve_model(tree, suffstats, config):

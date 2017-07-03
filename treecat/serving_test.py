@@ -14,6 +14,9 @@ from treecat.testutil import TINY_CONFIG
 from treecat.testutil import TINY_DATA
 from treecat.testutil import TINY_RAGGED_INDEX
 from treecat.training import train_model
+from treecat.testutil import numpy_seterr
+
+numpy_seterr()
 
 
 @pytest.fixture(scope='module')
@@ -134,3 +137,29 @@ def test_server_gof(N, V, C, M):
     probs /= probs.sum()
     gof = multinomial_goodness_of_fit(probs, counts, num_samples, plot=True)
     assert 1e-2 < gof
+
+
+@pytest.mark.parametrize('N,V,C,M', [
+    (10, 1, 2, 2),
+    (10, 2, 2, 3),
+    (10, 3, 2, 4),
+    (10, 4, 2, 5),
+    (10, 5, 2, 6),
+    (10, 6, 2, 7),
+    (10, 7, 2, 8),
+])
+def test_correlation(N, V, C, M):
+    np.random.seed(0)
+    model = generate_fake_model(N, V, C, M)
+    config = TINY_CONFIG.copy()
+    config['model_num_clusters'] = M
+    server = serve_model(model['tree'], model['suffstats'], config)
+
+    correlation = server.correlation()
+    print(correlation)
+    assert np.all(0 <= correlation)
+    assert np.all(correlation <= 1)
+    assert np.allclose(correlation, correlation.T)
+    for v in range(V):
+        assert correlation[v, :].argmax() == v
+        assert correlation[:, v].argmax() == v

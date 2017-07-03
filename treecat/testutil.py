@@ -26,6 +26,10 @@ TINY_DATA = np.array(
     dtype=np.int8)
 
 
+def numpy_seterr():
+    np.seterr(divide='raise', invalid='raise')
+
+
 @contextlib.contextmanager
 def tempdir():
     dirname = tempfile.mkdtemp()

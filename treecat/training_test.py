@@ -13,6 +13,9 @@ from treecat.testutil import TINY_CONFIG
 from treecat.training import TreeCatTrainer
 from treecat.training import get_annealing_schedule
 from treecat.training import train_model
+from treecat.testutil import numpy_seterr
+
+numpy_seterr()
 
 
 def test_get_annealing_schedule():

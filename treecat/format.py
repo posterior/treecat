@@ -11,8 +11,8 @@ import numpy as np
 from parsable import parsable
 
 from six.moves import cPickle as pickle
-from six.moves import zip
 from six.moves import intern
+from six.moves import zip
 from treecat.version import __version__
 
 logger = logging.getLogger(__name__)

@@ -69,6 +69,7 @@ def serve_files(model_path, config_path):
     for _ in range(1000):
         sample = server.sample(counts)
         server.logprob(sample)
+    server.correlation()
 
 
 @parsable
