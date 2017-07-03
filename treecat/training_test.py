@@ -41,6 +41,7 @@ def validate_model(ragged_index, data, model, config):
     vert_ss = model['suffstats']['vert_ss']
     edge_ss = model['suffstats']['edge_ss']
     feat_ss = model['suffstats']['feat_ss']
+    meas_ss = model['suffstats']['meas_ss']
 
     # Check shape.
     V = len(ragged_index) - 1
@@ -52,15 +53,17 @@ def validate_model(ragged_index, data, model, config):
     assert vert_ss.shape == (V, M)
     assert edge_ss.shape == (E, M, M)
     assert feat_ss.shape == (ragged_index[-1], M)
+    assert meas_ss.shape == (V, M)
 
     # Check bounds.
+    assert np.all(0 <= assignments)
+    assert np.all(assignments < M)
     assert np.all(0 <= vert_ss)
     assert np.all(vert_ss <= N)
     assert np.all(0 <= edge_ss)
     assert np.all(edge_ss <= N)
-    assert np.all(0 <= assignments)
-    assert np.all(assignments < M)
     assert np.all(0 <= feat_ss)
+    assert np.all(0 <= meas_ss)
 
     # Check marginals.
     assert vert_ss.sum() == N * V
@@ -69,12 +72,14 @@ def validate_model(ragged_index, data, model, config):
     assert np.all(edge_ss.sum((1, 2)) == N)
     assert np.all(edge_ss.sum(2) == vert_ss[grid[1, :]])
     assert np.all(edge_ss.sum(1) == vert_ss[grid[2, :]])
+    assert feat_ss.sum() == meas_ss.sum()
     for v in range(V):
         beg, end = ragged_index[v:v + 2]
         data_block = data[:, beg:end]
         feat_ss_block = feat_ss[beg:end, :]
         assert feat_ss_block.sum() == data_block.sum()
         assert np.all(feat_ss_block.sum(1) == data_block.sum(0))
+        assert np.all(feat_ss_block.sum(0) == meas_ss[v, :])
 
     # Check computation from scratch.
     for v in range(V):
@@ -91,6 +96,12 @@ def validate_model(ragged_index, data, model, config):
         for n in range(N):
             counts[:, assignments[n, v]] += data[n, beg:end]
         assert np.all(feat_ss_block == counts)
+    for v in range(V):
+        beg, end = ragged_index[v:v + 2]
+        counts = np.zeros_like(meas_ss[v, :])
+        for n in range(N):
+            counts[assignments[n, v]] += data[n, beg:end].sum()
+        assert np.all(meas_ss[v, :] == counts)
 
 
 @pytest.mark.parametrize('N,V,C,M', [

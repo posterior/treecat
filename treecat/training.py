@@ -92,9 +92,11 @@ def jit_add_row(
         vert_ss,
         edge_ss,
         feat_ss,
+        meas_ss,
         vert_probs,
         edge_probs,
-        feat_probs, ):
+        feat_probs,
+        meas_probs, ):
     messages = vert_probs.copy()
     for i in xrange(len(schedule)):
         op, v, v2, e = schedule[i]
@@ -102,21 +104,16 @@ def jit_add_row(
         if op == 0:  # OP_UP
             # Propagate upward from observed to latent.
             beg, end = ragged_index[v:v + 2]
-            obs_lat = feat_probs[beg:end, :]
-
-            # FIXME numba cannot reduce over one axis. See:
-            # https://github.com/numba/numba/issues/1269
-            # https://github.com/numba/numba/issues/2446
-            lat = np.sum(obs_lat, 0)
-
+            feat_block = feat_probs[beg:end, :]
+            meas_block = meas_probs[v, :]
             for c, count in enumerate(data_row[beg:end]):
                 for _ in xrange(count):
-                    message *= obs_lat[c, :]
-                    message /= lat
-                    obs_lat[c, :] += 1.0
-                    lat += 1.0
+                    message *= feat_block[c, :]
+                    message /= meas_block
+                    feat_block[c, :] += 1.0
+                    meas_block += 1.0
         elif op == 1:  # OP_IN
-            # Propagate upward from observed to latent.
+            # Propagate latent state inward from children to v.
             trans = edge_probs[e, :, :]
             if v > v2:
                 trans = trans.T
@@ -125,6 +122,7 @@ def jit_add_row(
             message /= message.sum()  # For numerical stability only.
         else:  # OP_ROOT or OP_OUT
             if op == 3:  # OP_OUT
+                # Propagate latent state outward from parent to v.
                 trans = edge_probs[e, :, :]
                 if v2 > v:
                     trans = trans.T
@@ -144,6 +142,7 @@ def jit_add_row(
     for v, m in enumerate(assignments):
         beg, end = ragged_index[v:v + 2]
         feat_ss[beg:end, m] += data_row[beg:end]
+        meas_ss[v, m] += data_row[beg:end].sum()
 
 
 @profile
@@ -155,7 +154,8 @@ def jit_remove_row(
         assignments,
         vert_ss,
         edge_ss,
-        feat_ss, ):
+        feat_ss,
+        meas_ss, ):
 
     # Update sufficient statistics.
     E = tree_grid.shape[1]
@@ -168,6 +168,7 @@ def jit_remove_row(
     for v, m in enumerate(assignments):
         beg, end = ragged_index[v:v + 2]
         feat_ss[beg:end, m] -= data_row[beg:end]
+        meas_ss[v, m] -= data_row[beg:end].sum()
 
 
 class TreeCatTrainer(object):
@@ -213,11 +214,16 @@ class TreeCatTrainer(object):
         self._vert_prior = 0.5
         self._edge_prior = 0.5 / M
         self._feat_prior = 0.5 / M
+        self._meas_prior = self._feat_prior * np.array(
+            [(self._ragged_index[v + 1] - self._ragged_index[v])
+             for v in range(V)],
+            dtype=np.float32).reshape((V, 1))
 
         # Sufficient statistics are maintained always.
         self._vert_ss = np.zeros([V, M], np.int32)
         self._edge_ss = np.zeros([E, M, M], np.int32)
         self._feat_ss = np.zeros([self._ragged_index[-1], M], np.int32)
+        self._meas_ss = np.zeros([V, M], np.int32)
 
     def _update_tree(self):
         V, E, K, M = self._VEKM
@@ -233,6 +239,7 @@ class TreeCatTrainer(object):
         vert_probs = self._vert_ss.astype(np.float32) + self._vert_prior
         edge_probs = self._edge_ss.astype(np.float32) + self._edge_prior
         feat_probs = self._feat_ss.astype(np.float32) + self._feat_prior
+        meas_probs = self._meas_ss.astype(np.float32) + self._meas_prior
 
         jit_add_row(
             self._ragged_index,
@@ -243,9 +250,11 @@ class TreeCatTrainer(object):
             self._vert_ss,
             self._edge_ss,
             self._feat_ss,
+            self._meas_ss,
             vert_probs,
             edge_probs,
-            feat_probs, )
+            feat_probs,
+            meas_probs, )
 
         self._assigned_rows.add(row_id)
 
@@ -261,7 +270,8 @@ class TreeCatTrainer(object):
             self.assignments[row_id, :],
             self._vert_ss,
             self._edge_ss,
-            self._feat_ss, )
+            self._feat_ss,
+            self._meas_ss, )
 
         self._assigned_rows.remove(row_id)
 
@@ -348,9 +358,10 @@ class TreeCatTrainer(object):
             'assignments': self.assignments,
             'suffstats': {
                 'ragged_index': self._ragged_index,
-                'feat_ss': self._feat_ss,
                 'vert_ss': self._vert_ss,
                 'edge_ss': self._edge_ss,
+                'feat_ss': self._feat_ss,
+                'meas_ss': self._meas_ss,
             }
         }
 

@@ -100,7 +100,7 @@ class TreeCatServer(object):
                         obs_lat[c, :] += 1.0
                         lat += 1.0
             elif op == 1:  # OP_IN
-                # Propagate latent state inward from v2ren to v.
+                # Propagate latent state inward from children to v.
                 trans = edge_probs[e, :, :]
                 if v > v2:
                     trans = trans.T
@@ -108,7 +108,7 @@ class TreeCatServer(object):
                 message /= vert_probs[v, :]
                 message /= message.sum()
             else:  # OP_ROOT or OP_OUT
-                # Propagate latent state outward from v2 to v.
+                # Propagate latent state outward from parent to v.
                 if op == 3:  # OP_OUT
                     trans = edge_probs[e, :, :]
                     if v2 > v:
@@ -121,8 +121,8 @@ class TreeCatServer(object):
                     beg, end = self._ragged_index[v:v + 2]
                     probs = feat_probs[beg:end, vert_sample[v]].copy()
                     probs /= probs.sum()
-                    feat_sample[beg:end] = np.random.multinomial(
-                        counts[v], probs)
+                    feat_sample[beg:end] = np.random.multinomial(counts[v],
+                                                                 probs)
 
         return feat_sample
 
@@ -204,9 +204,9 @@ class TreeCatServer(object):
                     trans = edge_probs[e, :, :]
                     if v > v2:
                         trans = trans.T
-                    messages[v, :, :] = np.dot(
-                        trans / vert_probs[v2, np.newaxis, :],
-                        messages[v2, :, :])
+                    messages[v, :, :] = np.dot(trans /
+                                               vert_probs[v2, np.newaxis, :],
+                                               messages[v2, :, :])
             for v in range(V):
                 result[root, v] = correlation(messages[v, :, :])
         return result
