@@ -8,6 +8,7 @@ from goftests import multinomial_goodness_of_fit
 
 from treecat.util import sample_from_probs
 from treecat.util import sample_from_probs2
+from treecat.util import set_random_seed
 from treecat.util import sizeof
 
 
@@ -27,7 +28,7 @@ def test_sizeof_numpy(shape, dtype, expected_size):
 
 @pytest.mark.parametrize('size', range(1, 15))
 def test_sample_from_probs_gof(size):
-    np.random.seed(size)
+    set_random_seed(size)
     probs = np.exp(2 * np.random.random(size)).astype(np.float32)
     probs /= probs.sum()
     counts = np.zeros(size, dtype=np.int32)
@@ -42,7 +43,7 @@ def test_sample_from_probs_gof(size):
 
 @pytest.mark.parametrize('size', range(1, 15))
 def test_sample_from_probs2_gof(size):
-    np.random.seed(size)
+    set_random_seed(size)
     probs = np.exp(2 * np.random.random(size)).astype(np.float32)
     probs /= probs.sum()
     counts = np.zeros(size, dtype=np.int32)

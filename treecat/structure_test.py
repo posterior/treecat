@@ -18,6 +18,7 @@ from treecat.structure import make_propagation_schedule
 from treecat.structure import make_tree
 from treecat.structure import sample_tree
 from treecat.testutil import numpy_seterr
+from treecat.util import set_random_seed
 
 numpy_seterr()
 
@@ -156,7 +157,7 @@ def test_make_propagation_schedule(edges, root):
 
 @pytest.mark.parametrize('num_edges', [1, 2, 3, 4])
 def test_sample_tree_gof(num_edges):
-    np.random.seed(0)
+    set_random_seed(0)
     E = num_edges
     V = 1 + E
     grid = make_complete_graph(V)

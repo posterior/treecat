@@ -14,6 +14,7 @@ from treecat.format import pickle_load
 from treecat.structure import TreeStructure
 from treecat.structure import sample_tree
 from treecat.training import train_model
+from treecat.util import set_random_seed
 
 parsable = parsable.Parsable()
 
@@ -27,7 +28,7 @@ def generate_dataset(num_rows, num_cols, num_cats=4, rate=1.0):
     Returns:
       A pair (ragged_index, data).
     """
-    np.random.seed(0)
+    set_random_seed(0)
     ragged_index = np.arange(0, num_cats * (num_cols + 1), num_cats, np.int32)
     data = np.zeros((num_rows, num_cols * num_cats), np.int8)
     for v in range(num_cols):

@@ -39,8 +39,15 @@ else:
     jit = no_jit
 
 
-def TODO(message=''):
-    raise NotImplementedError('TODO {}'.format(message))
+@jit
+def jit_random_seed(seed):
+    np.random.seed(seed)
+
+
+def set_random_seed(seed):
+    """Set random seeds for both numpy and numba."""
+    np.random.seed(seed)
+    jit_random_seed(seed)
 
 
 def log_art(art):

@@ -15,12 +15,13 @@ from treecat.training import TreeCatTrainer
 from treecat.training import get_annealing_schedule
 from treecat.training import train_ensemble
 from treecat.training import train_model
+from treecat.util import set_random_seed
 
 numpy_seterr()
 
 
 def test_get_annealing_schedule():
-    np.random.seed(0)
+    set_random_seed(0)
     num_rows = 10
     schedule = get_annealing_schedule(num_rows, TINY_CONFIG)
     for step, (action, row_id) in enumerate(schedule):
@@ -180,7 +181,7 @@ def test_assignment_sampler_gof(N, V, C, M):
     print(data)
 
     # Add all rows.
-    np.random.seed(0)
+    set_random_seed(0)
     for row_id in range(N):
         trainer.add_row(row_id)
 

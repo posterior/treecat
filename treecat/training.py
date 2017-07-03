@@ -16,6 +16,7 @@ from treecat.structure import sample_tree
 from treecat.util import art_logger
 from treecat.util import jit
 from treecat.util import profile
+from treecat.util import set_random_seed
 
 logger = logging.getLogger(__name__)
 
@@ -338,7 +339,7 @@ class TreeCatTrainer(object):
               cell in the dataset.
         """
         logger.info('train()')
-        np.random.seed(self._config['seed'])
+        set_random_seed(self._config['seed'])
         num_rows = self._assignments.shape[0]
         for action, row_id in get_annealing_schedule(num_rows, self._config):
             if action == 'add_row':

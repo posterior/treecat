@@ -15,6 +15,7 @@ from treecat.testutil import TINY_DATA
 from treecat.testutil import TINY_RAGGED_INDEX
 from treecat.testutil import numpy_seterr
 from treecat.training import train_model
+from treecat.util import set_random_seed
 
 numpy_seterr()
 
@@ -114,7 +115,7 @@ def test_server_logprob_normalized(N, V, C, M):
     (40, 4, 2, 2),
 ])
 def test_server_gof(N, V, C, M):
-    np.random.seed(0)
+    set_random_seed(0)
     model = generate_fake_model(N, V, C, M)
     config = TINY_CONFIG.copy()
     config['model_num_clusters'] = M
@@ -155,7 +156,7 @@ def test_server_gof(N, V, C, M):
     (10, 7, 2, 8),
 ])
 def test_correlation(N, V, C, M):
-    np.random.seed(0)
+    set_random_seed(0)
     model = generate_fake_model(N, V, C, M)
     config = TINY_CONFIG.copy()
     config['model_num_clusters'] = M
