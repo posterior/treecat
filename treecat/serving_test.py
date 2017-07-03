@@ -42,12 +42,12 @@ def test_server_sample_shape(model):
         counts = np.array(counts, dtype=np.int8)
         for n in range(N):
             row = data[n, :]
-            sample = server.sample(counts, row)
-            assert sample.shape == row.shape
-            assert sample.dtype == row.dtype
+            samples = server.sample(N, counts, row)
+            assert samples.shape == (N, row.shape[0])
+            assert samples.dtype == row.dtype
             for v in range(V):
                 beg, end = ragged_index[v:v + 2]
-                assert np.all(sample[beg:end].sum() == counts[v])
+                assert np.all(samples[:, beg:end].sum(axis=1) == counts[v])
 
 
 def test_server_logprob_runs(model):
@@ -123,12 +123,12 @@ def test_server_unconditional_gof(N, V, C, M):
 
     # Generate samples.
     expected = C**V
-    num_samples = 500 * expected
+    num_samples = 1000 * expected
     ones = np.ones(V, dtype=np.int8)
     counts = {}
     logprobs = {}
-    for _ in range(num_samples):
-        sample = server.sample(ones)
+    samples = server.sample(num_samples, ones)
+    for sample in samples:
         key = tuple(sample)
         if key in counts:
             counts[key] += 1
@@ -172,13 +172,13 @@ def test_server_conditional_gof(N, V, C, M):
 
     # Generate samples.
     expected = C**V
-    num_samples = 200 * expected
+    num_samples = 1000 * expected
     ones = np.ones(V, dtype=np.int8)
-    cond_data = server.sample(ones)
+    cond_data = server.sample(1, ones).reshape(server.zero_row().shape)
     counts = {}
     logprobs = {}
-    for _ in range(num_samples):
-        sample = server.sample(ones, cond_data)
+    samples = server.sample(num_samples, ones, cond_data)
+    for sample in samples:
         key = tuple(sample)
         if key in counts:
             counts[key] += 1

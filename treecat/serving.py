@@ -10,7 +10,7 @@ from scipy.stats import entropy
 from treecat.structure import TreeStructure
 from treecat.structure import make_propagation_schedule
 from treecat.util import profile
-from treecat.util import sample_from_probs
+from treecat.util import sample_from_probs2
 
 logger = logging.getLogger(__name__)
 
@@ -76,22 +76,18 @@ class TreeCatServer(object):
         return self._zero_row.copy()
 
     @profile
-    def sample(self, counts, data=None):
-        """Sample from the posterior conditional distribution.
-
-        Let V be the number of features and N be the number of rows in input
-        data. This function draws in parallel N samples, each sample
-        conditioned on one of the input data rows.
+    def sample(self, N, counts, data=None):
+        """Draw N samples from the posterior distribution.
 
         Args:
-          counts: A [V] numpy array of requested counts of multinomials to
-            sample.
+          size: The number of samples to draw.
+          counts: A [V]-shaped numpy array of requested counts of multinomials
+            to sample.
           data: An optional single row of conditioning data, as a ragged nummpy
             array of multinomial counts.
 
         Returns:
-          A single row of sampled data, as a length-V list of numpy arrays of
-          sampled multinomial data.
+          An [N, _]-shaped numpy array of sampled multinomial data.
         """
         logger.debug('sampling data')
         V, E, M = self._VEM
@@ -100,17 +96,20 @@ class TreeCatServer(object):
         assert data.shape == self._zero_row.shape
         assert data.dtype == self._zero_row.dtype
         assert counts.shape == (V, )
+        assert counts.dtype == np.int8
         edge_trans = self._edge_trans
         feat_cond = self._feat_cond
 
-        messages = self._vert_probs.copy()
-        vert_sample = np.zeros([V], np.int32)
-        feat_sample = self._zero_row.copy()
+        messages_in = self._vert_probs.copy()
+        messages_out = np.tile(self._vert_probs[:, np.newaxis, :], (1, N, 1))
+        vert_samples = np.zeros([V, N], np.int8)
+        feat_samples = np.zeros([N, self._zero_row.shape[0]], np.int8)
+        range_N = np.arange(N, dtype=np.int32)
 
         for op, v, v2, e in self._schedule:
-            message = messages[v, :]
             if op == 0:  # OP_UP
                 # Propagate upward from observed to latent.
+                message = messages_in[v, :]
                 beg, end = self._ragged_index[v:v + 2]
                 for r in range(beg, end):
                     # This uses a with-replacement approximation which is exact
@@ -118,36 +117,41 @@ class TreeCatServer(object):
                     message *= feat_cond[r, :]**data[r]
             elif op == 1:  # OP_IN
                 # Propagate latent state inward from children to v.
+                message = messages_in[v, :]
                 trans = edge_trans[e, :, :]
                 if v > v2:
                     trans = trans.T
-                message *= np.dot(trans, messages[v2, :])
+                message *= np.dot(trans, messages_in[v2, :])
                 message /= message.sum()
             else:  # OP_ROOT or OP_OUT
+                message = messages_out[v, :, :]
+                message[...] = messages_in[v, np.newaxis, :]
                 # Propagate latent state outward from parent to v.
                 if op == 3:  # OP_OUT
                     trans = edge_trans[e, :, :]
                     if v2 > v:
                         trans = trans.T
-                    message *= trans[vert_sample[v2], :]
-                message /= message.sum()
-                vert_sample[v] = sample_from_probs(message)
+                    message *= trans[vert_samples[v2, :], :]
+                message /= message.sum(axis=1, keepdims=True)
+                vert_samples[v, :] = sample_from_probs2(message)
                 # Propagate downward from latent to observed.
-                if counts[v]:
-                    beg, end = self._ragged_index[v:v + 2]
-                    probs = feat_cond[beg:end, vert_sample[v]]
-                    feat_sample[beg:end] = np.random.multinomial(counts[v],
-                                                                 probs)
+                beg, end = self._ragged_index[v:v + 2]
+                feat_block = feat_cond[beg:end, :].T
+                probs = feat_block[vert_samples[v, :], :]
+                samples_block = feat_samples[:, beg:end]
+                for _ in range(counts[v]):
+                    samples_block[range_N, sample_from_probs2(probs)] += 1
 
-        return feat_sample
+        return feat_samples
 
     @profile
     def logprob(self, data):
         """Compute non-normalized log probability of a row of data.
 
-        Let V be the number of features and N be the number of rows in input
-        data. This function computes in the logprob of each of the N input
-        data rows.
+        To compute conditional probabilty, use the identity:
+
+          log P(data|cond_data) = server.logprob(data + cond_data)
+                                - server.logprob(cond_data)
 
         Args:
           data: A ragged nummpy array of multinomial count data.

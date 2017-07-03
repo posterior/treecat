@@ -170,5 +170,13 @@ def export_data(dataset_in, schema_csv_out, data_csv_out):
             writer.writerow(row)
 
 
+@parsable
+def cat(*paths):
+    """Print .pkl.gz files in human readable form."""
+    for path in paths:
+        assert path.endswith('.pkl.gz')
+        print(pickle_load(path))
+
+
 if __name__ == '__main__':
     parsable()

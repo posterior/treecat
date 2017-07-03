@@ -65,9 +65,10 @@ def serve_files(model_path, config_path):
     model = pickle_load(model_path)
     config = pickle_load(config_path)
     server = serve_model(model['tree'], model['suffstats'], config['config'])
+    num_samples = config['config']['serving_samples']
     counts = np.ones(model['tree'].num_vertices, np.int8)
-    for _ in range(1000):
-        sample = server.sample(counts)
+    samples = server.sample(num_samples, counts)
+    for sample in samples:
         server.logprob(sample)
     server.correlation()
 
