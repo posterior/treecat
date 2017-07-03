@@ -180,11 +180,12 @@ def test_assignment_sampler_gof(N, V, C, M):
     print(data)
 
     # Add all rows.
+    np.random.seed(0)
     for row_id in range(N):
         trainer.add_row(row_id)
 
     # Collect samples.
-    num_samples = 200 * M**(N * V)
+    num_samples = 500 * M**(N * V)
     counts = {}
     logprobs = {}
     for _ in range(num_samples):

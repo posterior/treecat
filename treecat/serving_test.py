@@ -100,7 +100,7 @@ def test_server_logprob_normalized(model):
     pytest.mark.xfail((20, 1, 2, 3)),
     (20, 2, 2, 2),
     (20, 3, 2, 2),
-    pytest.mark.xfail((20, 4, 2, 2)),
+    (20, 4, 2, 2),
     (40, 1, 2, 2),
     (40, 1, 2, 3),
     (40, 2, 2, 2),

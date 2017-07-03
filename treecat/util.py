@@ -77,13 +77,13 @@ def sample_from_probs(probs):
         return probs.argmax()
 
 
-def sample_from_probs2(probs, out):
+def sample_from_probs2(probs, out=None):
     """Vectorized sampler from categorical distribution."""
     # Adapted from https://stackoverflow.com/questions/40474436
     assert len(probs.shape) == 2
     u = np.random.rand(probs.shape[0], 1)
     cdf = probs.cumsum(axis=1)
-    (u < cdf).argmax(axis=1, out=out)
+    return (u < cdf).argmax(axis=1, out=out)
 
 
 def make_ragged_index(columns):

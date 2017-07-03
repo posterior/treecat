@@ -55,6 +55,13 @@ class TreeCatServer(object):
         self._vert_probs = suffstats['vert_ss'].astype(np.float32) + vert_prior
         self._edge_probs = suffstats['edge_ss'].astype(np.float32) + edge_prior
 
+        # This represents information in the pairwise joint posterior minus
+        # information in the individual factors.
+        self._edge_trans = self._edge_probs.copy()
+        for e, v1, v2 in tree.tree_grid.T:
+            self._edge_trans[e, :, :] /= self._vert_probs[v1, np.newaxis, :]
+            self._edge_trans[e, :, :] /= self._vert_probs[v2, :, np.newaxis]
+
         # This is the conditional distribution of features given latent.
         self._feat_cond = suffstats['feat_ss'].astype(np.float32) + feat_prior
         meas_probs = suffstats['meas_ss'].astype(np.float32) + meas_prior
@@ -91,12 +98,10 @@ class TreeCatServer(object):
         assert data.shape == self._zero_row.shape
         assert data.dtype == self._zero_row.dtype
         assert counts.shape == (V, )
-
-        vert_probs = self._vert_probs
-        edge_probs = self._edge_probs
+        edge_trans = self._edge_trans
         feat_cond = self._feat_cond
 
-        messages = vert_probs.copy()
+        messages = self._vert_probs.copy()
         vert_sample = np.zeros([V], np.int32)
         feat_sample = self._zero_row.copy()
 
@@ -104,23 +109,22 @@ class TreeCatServer(object):
             message = messages[v, :]
             if op == 0:  # OP_UP
                 # Propagate upward from observed to latent.
-                # This uses a with-replacement approximation which is exact
-                # for categorical data but approximate for multinomial.
                 beg, end = self._ragged_index[v:v + 2]
                 for r in range(beg, end):
+                    # This uses a with-replacement approximation which is exact
+                    # for categorical data but approximate for multinomial.
                     message *= feat_cond[r, :]**data[r]
             elif op == 1:  # OP_IN
                 # Propagate latent state inward from children to v.
-                trans = edge_probs[e, :, :]
+                trans = edge_trans[e, :, :]
                 if v > v2:
                     trans = trans.T
-                message *= np.dot(trans, messages[v2, :] / vert_probs[v2, :])
-                message /= vert_probs[v, :]
+                message *= np.dot(trans, messages[v2, :])
                 message /= message.sum()
             else:  # OP_ROOT or OP_OUT
                 # Propagate latent state outward from parent to v.
                 if op == 3:  # OP_OUT
-                    trans = edge_probs[e, :, :]
+                    trans = edge_trans[e, :, :]
                     if v2 > v:
                         trans = trans.T
                     message *= trans[vert_sample[v2], :]
@@ -152,30 +156,27 @@ class TreeCatServer(object):
         logger.debug('computing logprob')
         V, E, M = self._VEM
         assert data.shape == (self._ragged_index[-1], )
-
-        vert_probs = self._vert_probs
-        edge_probs = self._edge_probs
+        edge_trans = self._edge_trans
         feat_cond = self._feat_cond
 
-        messages = vert_probs.copy()
+        messages = self._vert_probs.copy()
         logprob = 0.0
 
         for op, v, v2, e in self._schedule:
             message = messages[v, :]
             if op == 0:  # OP_UP
                 # Propagate upward from observed to latent.
-                # This uses a with-replacement approximation which is exact
-                # for categorical data but approximate for multinomial.
                 beg, end = self._ragged_index[v:v + 2]
                 for r in range(beg, end):
+                    # This uses a with-replacement approximation which is exact
+                    # for categorical data but approximate for multinomial.
                     message *= feat_cond[r, :]**data[r]
             elif op == 1:  # OP_IN
-                # Propagate latent state inward from v2ren to v.
-                trans = edge_probs[e, :, :]
+                # Propagate latent state inward from children to v.
+                trans = edge_trans[e, :, :]
                 if v > v2:
                     trans = trans.T
-                message *= np.dot(trans, messages[v2, :] / vert_probs[v2, :])
-                message /= vert_probs[v, :]
+                message *= np.dot(trans, messages[v2, :])
                 message_sum = message.sum()
                 message /= message_sum
                 logprob += np.log(message_sum)
