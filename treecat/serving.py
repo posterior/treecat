@@ -29,9 +29,10 @@ class TreeCatServer(object):
     def __init__(self, tree, suffstats, config):
         logger.info('TreeCatServer with %d features', tree.num_vertices)
         assert isinstance(tree, TreeStructure)
+        ragged_index = suffstats['ragged_index']
         self._tree = tree
         self._config = config
-        self._ragged_index = suffstats['ragged_index']
+        self._ragged_index = ragged_index
         self._schedule = make_propagation_schedule(tree.tree_grid)
         self._zero_row = np.zeros(self._ragged_index[-1], np.int8)
 
@@ -46,9 +47,14 @@ class TreeCatServer(object):
         vert_prior = 0.5
         edge_prior = 0.5 / M
         feat_prior = 0.5 / M
+        meas_prior = feat_prior * np.array(
+            [(ragged_index[v + 1] - ragged_index[v]) for v in range(V)],
+            dtype=np.float32).reshape((V, 1))
+
         self._vert_probs = suffstats['vert_ss'].astype(np.float32) + vert_prior
         self._edge_probs = suffstats['edge_ss'].astype(np.float32) + edge_prior
         self._feat_probs = suffstats['feat_ss'].astype(np.float32) + feat_prior
+        self._meas_probs = suffstats['meas_ss'].astype(np.float32) + meas_prior
 
     def zero_row(self):
         """Make an empty data row."""
@@ -80,9 +86,11 @@ class TreeCatServer(object):
         assert data.dtype == self._zero_row.dtype
         assert counts.shape == (V, )
 
-        feat_probs = self._feat_probs
-        edge_probs = self._edge_probs
         vert_probs = self._vert_probs
+        edge_probs = self._edge_probs
+        feat_probs = self._feat_probs
+        meas_probs = self._meas_probs
+
         messages = vert_probs.copy()
         vert_sample = np.zeros([V], np.int32)
         feat_sample = self._zero_row.copy()
@@ -91,14 +99,11 @@ class TreeCatServer(object):
             message = messages[v, :]
             if op == 0:  # OP_UP
                 # Propagate upward from observed to latent.
+                # This uses a with-replacement approximation which is exact
+                # for categorical data but approximate for multinomial.
                 beg, end = self._ragged_index[v:v + 2]
-                obs_lat = feat_probs[beg:end, :].copy()
-                lat = obs_lat.sum(axis=0)
-                for c, count in enumerate(data[beg:end]):
-                    for _ in range(count):
-                        message *= obs_lat[c, :] / lat
-                        obs_lat[c, :] += 1.0
-                        lat += 1.0
+                for r in range(beg, end):
+                    message *= (feat_probs[r, :] / meas_probs[v, :])**data[r]
             elif op == 1:  # OP_IN
                 # Propagate latent state inward from children to v.
                 trans = edge_probs[e, :, :]
@@ -144,9 +149,11 @@ class TreeCatServer(object):
         V, E, M = self._VEM
         assert data.shape == (self._ragged_index[-1], )
 
-        feat_probs = self._feat_probs
-        edge_probs = self._edge_probs
         vert_probs = self._vert_probs
+        edge_probs = self._edge_probs
+        feat_probs = self._feat_probs
+        meas_probs = self._meas_probs
+
         messages = vert_probs.copy()
         logprob = 0.0
 
@@ -154,14 +161,11 @@ class TreeCatServer(object):
             message = messages[v, :]
             if op == 0:  # OP_UP
                 # Propagate upward from observed to latent.
+                # This uses a with-replacement approximation which is exact
+                # for categorical data but approximate for multinomial.
                 beg, end = self._ragged_index[v:v + 2]
-                obs_lat = feat_probs[beg:end, :].copy()
-                lat = obs_lat.sum(axis=0)
-                for c, count in enumerate(data[beg:end]):
-                    for _ in range(count):
-                        message *= obs_lat[c, :] / lat
-                        obs_lat[c, :] += 1.0
-                        lat += 1.0
+                for r in range(beg, end):
+                    message *= (feat_probs[r, :] / meas_probs[v, :])**data[r]
             elif op == 1:  # OP_IN
                 # Propagate latent state inward from v2ren to v.
                 trans = edge_probs[e, :, :]

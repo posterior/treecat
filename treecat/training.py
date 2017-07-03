@@ -215,8 +215,7 @@ class TreeCatTrainer(object):
         self._edge_prior = 0.5 / M
         self._feat_prior = 0.5 / M
         self._meas_prior = self._feat_prior * np.array(
-            [(self._ragged_index[v + 1] - self._ragged_index[v])
-             for v in range(V)],
+            [(ragged_index[v + 1] - ragged_index[v]) for v in range(V)],
             dtype=np.float32).reshape((V, 1))
 
         # Sufficient statistics are maintained always.
