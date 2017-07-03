@@ -198,10 +198,10 @@ class TreeCatTrainer(object):
         self._config = config
         self._ragged_index = ragged_index
         self._assigned_rows = set()
-        self.assignments = np.zeros([N, V], dtype=np.int8)
-        self.tree = TreeStructure(V)
-        assert self.tree.num_vertices == V
-        self._schedule = make_propagation_schedule(self.tree.tree_grid)
+        self._assignments = np.zeros([N, V], dtype=np.int8)
+        self._tree = TreeStructure(V)
+        assert self._tree.num_vertices == V
+        self._schedule = make_propagation_schedule(self._tree.tree_grid)
 
         # These are useful dimensions to import into locals().
         E = V - 1  # Number of edges in the tree.
@@ -227,10 +227,10 @@ class TreeCatTrainer(object):
 
     def _update_tree(self):
         V, E, K, M = self._VEKM
-        assignments = self.assignments[sorted(self._assigned_rows), :]
-        for e, v1, v2 in self.tree.tree_grid.T:
+        assignments = self._assignments[sorted(self._assigned_rows), :]
+        for e, v1, v2 in self._tree.tree_grid.T:
             self._edge_ss[e, :, :] = count_pairs(assignments, v1, v2, M)
-        self._schedule = make_propagation_schedule(self.tree.tree_grid)
+        self._schedule = make_propagation_schedule(self._tree.tree_grid)
 
     @profile
     def add_row(self, row_id):
@@ -244,9 +244,9 @@ class TreeCatTrainer(object):
         jit_add_row(
             self._ragged_index,
             self._data[row_id, :],
-            self.tree.tree_grid,
+            self._tree.tree_grid,
             self._schedule,
-            self.assignments[row_id, :],
+            self._assignments[row_id, :],
             self._vert_ss,
             self._edge_ss,
             self._feat_ss,
@@ -266,8 +266,8 @@ class TreeCatTrainer(object):
         jit_remove_row(
             self._ragged_index,
             self._data[row_id, :],
-            self.tree.tree_grid,
-            self.assignments[row_id, :],
+            self._tree.tree_grid,
+            self._assignments[row_id, :],
             self._vert_ss,
             self._edge_ss,
             self._feat_ss,
@@ -280,25 +280,25 @@ class TreeCatTrainer(object):
         logger.info('TreeCatTrainer.sample_tree given %d rows',
                     len(self._assigned_rows))
         V, E, K, M = self._VEKM
-        assignments = self.assignments[sorted(self._assigned_rows), :]
+        assignments = self._assignments[sorted(self._assigned_rows), :]
         vertex_logits = logprob_dc(self._vert_ss + self._vert_prior, axis=1)
         edge_logits = np.zeros([K], np.float32)
-        for k, v1, v2 in self.tree.tree_grid.T:
+        for k, v1, v2 in self._tree.tree_grid.T:
             counts = count_pairs(assignments, v1, v2, M)
             # This is the most expensive part of tree sampling:
             edge_logits[k] = (logprob_dc(counts + self._edge_prior) -
                               vertex_logits[v1] - vertex_logits[v2])
 
         # Sample the tree.
-        complete_grid = self.tree.complete_grid
+        complete_grid = self._tree.complete_grid
         assert edge_logits.shape[0] == complete_grid.shape[1]
-        edges = [tuple(edge) for edge in self.tree.tree_grid[1:3, :].T]
+        edges = [tuple(edge) for edge in self._tree.tree_grid[1:3, :].T]
         edges = sample_tree(
             complete_grid,
             edge_logits,
             edges,
             steps=self._config['learning_sample_tree_steps'])
-        self.tree.set_edges(edges)
+        self._tree.set_edges(edges)
         self._update_tree()
 
     def logprob(self):
@@ -307,11 +307,11 @@ class TreeCatTrainer(object):
         This is mainly useful for testing goodness of fit of the category
         kernel.
         """
-        assert len(self._assigned_rows) == self.assignments.shape[0]
+        assert len(self._assigned_rows) == self._assignments.shape[0]
         V, E, K, M = self._VEKM
         vertex_logits = logprob_dc(self._vert_ss + self._vert_prior, axis=1)
         logprob = vertex_logits.sum()
-        for e, v1, v2 in self.tree.tree_grid.T:
+        for e, v1, v2 in self._tree.tree_grid.T:
             logprob += (logprob_dc(self._edge_ss[e, :, :] + self._edge_prior) -
                         vertex_logits[v1] - vertex_logits[v2])
         for v in range(V):
@@ -323,7 +323,7 @@ class TreeCatTrainer(object):
     def finish(self):
         logger.info('TreeCatTrainer.finish with %d rows',
                     len(self._assigned_rows))
-        self.tree.gc()
+        self._tree.gc()
 
     def train(self):
         """Train a TreeCat model using subsample-annealed MCMC.
@@ -340,7 +340,7 @@ class TreeCatTrainer(object):
         """
         logger.info('train()')
         np.random.seed(self._config['seed'])
-        num_rows = self.assignments.shape[0]
+        num_rows = self._assignments.shape[0]
         for action, row_id in get_annealing_schedule(num_rows, self._config):
             if action == 'add_row':
                 art_logger('+')
@@ -354,8 +354,8 @@ class TreeCatTrainer(object):
         self.finish()
         return {
             'config': self._config,
-            'tree': self.tree,
-            'assignments': self.assignments,
+            'tree': self._tree,
+            'assignments': self._assignments,
             'suffstats': {
                 'ragged_index': self._ragged_index,
                 'vert_ss': self._vert_ss,

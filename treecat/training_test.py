@@ -165,6 +165,7 @@ def hash_assignments(assignments):
     (2, 3, 2, 2),
     (3, 1, 2, 2),
     (3, 2, 2, 2),
+    (3, 2, 2, 2),
     (4, 1, 2, 2),
 ])
 def test_assignment_sampler_gof(N, V, C, M):
@@ -183,7 +184,7 @@ def test_assignment_sampler_gof(N, V, C, M):
         trainer.add_row(row_id)
 
     # Collect samples.
-    num_samples = 100 * M**(N * V)
+    num_samples = 200 * M**(N * V)
     counts = {}
     logprobs = {}
     for _ in range(num_samples):
@@ -191,7 +192,7 @@ def test_assignment_sampler_gof(N, V, C, M):
             # This is a single-site Gibbs sampler.
             trainer.remove_row(row_id)
             trainer.add_row(row_id)
-        key = hash_assignments(trainer.assignments)
+        key = hash_assignments(trainer._assignments)
         if key in counts:
             counts[key] += 1
         else:
