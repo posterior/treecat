@@ -53,7 +53,9 @@ class TreeCatServer(object):
 
         # These are posterior marginals for vertices and pairs of vertices.
         self._vert_probs = suffstats['vert_ss'].astype(np.float32) + vert_prior
+        self._vert_probs /= self._vert_probs.sum(axis=1, keepdims=True)
         self._edge_probs = suffstats['edge_ss'].astype(np.float32) + edge_prior
+        self._edge_probs /= self._edge_probs.sum(axis=(1, 2), keepdims=True)
 
         # This represents information in the pairwise joint posterior minus
         # information in the individual factors.

@@ -67,24 +67,30 @@ def one_hot(c, C):
     return value
 
 
-@pytest.mark.xfail
-def test_server_logprob_normalized(model):
-    ragged_index = TINY_RAGGED_INDEX
-    data = TINY_DATA
-    server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
+@pytest.mark.parametrize('N,V,C,M', [
+    (10, 1, 2, 2),
+    (10, 1, 2, 3),
+    (10, 2, 2, 2),
+    pytest.mark.xfail((10, 2, 2, 3)),
+    pytest.mark.xfail((10, 3, 2, 2)),
+    pytest.mark.xfail((10, 4, 2, 2)),
+])
+def test_server_logprob_normalized(N, V, C, M):
+    model = generate_fake_model(N, V, C, M)
+    config = TINY_CONFIG.copy()
+    config['model_num_clusters'] = M
+    server = serve_model(model['tree'], model['suffstats'], config)
 
     # The total probability of all categorical rows should be 1.
-    V = len(data)
+    ragged_index = model['suffstats']['ragged_index']
     factors = []
     for v in range(V):
         C = ragged_index[v + 1] - ragged_index[v]
         factors.append([one_hot(c, C) for c in range(C)])
     logprobs = []
-    row = server.zero_row
     for columns in itertools.product(*factors):
-        for v, column in enumerate(columns):
-            beg, end = ragged_index[v:v + 2]
-            row[beg:end] = column
+        row = np.concatenate(columns)
+        print(row)
         logprobs.append(server.logprob(row))
     logtotal = np.logaddexp.reduce(logprobs)
     assert logtotal == pytest.approx(0.0, abs=1e-5)
@@ -95,9 +101,9 @@ def test_server_logprob_normalized(model):
     (10, 1, 2, 3),
     (10, 2, 2, 2),
     (10, 3, 2, 2),
-    pytest.mark.xfail((10, 4, 2, 2)),
+    (10, 4, 2, 2),
     (20, 1, 2, 2),
-    pytest.mark.xfail((20, 1, 2, 3)),
+    (20, 1, 2, 3),
     (20, 2, 2, 2),
     (20, 3, 2, 2),
     (20, 4, 2, 2),
@@ -105,7 +111,7 @@ def test_server_logprob_normalized(model):
     (40, 1, 2, 3),
     (40, 2, 2, 2),
     (40, 3, 2, 2),
-    pytest.mark.xfail((40, 4, 2, 2)),
+    (40, 4, 2, 2),
 ])
 def test_server_gof(N, V, C, M):
     np.random.seed(0)
@@ -116,7 +122,7 @@ def test_server_gof(N, V, C, M):
 
     # Generate samples.
     expected = C**V
-    num_samples = 100 * expected
+    num_samples = 500 * expected
     ones = np.ones(V, dtype=np.int8)
     counts = {}
     logprobs = {}
