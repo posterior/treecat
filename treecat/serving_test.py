@@ -114,7 +114,7 @@ def test_server_logprob_normalized(N, V, C, M):
     (40, 3, 2, 2),
     (40, 4, 2, 2),
 ])
-def test_server_gof(N, V, C, M):
+def test_server_unconditional_gof(N, V, C, M):
     set_random_seed(0)
     model = generate_fake_model(N, V, C, M)
     config = TINY_CONFIG.copy()
@@ -143,6 +143,66 @@ def test_server_gof(N, V, C, M):
     probs = np.exp(np.array([logprobs[k] for k in keys]))
     probs /= probs.sum()
     gof = multinomial_goodness_of_fit(probs, counts, num_samples, plot=True)
+    assert 1e-2 < gof
+
+
+@pytest.mark.parametrize('N,V,C,M', [
+    (10, 1, 2, 2),
+    (10, 1, 2, 3),
+    (10, 2, 2, 2),
+    (10, 3, 2, 2),
+    (10, 4, 2, 2),
+    (20, 1, 2, 2),
+    (20, 1, 2, 3),
+    (20, 2, 2, 2),
+    (20, 3, 2, 2),
+    (20, 4, 2, 2),
+    (40, 1, 2, 2),
+    (40, 1, 2, 3),
+    (40, 2, 2, 2),
+    (40, 3, 2, 2),
+    (40, 4, 2, 2),
+])
+def test_server_conditional_gof(N, V, C, M):
+    set_random_seed(0)
+    model = generate_fake_model(N, V, C, M)
+    config = TINY_CONFIG.copy()
+    config['model_num_clusters'] = M
+    server = serve_model(model['tree'], model['suffstats'], config)
+
+    # Generate samples.
+    expected = C**V
+    num_samples = 200 * expected
+    ones = np.ones(V, dtype=np.int8)
+    cond_data = server.sample(ones)
+    counts = {}
+    logprobs = {}
+    for _ in range(num_samples):
+        sample = server.sample(ones, cond_data)
+        key = tuple(sample)
+        if key in counts:
+            counts[key] += 1
+        else:
+            counts[key] = 1
+            logprobs[key] = server.logprob(sample + cond_data)
+    assert len(counts) == expected
+
+    # Check accuracy using Pearson's chi-squared test.
+    keys = sorted(counts.keys(), key=lambda key: -logprobs[key])
+    counts = np.array([counts[k] for k in keys], dtype=np.int32)
+    probs = np.exp(np.array([logprobs[k] for k in keys]))
+    probs /= probs.sum()
+
+    truncated = False
+    valid = (probs * num_samples > 20)
+    if not valid.all():
+        T = valid.argmin()
+        probs = probs[:T]
+        counts = counts[:T]
+        truncated = True
+
+    gof = multinomial_goodness_of_fit(
+        probs, counts, num_samples, plot=True, truncated=truncated)
     assert 1e-2 < gof
 
 
