@@ -78,7 +78,7 @@ def train(rows=100, cols=10, epochs=5, tool='timers'):
     Available tools: timers, time, snakeviz, line_profiler, pdb
     """
     from treecat.generate import generate_dataset_file
-    config = make_default_config()
+    config = DEFAULT_CONFIG.copy()
     config['learning_annealing_epochs'] = epochs
     dataset_path = generate_dataset_file(rows, cols)
     with tempdir() as dirname:
@@ -94,7 +94,7 @@ def serve(rows=100, cols=10, cats=4, tool='timers'):
     Available tools: timers, time, snakeviz, line_profiler, pdb
     """
     from treecat.generate import generate_model_file
-    config = make_default_config()
+    config = DEFAULT_CONFIG.copy()
     model_path = generate_model_file(rows, cols, cats)
     with tempdir() as dirname:
         config_path = os.path.join(dirname, 'config.pkl.gz')
