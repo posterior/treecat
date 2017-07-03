@@ -39,7 +39,9 @@ def test_get_annealing_schedule():
 def test_train_model(N, V, C, M):
     config = DEFAULT_CONFIG.copy()
     config['model_num_clusters'] = M
-    ragged_index, data = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
+    dataset = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
+    ragged_index = dataset['ragged_index']
+    data = dataset['data']
     model = train_model(ragged_index, data, config)
 
     assert model['config'] == config
@@ -128,7 +130,9 @@ def test_assignment_sampler_gof(N, V, C, M):
     config = DEFAULT_CONFIG.copy()
     config['learning_sample_tree_steps'] = 0  # Disable tree kernel.
     config['model_num_clusters'] = M
-    ragged_index, data = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
+    dataset = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
+    ragged_index = dataset['ragged_index']
+    data = dataset['data']
     trainer = TreeCatTrainer(ragged_index, data, config)
     print('Data:')
     print(data)

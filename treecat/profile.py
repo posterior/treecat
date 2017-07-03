@@ -49,12 +49,12 @@ def run_with_tool(cmd, tool, dirname):
 
 
 @parsable
-def train_files(data_path, config_path):
+def train_files(dataset_path, config_path):
     """INTERNAL Train from pickled dataset, config."""
     from treecat.training import train_model
-    ragged_index, data = pickle_load(data_path)
+    dataset = pickle_load(dataset_path)
     config = pickle_load(config_path)
-    train_model(ragged_index, data, config)
+    train_model(dataset['ragged_index'], dataset['data'], config['config'])
 
 
 @parsable
@@ -64,7 +64,7 @@ def serve_files(model_path, config_path):
     import numpy as np
     model = pickle_load(model_path)
     config = pickle_load(config_path)
-    server = serve_model(model['tree'], model['suffstats'], config)
+    server = serve_model(model['tree'], model['suffstats'], config['config'])
     counts = np.ones(model['tree'].num_vertices, np.int8)
     for _ in range(1000):
         sample = server.sample(counts)
@@ -79,11 +79,11 @@ def train(rows=100, cols=10, epochs=5, tool='timers'):
     from treecat.generate import generate_dataset_file
     config = DEFAULT_CONFIG.copy()
     config['learning_annealing_epochs'] = epochs
-    data_path = generate_dataset_file(rows, cols)
+    dataset_path = generate_dataset_file(rows, cols)
     with tempdir() as dirname:
         config_path = os.path.join(dirname, 'config.pkl.gz')
-        pickle_dump(config, config_path)
-        cmd = [FILE, 'train_files', data_path, config_path]
+        pickle_dump({'config': config}, config_path)
+        cmd = [FILE, 'train_files', dataset_path, config_path]
         run_with_tool(cmd, tool, dirname)
 
 
@@ -97,7 +97,7 @@ def serve(rows=100, cols=10, cats=4, tool='timers'):
     model_path = generate_model_file(rows, cols, cats)
     with tempdir() as dirname:
         config_path = os.path.join(dirname, 'config.pkl.gz')
-        pickle_dump(config, config_path)
+        pickle_dump({'config': config}, config_path)
         cmd = [FILE, 'serve_files', model_path, config_path]
         run_with_tool(cmd, tool, dirname)
 

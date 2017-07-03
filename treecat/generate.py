@@ -37,7 +37,7 @@ def generate_dataset(num_rows, num_cols, num_cats=4, rate=1.0):
         for n in range(num_rows):
             count = np.random.poisson(rate)
             column[n, :] = np.random.multinomial(count, probs)
-    return ragged_index, data
+    return {'ragged_index': ragged_index, 'data': data}
 
 
 def generate_dataset_file(num_rows, num_cols, num_cats=4, rate=1.0):
@@ -72,7 +72,9 @@ def generate_fake_model(num_rows, num_cols, num_cats, num_components):
     tree = generate_tree(num_cols)
     assignments = np.random.choice(num_components, size=(num_rows, num_cols))
     assignments = assignments.astype(np.int32)
-    ragged_index, data = generate_dataset(num_rows, num_cols, num_cats)
+    dataset = generate_dataset(num_rows, num_cols, num_cats)
+    ragged_index = dataset['ragged_index']
+    data = dataset['data']
     N = num_rows
     V = num_cols
     E = V - 1
@@ -102,7 +104,7 @@ def generate_fake_model(num_rows, num_cols, num_cats, num_components):
             'feat_ss': feat_ss,
         },
     }
-    return data, model
+    return model
 
 
 def generate_model_file(num_rows, num_cols, num_cats=4, rate=1.0):
@@ -119,10 +121,10 @@ def generate_model_file(num_rows, num_cols, num_cats=4, rate=1.0):
     if not os.path.exists(DATA):
         os.makedirs(DATA)
     dataset_path = generate_dataset_file(num_rows, num_cols, num_cats, rate)
-    ragged_index, data = pickle_load(dataset_path)
+    dataset = pickle_load(dataset_path)
     config = DEFAULT_CONFIG.copy()
     config['learning_annealing_epochs'] = 5
-    model = train_model(ragged_index, data, config)
+    model = train_model(dataset['ragged_index'], dataset['data'], config)
     pickle_dump(model, path)
     return path
 

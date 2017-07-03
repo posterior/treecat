@@ -11,9 +11,11 @@ except (IOError, ImportError, OSError) as e:
     sys.stderr.flush()
     long_description = open('README.md').read()
 
+version = open('treecat/version.py').read().strip().split()[-1]
+
 setup(
     name='treecat',
-    version='0.0.1',
+    version=version,
     description='A tree-of-mixtures nonparametric Bayesian model',
     long_description=long_description,
     author='Fritz Obermeyer',

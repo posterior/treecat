@@ -106,7 +106,7 @@ def test_server_logprob_normalized(model):
 ])
 def test_server_gof(N, V, C, M):
     np.random.seed(0)
-    data, model = generate_fake_model(N, V, C, M)
+    model = generate_fake_model(N, V, C, M)
     config = TINY_CONFIG.copy()
     config['model_num_clusters'] = M
     server = serve_model(model['tree'], model['suffstats'], config)

@@ -112,8 +112,8 @@ class TreeCatServer(object):
                     beg, end = self._ragged_index[v:v + 2]
                     probs = feat_probs[beg:end, vert_sample[v]].copy()
                     probs /= probs.sum()
-                    feat_sample[beg:end] = np.random.multinomial(counts[v],
-                                                                 probs)
+                    feat_sample[beg:end] = np.random.multinomial(
+                        counts[v], probs)
 
         return feat_sample
 
