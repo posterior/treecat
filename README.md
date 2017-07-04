@@ -5,6 +5,9 @@
 [![DOI](https://zenodo.org/badge/93913649.svg)](https://zenodo.org/badge/latestdoi/93913649)
 
 Tree-Cat is a Bayesian latent tree model of multivariate multinomial data.
+
+## Intended Use
+
 Tree-Cat is appropriate for analyzing medium-sized tabular data with
 categorical and ordinal values, possibly with missing observations.
 
@@ -30,6 +33,50 @@ First install `numba`. Then
 ```sh
 $ pip install tree-cat
 ```
+
+## Quick Start
+
+1.  Create two csv files: a `schema.csv` and a `data.csv`.
+
+2.  Import the csv files into treecat's internal format.
+
+    ```python
+    from treecat.format import import_data
+
+    import_data('schema.csv', 'data.csv', 'dataset.pkl.gz')
+    ```
+
+3.  Train an ensemble model on your dataset.
+
+    ```python
+    from treecat.format import pickle_load, pickle_dump
+    from treecat.config import train_ensemble
+    from treecat.training import train_ensemble
+    from treecat.config import make_default_config
+
+    dataset = pickle_load('dataset.pkl.gz')
+    config = make_default_config()
+    ensemble = train_ensemble(dataset['ragged_index'],
+                              dataset['data'], config)
+    pickle_dump(ensemble, 'ensemble.plk.gz')
+    ```
+
+4.  Load your trained model into a server
+
+    ```python
+    from treecat.serving import serve_ensemble
+
+    server = serve_ensemble('ensemble.plk.gz')
+    ```
+
+5.  Run queries against the server, e.g. compute marginals
+    ```python
+    server.sample(100, np.ones(V)).mean(axis=1)
+    ```
+    or compute a latent correlation matrix
+    ```python
+    print(server.correlation())
+    ```
 
 ## The Model
 
