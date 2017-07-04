@@ -12,8 +12,8 @@ possibly with missing observations.
 | --- | --- |
 | **Feature Types** | categorical, ordinal, binomial, multinomial |
 | **# Rows (n)** | 1000-100K |
-| **# Features (p)** | 20-1000 |
-| **# Cells (n &times; p)** | <10M |
+| **# Features (p)** | 10-1000 |
+| **# Cells (n &times; p)** | <1M |
 | **# Categories** | 2-10ish |
 | **# Max Ordinal** | 10ish |
 | **Missing obervations?** | yes |
@@ -34,7 +34,7 @@ Let `K[n,v]` be the number of observations of feature `v` in row `n`
 
 TreeCat is the following generative model:
 ```bugs
-E ~ UniformSpanningTree(V)
+E ~ UniformSpanningTree(V)    # An undirected tree.
 for v in V:
     Pv[v] ~ Dirichlet(size = [M], alpha = 1/2)
 for (u,v) in E:
@@ -53,7 +53,7 @@ for n in 1:N:
         Z[n,v] ~ Multinomial(Q[v,X[n,v]], count = K[n,v])
 ```
 
-## Inference
+## The Inference Algorithm
 
 This package implements fully Bayesian MCMC inference using subsample-annealed
 Gibbs sampling. There are two pieces of latent state that are sampled:
