@@ -8,12 +8,15 @@ import numpy as np
 import pytest
 from goftests import multinomial_goodness_of_fit
 
+from treecat.generate import generate_fake_ensemble
 from treecat.generate import generate_fake_model
+from treecat.serving import serve_ensemble
 from treecat.serving import serve_model
 from treecat.testutil import TINY_CONFIG
 from treecat.testutil import TINY_DATA
 from treecat.testutil import TINY_RAGGED_INDEX
 from treecat.testutil import numpy_seterr
+from treecat.training import train_ensemble
 from treecat.training import train_model
 from treecat.util import set_random_seed
 
@@ -25,15 +28,12 @@ def model():
     return train_model(TINY_RAGGED_INDEX, TINY_DATA, TINY_CONFIG)
 
 
-def test_server_init(model):
-    serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
+@pytest.fixture(scope='module')
+def ensemble():
+    return train_ensemble(TINY_RAGGED_INDEX, TINY_DATA, TINY_CONFIG)
 
 
-def test_server_sample_shape(model):
-    ragged_index = TINY_RAGGED_INDEX
-    data = TINY_DATA
-    server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
-
+def validate_sample_shape(ragged_index, data, server):
     # Sample many different counts patterns.
     V = len(ragged_index) - 1
     N = data.shape[0]
@@ -50,9 +50,33 @@ def test_server_sample_shape(model):
                 assert np.all(samples[:, beg:end].sum(axis=1) == counts[v])
 
 
+def test_server_sample_shape(model):
+    ragged_index = TINY_RAGGED_INDEX
+    data = TINY_DATA
+    server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
+    validate_sample_shape(ragged_index, data, server)
+
+
+def test_ensemble_sample_shape(ensemble):
+    ragged_index = TINY_RAGGED_INDEX
+    data = TINY_DATA
+    server = serve_ensemble(ensemble)
+    validate_sample_shape(ragged_index, data, server)
+
+
 def test_server_logprob_shape(model):
     data = TINY_DATA
     server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
+    logprobs = server.logprob(data)
+    N = data.shape[0]
+    assert logprobs.dtype == np.float32
+    assert logprobs.shape == (N, )
+    assert np.isfinite(logprobs).all()
+
+
+def test_ensemble_logprob_shape(ensemble):
+    data = TINY_DATA
+    server = serve_ensemble(ensemble)
     logprobs = server.logprob(data)
     N = data.shape[0]
     assert logprobs.dtype == np.float32
@@ -94,7 +118,7 @@ def test_server_logprob_normalized(N, V, C, M):
     assert logtotal == pytest.approx(0.0, abs=1e-5)
 
 
-@pytest.mark.parametrize('N,V,C,M', [
+NVCM_EXAMPLES_FOR_GOF = [
     (10, 1, 2, 2),
     (10, 1, 2, 3),
     (10, 2, 2, 2),
@@ -110,69 +134,54 @@ def test_server_logprob_normalized(N, V, C, M):
     (40, 2, 2, 2),
     (40, 3, 2, 2),
     (40, 4, 2, 2),
-])
+]
+
+
+@pytest.mark.parametrize('N,V,C,M', NVCM_EXAMPLES_FOR_GOF)
 def test_server_unconditional_gof(N, V, C, M):
     set_random_seed(0)
     model = generate_fake_model(N, V, C, M)
     config = TINY_CONFIG.copy()
     config['model_num_clusters'] = M
     server = serve_model(model['tree'], model['suffstats'], config)
-
-    # Generate samples.
-    expected = C**V
-    num_samples = 1000 * expected
-    ones = np.ones(V, dtype=np.int8)
-    samples = server.sample(num_samples, ones)
-    logprobs = server.logprob(samples)
-    counts = {}
-    probs = {}
-    for sample, logprob in zip(samples, logprobs):
-        key = tuple(sample)
-        if key in counts:
-            counts[key] += 1
-        else:
-            counts[key] = 1
-            probs[key] = np.exp(logprob)
-    assert len(counts) == expected
-
-    # Check accuracy using Pearson's chi-squared test.
-    keys = sorted(counts.keys(), key=lambda key: -probs[key])
-    counts = np.array([counts[k] for k in keys], dtype=np.int32)
-    probs = np.array([probs[k] for k in keys])
-    probs /= probs.sum()
-    gof = multinomial_goodness_of_fit(probs, counts, num_samples, plot=True)
-    assert 1e-2 < gof
+    validate_gof(N, V, C, M, server, conditional=False)
 
 
-@pytest.mark.parametrize('N,V,C,M', [
-    (10, 1, 2, 2),
-    (10, 1, 2, 3),
-    (10, 2, 2, 2),
-    (10, 3, 2, 2),
-    (10, 4, 2, 2),
-    (20, 1, 2, 2),
-    (20, 1, 2, 3),
-    (20, 2, 2, 2),
-    (20, 3, 2, 2),
-    (20, 4, 2, 2),
-    (40, 1, 2, 2),
-    (40, 1, 2, 3),
-    (40, 2, 2, 2),
-    (40, 3, 2, 2),
-    (40, 4, 2, 2),
-])
+@pytest.mark.parametrize('N,V,C,M', NVCM_EXAMPLES_FOR_GOF)
 def test_server_conditional_gof(N, V, C, M):
     set_random_seed(0)
     model = generate_fake_model(N, V, C, M)
     config = TINY_CONFIG.copy()
     config['model_num_clusters'] = M
     server = serve_model(model['tree'], model['suffstats'], config)
+    validate_gof(N, V, C, M, server, conditional=True)
 
+
+@pytest.mark.xfail
+@pytest.mark.parametrize('N,V,C,M', NVCM_EXAMPLES_FOR_GOF)
+def test_ensemble_unconditional_gof(N, V, C, M):
+    ensemble = generate_fake_ensemble(N, V, C, M)
+    server = serve_ensemble(ensemble)
+    validate_gof(N, V, C, M, server, conditional=False)
+
+
+@pytest.mark.xfail
+@pytest.mark.parametrize('N,V,C,M', NVCM_EXAMPLES_FOR_GOF)
+def test_ensemble_conditional_gof(N, V, C, M):
+    ensemble = generate_fake_ensemble(N, V, C, M)
+    server = serve_ensemble(ensemble)
+    validate_gof(N, V, C, M, server, conditional=True)
+
+
+def validate_gof(N, V, C, M, server, conditional):
     # Generate samples.
     expected = C**V
     num_samples = 1000 * expected
     ones = np.ones(V, dtype=np.int8)
-    cond_data = server.sample(1, ones).reshape(server.zero_row().shape)
+    if conditional:
+        cond_data = server.sample(1, ones).reshape(server.zero_row().shape)
+    else:
+        cond_data = server.zero_row()
     samples = server.sample(num_samples, ones, cond_data)
     logprobs = server.logprob(samples + cond_data[np.newaxis, :])
     counts = {}

@@ -69,11 +69,13 @@ def generate_tree(num_cols):
     return tree
 
 
-def generate_fake_model(num_rows, num_cols, num_cats, num_components):
+def generate_fake_model(num_rows, num_cols, num_cats, num_components,
+                        dataset=None):
     tree = generate_tree(num_cols)
     assignments = np.random.choice(num_components, size=(num_rows, num_cols))
     assignments = assignments.astype(np.int32)
-    dataset = generate_dataset(num_rows, num_cols, num_cats)
+    if dataset is None:
+        dataset = generate_dataset(num_rows, num_cols, num_cats)
     ragged_index = dataset['ragged_index']
     data = dataset['data']
     N = num_rows
@@ -109,6 +111,23 @@ def generate_fake_model(num_rows, num_cols, num_cats, num_components):
         },
     }
     return model
+
+
+def generate_fake_ensemble(num_rows, num_cols, num_cats, num_components, seed):
+    dataset = generate_dataset(num_rows, num_cols, num_cats)
+    ensemble = []
+    config = make_default_config()
+    config['model_num_clusters'] = num_components
+    config['seed'] = seed
+    for sub_seed in range(3):
+        sub_config = config.copy()
+        sub_config['seed'] += sub_seed
+        set_random_seed(sub_config['seed'])
+        model = generate_fake_model(
+            num_rows, num_cols, num_cats, num_components, dataset)
+        model['config'] = sub_config
+        ensemble.append(model)
+    return ensemble
 
 
 def generate_model_file(num_rows, num_cols, num_cats=4, rate=1.0):

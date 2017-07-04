@@ -5,8 +5,8 @@ from __future__ import print_function
 import logging
 
 import numpy as np
-from scipy.stats import entropy
 from scipy.misc import logsumexp
+from scipy.stats import entropy
 
 from treecat.structure import TreeStructure
 from treecat.structure import make_propagation_schedule
@@ -225,9 +225,9 @@ class TreeCatServer(object):
                     trans = edge_probs[e, :, :]
                     if v > v2:
                         trans = trans.T
-                    messages[v, :, :] = np.dot(trans /
-                                               vert_probs[v2, np.newaxis, :],
-                                               messages[v2, :, :])
+                    messages[v, :, :] = np.dot(
+                        trans / vert_probs[v2, np.newaxis, :],
+                        messages[v2, :, :])
             for v in range(V):
                 result[root, v] = correlation(messages[v, :, :])
         return result
@@ -242,16 +242,22 @@ class EnsembleServer(object):
 
     def __init__(self, ensemble):
         logger.info('EnsembleServer of size %d', len(ensemble))
+        assert ensemble
         self._ensemble = [
             TreeCatServer(model['tree'], model['suffstats'], model['config'])
             for model in ensemble
         ]
+        self._zero_row = self._ensemble[0]._zero_row.copy()
+
+    def zero_row(self):
+        """Make an empty data row."""
+        return self._zero_row.copy()
 
     def sample(self, N, counts, data=None):
         size = len(self._ensemble)
         pvals = np.ones(size, dtype=np.float32) / size
         sub_Ns = np.random.multinomial(N, pvals)
-        samples = np.concat([
+        samples = np.concatenate([
             server.sample(sub_N, counts, data)
             for server, sub_N in zip(self._ensemble, sub_Ns)
         ])
@@ -263,7 +269,7 @@ class EnsembleServer(object):
         logprobs = np.stack(
             [server.logprob(data) for server in self._ensemble])
         logprobs = logsumexp(logprobs, axis=0)
-        logprobs -= np.log(len(self.ensemble))
+        logprobs -= np.log(len(self._ensemble))
         assert logprobs.shape == (data.shape[0], )
         return logprobs
 

@@ -13,6 +13,7 @@ from treecat.config import make_default_config
 TINY_CONFIG = make_default_config()
 TINY_CONFIG['learning_annealing_epochs'] = 2
 TINY_CONFIG['model_num_clusters'] = 7
+TINY_CONFIG['model_ensemble_size'] = 3
 
 TINY_RAGGED_INDEX = np.array([0, 2, 4, 7, 10, 13], dtype=np.int32)
 TINY_DATA = np.array(
