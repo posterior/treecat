@@ -14,7 +14,7 @@ except (IOError, ImportError, OSError) as e:
 version = open('treecat/version.py').read().strip().split()[-1][1:-1]
 
 setup(
-    name='treecat',
+    name='tree-cat',
     version=version,
     description='A tree-of-mixtures nonparametric Bayesian model',
     long_description=long_description,

@@ -1,16 +1,17 @@
-# TreeCat
+# Tree-Cat
 
 [![Build Status](https://travis-ci.org/posterior/treecat.svg?branch=master)](https://travis-ci.org/posterior/treecat)
+[![Latest Version](https://badge.fury.io/py/tree-cat.svg)](https://pypi.python.org/pypi/tree-cat)
 [![DOI](https://zenodo.org/badge/93913649.svg)](https://zenodo.org/badge/latestdoi/93913649)
 
 A Bayesian latent tree model of multivariate multinomial data.
 
 ## Intended Use
 
-TreeCat is appropriate for analyzing medium-sized tabular data with
+Tree-Cat is appropriate for analyzing medium-sized tabular data with
 categorical and ordinal values, possibly with missing observations.
 
-| | TreeCat supports |
+| | Tree-Cat supports |
 | --- | --- |
 | **Feature Types** | categorical, ordinal, binomial, multinomial |
 | **# Rows (n)** | 1000-100K |
@@ -25,6 +26,14 @@ categorical and ordinal values, possibly with missing observations.
 | **Semisupervised** | yes |
 | **Supervised** | there are better methods |
 
+## Installing
+
+First install `numba`. Then
+
+```sh
+$ pip install tree-cat
+```
+
 ## The Model
 
 Let `V` be a set of vertices (one vertex per feature).<br />
@@ -34,7 +43,7 @@ Let `K[n,v]` be the number of observations of feature `v` in row `n`
 (e.g. 1 for a categorical variable, 0 for missing data, or
 `k` for an ordinal value with minimum 0 and maximum `k`).
 
-TreeCat is the following generative model:
+Tree-Cat is the following generative model:
 ```bugs
 E ~ UniformSpanningTree(V)    # An undirected tree.
 for v in V:
@@ -81,4 +90,4 @@ The virtual machine for training is jit-compiled using numba.
 ## License
 
 Copyright (c) 2017 Fritz Obermeyer. <br />
-TreeCat is licensed under the [Apache 2.0 License](/LICENSE).
+Tree-Cat is licensed under the [Apache 2.0 License](/LICENSE).
