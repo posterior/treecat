@@ -18,7 +18,8 @@ for line in open('treecat/__init__.py'):
 setup(
     name='tree-cat',
     version=version,
-    description='A tree-of-mixtures nonparametric Bayesian model',
+    description=(
+        'A Bayesian latent tree model of multivariate multinomial data'),
     long_description=long_description,
     author='Fritz Obermeyer',
     author_email='fritz.obermeyer@gmail.com',

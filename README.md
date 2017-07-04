@@ -4,7 +4,7 @@
 [![Latest Version](https://badge.fury.io/py/tree-cat.svg)](https://pypi.python.org/pypi/tree-cat)
 [![DOI](https://zenodo.org/badge/93913649.svg)](https://zenodo.org/badge/latestdoi/93913649)
 
-Tree-Cat is a Bayesian latent tree model of multivariate multinomial data.
+A Bayesian latent tree model of multivariate multinomial data.
 
 ## Intended Use
 
