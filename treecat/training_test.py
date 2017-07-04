@@ -166,7 +166,6 @@ def hash_assignments(assignments):
     (2, 3, 2, 2),
     (3, 1, 2, 2),
     (3, 2, 2, 2),
-    (3, 2, 2, 2),
     (4, 1, 2, 2),
 ])
 def test_assignment_sampler_gof(N, V, C, M):

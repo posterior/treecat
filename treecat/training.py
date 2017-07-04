@@ -225,6 +225,12 @@ class TreeCatTrainer(object):
         self._feat_ss = np.zeros([self._ragged_index[-1], M], np.int32)
         self._meas_ss = np.zeros([V, M], np.int32)
 
+        # Temporaries.
+        self._vert_probs = self._vert_ss.astype(np.float32)
+        self._edge_probs = self._edge_ss.astype(np.float32)
+        self._feat_probs = self._feat_ss.astype(np.float32)
+        self._meas_probs = self._meas_ss.astype(np.float32)
+
     def _update_tree(self):
         V, E, K, M = self._VEKM
         assignments = self._assignments[sorted(self._assigned_rows), :]
@@ -236,10 +242,13 @@ class TreeCatTrainer(object):
     def add_row(self, row_id):
         logger.debug('TreeCatTrainer.add_row %d', row_id)
         assert row_id not in self._assigned_rows, row_id
-        vert_probs = self._vert_ss.astype(np.float32) + self._vert_prior
-        edge_probs = self._edge_ss.astype(np.float32) + self._edge_prior
-        feat_probs = self._feat_ss.astype(np.float32) + self._feat_prior
-        meas_probs = self._meas_ss.astype(np.float32) + self._meas_prior
+        self._assigned_rows.add(row_id)
+
+        # This is a little silly, in that we're copying the entire model.
+        np.add(self._vert_ss, self._vert_prior, out=self._vert_probs)
+        np.add(self._edge_ss, self._edge_prior, out=self._edge_probs)
+        np.add(self._feat_ss, self._feat_prior, out=self._feat_probs)
+        np.add(self._meas_ss, self._meas_prior, out=self._meas_probs)
 
         jit_add_row(
             self._ragged_index,
@@ -251,17 +260,16 @@ class TreeCatTrainer(object):
             self._edge_ss,
             self._feat_ss,
             self._meas_ss,
-            vert_probs,
-            edge_probs,
-            feat_probs,
-            meas_probs, )
-
-        self._assigned_rows.add(row_id)
+            self._vert_probs,
+            self._edge_probs,
+            self._feat_probs,
+            self._meas_probs, )
 
     @profile
     def remove_row(self, row_id):
         logger.debug('TreeCatTrainer.remove_row %d', row_id)
         assert row_id in self._assigned_rows, row_id
+        self._assigned_rows.remove(row_id)
 
         jit_remove_row(
             self._ragged_index,
@@ -272,8 +280,6 @@ class TreeCatTrainer(object):
             self._edge_ss,
             self._feat_ss,
             self._meas_ss, )
-
-        self._assigned_rows.remove(row_id)
 
     @profile
     def sample_tree(self):

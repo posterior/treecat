@@ -69,7 +69,10 @@ def generate_tree(num_cols):
     return tree
 
 
-def generate_fake_model(num_rows, num_cols, num_cats, num_components,
+def generate_fake_model(num_rows,
+                        num_cols,
+                        num_cats,
+                        num_components,
                         dataset=None):
     tree = generate_tree(num_cols)
     assignments = np.random.choice(num_components, size=(num_rows, num_cols))
@@ -123,8 +126,8 @@ def generate_fake_ensemble(num_rows, num_cols, num_cats, num_components, seed):
         sub_config = config.copy()
         sub_config['seed'] += sub_seed
         set_random_seed(sub_config['seed'])
-        model = generate_fake_model(
-            num_rows, num_cols, num_cats, num_components, dataset)
+        model = generate_fake_model(num_rows, num_cols, num_cats,
+                                    num_components, dataset)
         model['config'] = sub_config
         ensemble.append(model)
     return ensemble
