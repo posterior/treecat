@@ -14,7 +14,7 @@ from treecat.structure import OP_ROOT
 from treecat.structure import OP_UP
 from treecat.structure import find_center_of_tree
 from treecat.structure import make_complete_graph
-from treecat.structure import make_propagation_schedule
+from treecat.structure import make_propagation_program
 from treecat.structure import make_tree
 from treecat.structure import sample_tree
 from treecat.testutil import numpy_seterr
@@ -107,7 +107,7 @@ EXAMPLE_ROOTED_TREES = [(edges, root)
 
 
 @pytest.mark.parametrize('edges,root', EXAMPLE_ROOTED_TREES)
-def test_make_propagation_schedule(edges, root):
+def test_make_propagation_program(edges, root):
     E = len(edges)
     V = E + 1
     grid = make_tree(edges)
@@ -116,17 +116,17 @@ def test_make_propagation_schedule(edges, root):
         neighbors[v1].add(v2)
         neighbors[v2].add(v1)
 
-    # Generate a schedule.
-    schedule = make_propagation_schedule(grid, root)
-    assert schedule.shape == (V + E + 1 + E, 4)
-    assert schedule.dtype == np.int16
+    # Generate a program.
+    program = make_propagation_program(grid, root)
+    assert program.shape == (V + E + 1 + E, 4)
+    assert program.dtype == np.int16
 
     # Check topology.
     if root is not None:
-        assert schedule[V + E][0] == OP_ROOT
-        assert schedule[V + E][1] == root
-    assert set(row[1] for row in schedule) == set(range(V)), 'bad vertex set'
-    for op, v, v2, e in schedule:
+        assert program[V + E][0] == OP_ROOT
+        assert program[V + E][1] == root
+    assert set(row[1] for row in program) == set(range(V)), 'bad vertex set'
+    for op, v, v2, e in program:
         if op == OP_ROOT:
             if root is not None:
                 assert v == root
@@ -138,7 +138,7 @@ def test_make_propagation_schedule(edges, root):
 
     # Check inward ordering.
     state = np.zeros(V, np.int8)
-    for op, v, v2, e in schedule:
+    for op, v, v2, e in program:
         if op == OP_UP:
             assert state[v] == 0
             state[v] = 1

@@ -155,8 +155,8 @@ OP_ROOT = 2
 OP_OUT = 3
 
 
-def make_propagation_schedule(grid, root=None):
-    """Makes an efficient schedule for message passing on a tree.
+def make_propagation_program(grid, root=None):
+    """Makes an efficient program for message passing on a tree.
 
     This creates a program of instructions to be intrepreted by various
     virtual machines. Each 8-byte instruction is broken into 4 2-byte chunks:
@@ -207,38 +207,38 @@ def make_propagation_schedule(grid, root=None):
         edge_dict[v1, v2] = e
         edge_dict[v2, v1] = e
 
-    # Construct a nested schedule.
-    nested_schedule = []
+    # Construct a nested program.
+    nested_program = []
     queue = deque()
     queue.append((root, None))
     while queue:
         v, parent = queue.popleft()
-        nested_schedule.append((v, parent, []))
+        nested_program.append((v, parent, []))
         for v2 in sorted(neighbors[v]):
             if v2 != parent:
                 queue.append((v2, v))
-    for v, parent, children in nested_schedule:
+    for v, parent, children in nested_program:
         for v2 in sorted(neighbors[v]):
             if v2 != parent:
                 children.append(v2)
 
-    # Construct a flattened schedule.
-    schedule = np.zeros([V + E + V, 4], np.int16)
+    # Construct a flattened program.
+    program = np.zeros([V + E + 1 + E, 4], np.int16)
     pos = 0
-    for v, parent, children in reversed(nested_schedule):
-        schedule[pos, :] = [OP_UP, v, 0, 0]
+    for v, parent, children in reversed(nested_program):
+        program[pos, :] = [OP_UP, v, 0, 0]
         pos += 1
         for child in children:
-            schedule[pos, :] = [OP_IN, v, child, edge_dict[v, child]]
+            program[pos, :] = [OP_IN, v, child, edge_dict[v, child]]
             pos += 1
-    schedule[pos, :] = [OP_ROOT, v, 0, 0]
+    program[pos, :] = [OP_ROOT, v, 0, 0]
     pos += 1
-    for v, parent, children in nested_schedule[1:]:
-        schedule[pos, :] = [OP_OUT, v, parent, edge_dict[v, parent]]
+    for v, parent, children in nested_program[1:]:
+        program[pos, :] = [OP_OUT, v, parent, edge_dict[v, parent]]
         pos += 1
     assert pos == V + E + 1 + E
 
-    return schedule
+    return program
 
 
 class MutableTree(object):

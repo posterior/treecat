@@ -11,7 +11,7 @@ from scipy.special import gammaln
 
 from six.moves import xrange
 from treecat.structure import TreeStructure
-from treecat.structure import make_propagation_schedule
+from treecat.structure import make_propagation_program
 from treecat.structure import sample_tree
 from treecat.util import art_logger
 from treecat.util import jit
@@ -202,7 +202,7 @@ class TreeCatTrainer(object):
         self._assignments = np.zeros([N, V], dtype=np.int8)
         self._tree = TreeStructure(V)
         assert self._tree.num_vertices == V
-        self._schedule = make_propagation_schedule(self._tree.tree_grid)
+        self._schedule = make_propagation_program(self._tree.tree_grid)
 
         # These are useful dimensions to import into locals().
         E = V - 1  # Number of edges in the tree.
@@ -236,7 +236,7 @@ class TreeCatTrainer(object):
         assignments = self._assignments[sorted(self._assigned_rows), :]
         for e, v1, v2 in self._tree.tree_grid.T:
             self._edge_ss[e, :, :] = count_pairs(assignments, v1, v2, M)
-        self._schedule = make_propagation_schedule(self._tree.tree_grid)
+        self._schedule = make_propagation_program(self._tree.tree_grid)
 
     @profile
     def add_row(self, row_id):

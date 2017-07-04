@@ -9,7 +9,7 @@ from scipy.misc import logsumexp
 from scipy.stats import entropy
 
 from treecat.structure import TreeStructure
-from treecat.structure import make_propagation_schedule
+from treecat.structure import make_propagation_program
 from treecat.util import profile
 from treecat.util import sample_from_probs2
 
@@ -34,7 +34,7 @@ class TreeCatServer(object):
         self._tree = tree
         self._config = config
         self._ragged_index = ragged_index
-        self._schedule = make_propagation_schedule(tree.tree_grid)
+        self._program = make_propagation_program(tree.tree_grid)
         self._zero_row = np.zeros(self._ragged_index[-1], np.int8)
 
         # These are useful dimensions to import into locals().
@@ -107,7 +107,7 @@ class TreeCatServer(object):
         feat_samples = np.zeros([N, self._zero_row.shape[0]], np.int8)
         range_N = np.arange(N, dtype=np.int32)
 
-        for op, v, v2, e in self._schedule:
+        for op, v, v2, e in self._program:
             if op == 0:  # OP_UP
                 # Propagate upward from observed to latent.
                 message = messages_in[v, :]
@@ -174,7 +174,7 @@ class TreeCatServer(object):
         assert messages.shape == (V, M, N)
         logprob = np.zeros(N, np.float32)
 
-        for op, v, v2, e in self._schedule:
+        for op, v, v2, e in self._program:
             message = messages[v, :, :]
             if op == 0:  # OP_UP
                 # Propagate upward from observed to latent.
@@ -217,8 +217,8 @@ class TreeCatServer(object):
         result = np.zeros([V, V], np.float32)
         for root in range(V):
             messages = np.empty([V, M, M])
-            schedule = make_propagation_schedule(self._tree.tree_grid, root)
-            for op, v, v2, e in schedule:
+            program = make_propagation_program(self._tree.tree_grid, root)
+            for op, v, v2, e in program:
                 if op == 2:  # OP_ROOT
                     messages[v, :, :] = np.diagflat(vert_probs[v, :])
                 elif op == 3:  # OP_OUT

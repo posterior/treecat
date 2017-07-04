@@ -126,7 +126,7 @@ Gibbs sampling. There are two pieces of latent state that are sampled:
 
 The single-site Gibbs sampler uses dynamic programming to simultaneously sample
 the complete latent assignment vector for each row. A dynamic programming
-schedule is recomputed each time the tree structure changes. This schedule is
+program is created each time the tree structure changes. This program is
 interpreted by various virtual machines for different purposes (training the
 model, sampling from the posterior, computing log probability of the posterior).
 The virtual machine for training is jit-compiled using numba.
