@@ -1,11 +1,13 @@
-# Development requirements.
-# jupyter
-# numba
 flake8
 goftests
 isort
+jupyter
 line_profiler
+numba
 numpy
+parsable
 pytest
+scipy
+six
 snakeviz
 yapf
