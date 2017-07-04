@@ -158,16 +158,42 @@ OP_OUT = 3
 def make_propagation_schedule(grid, root=None):
     """Makes an efficient schedule for message passing on a tree.
 
+    This creates a program of instructions to be intrepreted by various
+    virtual machines. Each 8-byte instruction is broken into 4 2-byte chunks:
+
+      [ op_code | vertex | relative_vertex | relative_edge ]
+
+    where the relative_* operands are optional.
+    There are four types of instructions:
+
+      OP_UP: Propagate upwards from observed state to latent state.
+        vertex: The current vertex.
+        relative_vertex: Not set.
+        relative_edge: Not set.
+
+      OP_IN: Propagate inwards from latent leaves towards latent root,
+        assuming OP_UP has already been called on this vertex.
+        vertex: The target parent vertex.
+        relative_vertex: The source child vertex.
+        relative_edge: The edge between parent and child.
+
+      OP_ROOT: Process the root node, assuming OP_UP has been called on all
+        vertices and OP_IN has been called on all edges.
+        vertex: The root vertex.
+        relative_vertex: Not set.
+        relative_edge: Not set.
+
+      OP_OUT: Popagate outwards from the latent root towards latent leaves.
+        vertex: The target child vertex.
+        relative_vertex: The source parent vertex.
+        relative_edge: The edge between parent and child.
+
     Args:
       grid: A tree graph as returned by make_tree().
       root: Optional root vertex, defaults to find_center_of_tree(grid).
 
     Returns:
-      A numpy array with rows (opcode, vertex, relative, edge), where
-      opcode: One of 0 = up, 1 = in, 2 = root, 3 = out.
-      vertex: The vertex id of the vertex being operated on.
-      relative: The vertex ide of a relative, either a parent or child.
-      edge: The edge id of the (vertex, relative) pair.
+      A [V + E + 1 + E, 4]-shaped numpy array whose rows are instructions.
     """
     if root is None:
         root = find_center_of_tree(grid)
