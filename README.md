@@ -8,7 +8,7 @@ You might want to use TreeCat if:
 you have medium-sized tabular data with categorical and ordinal values,
 possibly with missing observations.
 
-| what you need | what TreeCat supports |
+| | TreeCat supports |
 | --- | --- |
 | **Feature Types** | categorical, ordinal, binomial, multinomial |
 | **# Rows (n)** | 1000-100K |
