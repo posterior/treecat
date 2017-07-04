@@ -8,17 +8,20 @@ You might want to use TreeCat if:
 you have medium-sized tabular data with categorical and ordinal values,
 possibly with missing observations.
 
-| **Feature Types** | categorical, ordinal, binomial, multinomial
-| **# Rows (n)** | 1000-100K
-| **# Features (p)** | 20-1000
-| **# Cells (n &times; p)** | <10M
-| **# Categories** | 2-10ish
-| **# Max Ordinal** | 10ish
-| **Missing obervations?** | yes
-| **Repeated observations?** | yes
-| **Unsupervised** | yes
-| **Semisupervised** | yes
-| **Supervised** | there are better methods
+| what you need | what TreeCat supports |
+| --- | --- |
+| **Feature Types** | categorical, ordinal, binomial, multinomial |
+| **# Rows (n)** | 1000-100K |
+| **# Features (p)** | 20-1000 |
+| **# Cells (n &times; p)** | <10M |
+| **# Categories** | 2-10ish |
+| **# Max Ordinal** | 10ish |
+| **Missing obervations?** | yes |
+| **Repeated observations?** | yes |
+| **Sparse data?** | there are better methods |
+| **Unsupervised** | yes |
+| **Semisupervised** | yes |
+| **Supervised** | there are better methods |
 
 ## The Model
 
