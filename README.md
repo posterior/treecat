@@ -6,9 +6,8 @@ A Bayesian latent tree model of multivariate multinomial data.
 
 ## Intended Use
 
-You might want to use TreeCat if:
-you have medium-sized tabular data with categorical and ordinal values,
-possibly with missing observations.
+TreeCat is appropriate for analyzing medium-sized tabular data with
+categorical and ordinal values, possibly with missing observations.
 
 | | TreeCat supports |
 | --- | --- |
@@ -54,6 +53,8 @@ for n in 1:N:
     for v in V:
         Z[n,v] ~ Multinomial(Q[v,X[n,v]], count = K[n,v])
 ```
+where we've avoided adding an arbitrary root to the tree, and instead presented
+the model as a manifold with overlapping variables and constraints.
 
 ## The Inference Algorithm
 
