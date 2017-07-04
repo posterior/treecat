@@ -11,7 +11,7 @@ except (IOError, ImportError, OSError) as e:
     sys.stderr.flush()
     long_description = open('README.md').read()
 
-version = open('treecat/version.py').read().strip().split()[-1]
+version = open('treecat/version.py').read().strip().split()[-1][1:-1]
 
 setup(
     name='treecat',
