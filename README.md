@@ -4,10 +4,7 @@
 [![Latest Version](https://badge.fury.io/py/tree-cat.svg)](https://pypi.python.org/pypi/tree-cat)
 [![DOI](https://zenodo.org/badge/93913649.svg)](https://zenodo.org/badge/latestdoi/93913649)
 
-A Bayesian latent tree model of multivariate multinomial data.
-
-## Intended Use
-
+Tree-Cat is a Bayesian latent tree model of multivariate multinomial data.
 Tree-Cat is appropriate for analyzing medium-sized tabular data with
 categorical and ordinal values, possibly with missing observations.
 
@@ -18,13 +15,13 @@ categorical and ordinal values, possibly with missing observations.
 | **# Features (p)** | 10-1000 |
 | **# Cells (n &times; p)** | <1M |
 | **# Categories** | 2-10ish |
-| **# Max Ordinal** | 10ish |
+| **Max Ordinal** | 10ish |
 | **Missing obervations?** | yes |
 | **Repeated observations?** | yes |
-| **Sparse data?** | there are better methods |
+| **Sparse data?** | no, use something else |
 | **Unsupervised** | yes |
 | **Semisupervised** | yes |
-| **Supervised** | there are better methods |
+| **Supervised** | no, use something else |
 
 ## Installing
 
