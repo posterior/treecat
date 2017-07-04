@@ -13,7 +13,6 @@ from parsable import parsable
 from six.moves import cPickle as pickle
 from six.moves import intern
 from six.moves import zip
-from treecat.version import __version__
 
 logger = logging.getLogger(__name__)
 parsable = parsable.Parsable()
@@ -23,9 +22,6 @@ VALID_TYPES = ('categorical', 'ordinal')
 
 def pickle_dump(data, filename):
     """Pickle data to file using gzip compression."""
-    assert isinstance(data, dict)
-    data = data.copy()
-    data['treecat.__version__'] = __version__
     with gzip.GzipFile(filename, 'wb') as f:
         pickle.dump(data, f)
 
