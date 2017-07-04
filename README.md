@@ -1,6 +1,7 @@
 # TreeCat
 
 [![Build Status](https://travis-ci.org/posterior/treecat.svg?branch=master)](https://travis-ci.org/posterior/treecat)
+[![DOI](https://zenodo.org/badge/93913649.svg)](https://zenodo.org/badge/latestdoi/93913649)
 
 A Bayesian latent tree model of multivariate multinomial data.
 
