@@ -50,16 +50,14 @@ def test_server_sample_shape(model):
                 assert np.all(samples[:, beg:end].sum(axis=1) == counts[v])
 
 
-def test_server_logprob_runs(model):
+def test_server_logprob_shape(model):
     data = TINY_DATA
     server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
-
-    # Sample all possible mask patterns.
+    logprobs = server.logprob(data)
     N = data.shape[0]
-    for n in range(N):
-        logprob = server.logprob(data[n, :])
-        assert isinstance(logprob, float)
-        assert np.isfinite(logprob)
+    assert logprobs.dtype == np.float32
+    assert logprobs.shape == (N, )
+    assert np.isfinite(logprobs).all()
 
 
 def one_hot(c, C):
@@ -88,11 +86,10 @@ def test_server_logprob_normalized(N, V, C, M):
     for v in range(V):
         C = ragged_index[v + 1] - ragged_index[v]
         factors.append([one_hot(c, C) for c in range(C)])
-    logprobs = []
-    for columns in itertools.product(*factors):
-        row = np.concatenate(columns)
-        print(row)
-        logprobs.append(server.logprob(row))
+    data = np.array(
+        [np.concatenate(columns) for columns in itertools.product(*factors)],
+        dtype=np.int8)
+    logprobs = server.logprob(data)
     logtotal = np.logaddexp.reduce(logprobs)
     assert logtotal == pytest.approx(0.0, abs=1e-5)
 
@@ -125,22 +122,23 @@ def test_server_unconditional_gof(N, V, C, M):
     expected = C**V
     num_samples = 1000 * expected
     ones = np.ones(V, dtype=np.int8)
-    counts = {}
-    logprobs = {}
     samples = server.sample(num_samples, ones)
-    for sample in samples:
+    logprobs = server.logprob(samples)
+    counts = {}
+    probs = {}
+    for sample, logprob in zip(samples, logprobs):
         key = tuple(sample)
         if key in counts:
             counts[key] += 1
         else:
             counts[key] = 1
-            logprobs[key] = server.logprob(sample)
+            probs[key] = np.exp(logprob)
     assert len(counts) == expected
 
     # Check accuracy using Pearson's chi-squared test.
-    keys = sorted(counts.keys(), key=lambda key: -logprobs[key])
+    keys = sorted(counts.keys(), key=lambda key: -probs[key])
     counts = np.array([counts[k] for k in keys], dtype=np.int32)
-    probs = np.exp(np.array([logprobs[k] for k in keys]))
+    probs = np.array([probs[k] for k in keys])
     probs /= probs.sum()
     gof = multinomial_goodness_of_fit(probs, counts, num_samples, plot=True)
     assert 1e-2 < gof
@@ -175,22 +173,23 @@ def test_server_conditional_gof(N, V, C, M):
     num_samples = 1000 * expected
     ones = np.ones(V, dtype=np.int8)
     cond_data = server.sample(1, ones).reshape(server.zero_row().shape)
-    counts = {}
-    logprobs = {}
     samples = server.sample(num_samples, ones, cond_data)
-    for sample in samples:
+    logprobs = server.logprob(samples + cond_data[np.newaxis, :])
+    counts = {}
+    probs = {}
+    for sample, logprob in zip(samples, logprobs):
         key = tuple(sample)
         if key in counts:
             counts[key] += 1
         else:
             counts[key] = 1
-            logprobs[key] = server.logprob(sample + cond_data)
+            probs[key] = np.exp(logprob)
     assert len(counts) == expected
 
     # Check accuracy using Pearson's chi-squared test.
-    keys = sorted(counts.keys(), key=lambda key: -logprobs[key])
+    keys = sorted(counts.keys(), key=lambda key: -probs[key])
     counts = np.array([counts[k] for k in keys], dtype=np.int32)
-    probs = np.exp(np.array([logprobs[k] for k in keys]))
+    probs = np.array([probs[k] for k in keys])
     probs /= probs.sum()
 
     truncated = False

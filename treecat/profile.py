@@ -68,8 +68,7 @@ def serve_files(model_path, config_path):
     num_samples = config['config']['serving_samples']
     counts = np.ones(model['tree'].num_vertices, np.int8)
     samples = server.sample(num_samples, counts)
-    for sample in samples:
-        server.logprob(sample)
+    server.logprob(samples)
     server.correlation()
 
 

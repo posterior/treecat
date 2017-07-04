@@ -6,6 +6,7 @@ import logging
 
 import numpy as np
 from scipy.stats import entropy
+from scipy.misc import logsumexp
 
 from treecat.structure import TreeStructure
 from treecat.structure import make_propagation_schedule
@@ -146,7 +147,7 @@ class TreeCatServer(object):
 
     @profile
     def logprob(self, data):
-        """Compute non-normalized log probability of a row of data.
+        """Compute non-normalized log probabilies of many rows of data.
 
         To compute conditional probabilty, use the identity:
 
@@ -154,41 +155,47 @@ class TreeCatServer(object):
                                 - server.logprob(cond_data)
 
         Args:
-          data: A ragged nummpy array of multinomial count data.
+          data: A [N, _]-shaped ragged nummpy array of multinomial count data,
+            where N is the number of rows.
 
         Returns:
-          An [N] numpy array of log probabilities.
+          An [N]-shaped numpy array of log probabilities.
         """
         logger.debug('computing logprob')
+        assert len(data.shape) == 2
+        assert data.shape[1] == self._ragged_index[-1]
+        assert data.dtype == np.int8
+        N = data.shape[0]
         V, E, M = self._VEM
-        assert data.shape == (self._ragged_index[-1], )
         edge_trans = self._edge_trans
         feat_cond = self._feat_cond
 
-        messages = self._vert_probs.copy()
-        logprob = 0.0
+        messages = np.tile(self._vert_probs[:, :, np.newaxis], (1, 1, N))
+        assert messages.shape == (V, M, N)
+        logprob = np.zeros(N, np.float32)
 
         for op, v, v2, e in self._schedule:
-            message = messages[v, :]
+            message = messages[v, :, :]
             if op == 0:  # OP_UP
                 # Propagate upward from observed to latent.
                 beg, end = self._ragged_index[v:v + 2]
                 for r in range(beg, end):
                     # This uses a with-replacement approximation which is exact
                     # for categorical data but approximate for multinomial.
-                    message *= feat_cond[r, :]**data[r]
+                    power = data[np.newaxis, :, r]
+                    message *= feat_cond[r, :, np.newaxis]**power
             elif op == 1:  # OP_IN
                 # Propagate latent state inward from children to v.
                 trans = edge_trans[e, :, :]
                 if v > v2:
                     trans = trans.T
-                message *= np.dot(trans, messages[v2, :])
-                message_sum = message.sum()
+                message *= np.dot(trans, messages[v2, :, :])
+                message_sum = message.sum(axis=0, keepdims=True)
                 message /= message_sum
-                logprob += np.log(message_sum)
+                logprob += np.log(message_sum[0, :])
             elif op == 2:  # OP_ROOT
                 # Aggregate the total logprob.
-                logprob += np.log(message.sum())
+                logprob += np.log(message.sum(axis=0))
                 return logprob
 
     @profile
@@ -240,15 +247,25 @@ class EnsembleServer(object):
             for model in ensemble
         ]
 
-    def sample(self, counts, data=None):
-        server = np.random.choice(self._ensemble)
-        return server.sample(counts, data)
+    def sample(self, N, counts, data=None):
+        size = len(self._ensemble)
+        pvals = np.ones(size, dtype=np.float32) / size
+        sub_Ns = np.random.multinomial(N, pvals)
+        samples = np.concat([
+            server.sample(sub_N, counts, data)
+            for server, sub_N in zip(self._ensemble, sub_Ns)
+        ])
+        np.random.shuffle(samples)
+        assert samples.shape[0] == N
+        return samples
 
     def logprob(self, data):
-        logprobs = [server.logprob(data) for server in self._ensemble]
-        logprob = np.logaddexp.reduce(logprobs)
-        logprob -= np.log(len(self._ensemble))
-        return logprob
+        logprobs = np.stack(
+            [server.logprob(data) for server in self._ensemble])
+        logprobs = logsumexp(logprobs, axis=0)
+        logprobs -= np.log(len(self.ensemble))
+        assert logprobs.shape == (data.shape[0], )
+        return logprobs
 
 
 def serve_ensemble(ensemble):
