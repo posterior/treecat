@@ -226,10 +226,10 @@ class TreeCatTrainer(object):
         self._meas_ss = np.zeros([V, M], np.int32)
 
         # Temporaries.
-        self._vert_probs = self._vert_ss.astype(np.float32)
-        self._edge_probs = self._edge_ss.astype(np.float32)
-        self._feat_probs = self._feat_ss.astype(np.float32)
-        self._meas_probs = self._meas_ss.astype(np.float32)
+        self._vert_probs = np.empty(self._vert_ss.shape, np.float32)
+        self._edge_probs = np.empty(self._edge_ss.shape, np.float32)
+        self._feat_probs = np.empty(self._feat_ss.shape, np.float32)
+        self._meas_probs = np.empty(self._meas_ss.shape, np.float32)
 
     def _update_tree(self):
         V, E, K, M = self._VEKM
@@ -244,7 +244,7 @@ class TreeCatTrainer(object):
         assert row_id not in self._assigned_rows, row_id
         self._assigned_rows.add(row_id)
 
-        # This is a little silly, in that we're copying the entire model.
+        # This is a little silly: we copy the entire model.
         np.add(self._vert_ss, self._vert_prior, out=self._vert_probs)
         np.add(self._edge_ss, self._edge_prior, out=self._edge_probs)
         np.add(self._feat_ss, self._feat_prior, out=self._feat_probs)
