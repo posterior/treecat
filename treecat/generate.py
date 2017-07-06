@@ -116,12 +116,12 @@ def generate_fake_model(num_rows,
     return model
 
 
-def generate_fake_ensemble(num_rows, num_cols, num_cats, num_components, seed):
+def generate_fake_ensemble(num_rows, num_cols, num_cats, num_components):
     dataset = generate_dataset(num_rows, num_cols, num_cats)
     ensemble = []
     config = make_default_config()
     config['model_num_clusters'] = num_components
-    config['seed'] = seed
+    config['seed'] = 0
     for sub_seed in range(3):
         sub_config = config.copy()
         sub_config['seed'] += sub_seed

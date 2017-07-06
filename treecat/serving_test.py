@@ -165,7 +165,6 @@ def test_ensemble_unconditional_gof(N, V, C, M):
     validate_gof(N, V, C, M, server, conditional=False)
 
 
-@pytest.mark.xfail
 @pytest.mark.parametrize('N,V,C,M', NVCM_EXAMPLES_FOR_GOF)
 def test_ensemble_conditional_gof(N, V, C, M):
     ensemble = generate_fake_ensemble(N, V, C, M)
@@ -201,10 +200,12 @@ def validate_gof(N, V, C, M, server, conditional):
     probs = np.array([probs[k] for k in keys])
     probs /= probs.sum()
 
+    # Truncate to avoid low-precision.
     truncated = False
     valid = (probs * num_samples > 20)
     if not valid.all():
         T = valid.argmin()
+        T = max(8, T)  # Avoid truncating too much
         probs = probs[:T]
         counts = counts[:T]
         truncated = True
