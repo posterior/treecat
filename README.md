@@ -1,6 +1,6 @@
 ![A Bayesian latent tree model](doc/cartoon.png)
 
-# Tree-Cat
+# TreeCat
 
 [![Build Status](https://travis-ci.org/posterior/treecat.svg?branch=master)](https://travis-ci.org/posterior/treecat)
 [![Latest Version](https://badge.fury.io/py/tree-cat.svg)](https://pypi.python.org/pypi/tree-cat)
@@ -8,27 +8,28 @@
 
 ## Intended Use
 
-Tree-Cat is appropriate for analyzing medium-sized tabular data with
+TreeCat is an inference engine intended to power higher-level machine learning tools.
+TreeCat is appropriate for analyzing medium-sized tabular data with
 categorical and ordinal values, possibly with missing observations.
 
-| | Tree-Cat supports |
-| --- | --- |
-| **Feature Types** | categorical, ordinal, binomial, multinomial |
-| **# Rows (n)** | 1000-100K |
-| **# Features (p)** | 10-1000 |
-| **# Cells (n &times; p)** | <1M |
-| **# Categories** | 2-10ish |
-| **Max Ordinal** | 10ish |
-| **Missing obervations?** | yes |
-| **Repeated observations?** | yes |
-| **Sparse data?** | no, use something else |
-| **Unsupervised** | yes |
-| **Semisupervised** | yes |
-| **Supervised** | no, use something else |
+|                        | TreeCat supports       |
+| ---------------------- | ---------------------- |
+| Feature Types          | categorical, ordinal   |
+| # Rows (n)             | 1000-100K              |
+| # Features (p)         | 10-1000                |
+| # Cells (n &times; p)  | 10K-10M                |
+| # Categories           | 2-10ish                |
+| Max Ordinal            | 10ish                  |
+| Missing obervations?   | yes                    |
+| Repeated observations? | yes                    |
+| Sparse data?           | no, use something else |
+| Unsupervised           | yes                    |
+| Semisupervised         | yes                    |
+| Supervised             | no, use something else |
 
 ## Installing
 
-First install `numba`. Then
+First install `numba` (conda make this easy). Then
 
 ```sh
 $ pip install tree-cat
@@ -37,8 +38,26 @@ $ pip install tree-cat
 ## Quick Start
 
 1.  Create two csv files: a `schema.csv` and a `data.csv`.
+    The `schema.csv` specifies the column types in `data.csv`, for example
+    
+    | name   | type        |
+    | ------ | ----------- |
+    | genre  | categorical |
+    | decade | categorical |
+    | rating | ordinal     |
+    
+    The `data.csv` file should have column headings matching the schema,
+    but it can have extra columns that will be ignored (e.g. `title`).
+    
+    | title     | genre    | decade | rating |
+    | --------- | -------- | ------ | ------ |
+    | vertigo   | thriller | 1950s  | 5      |
+    | up        | family   | 2000s  | 3      |
+    | desk set  | comedy   | 1950s  | 4      |
+    | santapaws | family   | 2010s  | 1      |
+    | chinatown | mystery  | 1970s  | 4      |
 
-2.  Import the csv files into treecat's internal format.
+2.  Import your csv files into treecat's internal format. We'll call our dataset `dataset.pkl.gz`.
 
     ```python
     from treecat.format import import_data
@@ -47,17 +66,18 @@ $ pip install tree-cat
     ```
 
 3.  Train an ensemble model on your dataset.
+    This typically takes ~15minutes for a 1M cell dataset.
 
     ```python
-    from treecat.format import pickle_load, pickle_dump
-    from treecat.config import train_ensemble
-    from treecat.training import train_ensemble
     from treecat.config import make_default_config
+    from treecat.format import pickle_load, pickle_dump
+    from treecat.training import train_ensemble
 
     dataset = pickle_load('dataset.pkl.gz')
     config = make_default_config()
     ensemble = train_ensemble(dataset['ragged_index'],
                               dataset['data'], config)
+    # ...wait for a while...
     pickle_dump(ensemble, 'ensemble.plk.gz')
     ```
 
@@ -69,14 +89,32 @@ $ pip install tree-cat
     server = serve_ensemble('ensemble.plk.gz')
     ```
 
-5.  Run queries against the server, e.g. compute marginals
+5.  Run queries against the server.
+    For example we can compute marginals
     ```python
-    server.sample(100, np.ones(V)).mean(axis=1)
+    server.sample(100, np.ones(V)).mean(axis=0)
     ```
     or compute a latent correlation matrix
     ```python
     print(server.correlation())
     ```
+    
+## The Server Interface
+
+TreeCat's
+[server](https://github.com/fritzo/treecat/blob/master/treecat/serving.py)
+interface currently supports the two basic Bayesian operations:
+
+- `server.sample(N, counts, data=None)`
+  draws N samples from the joint posterior distribution, optionally conditioned on `data`.
+  
+- `server.logprob(data)` computes posterior log probability of data.
+
+TreeCat's internal data representation is multinomial, and thus supports missing and repeated measurements, and even data adding. For example to compute conditional probability of data `A` given data `B`, we can simply compute
+
+```py
+cond = server.logprob(A + B) - server.logprob(B)
+```
 
 ## The Model
 
@@ -87,7 +125,7 @@ Let `K[n,v]` be the number of observations of feature `v` in row `n`
 (e.g. 1 for a categorical variable, 0 for missing data, or
 `k` for an ordinal value with minimum 0 and maximum `k`).
 
-Tree-Cat is the following generative model:
+TreeCat is the following generative model:
 ```bugs
 E ~ UniformSpanningTree(V)    # An undirected tree.
 for v in V:
@@ -134,4 +172,4 @@ The virtual machine for training is jit-compiled using numba.
 ## License
 
 Copyright (c) 2017 Fritz Obermeyer. <br />
-Tree-Cat is licensed under the [Apache 2.0 License](/LICENSE).
+TreeCat is licensed under the [Apache 2.0 License](/LICENSE).
