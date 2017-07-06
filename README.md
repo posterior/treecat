@@ -1,3 +1,5 @@
+![A Bayesian latent tree model](doc/cartoon.png)
+
 # Tree-Cat
 
 [![Build Status](https://travis-ci.org/posterior/treecat.svg?branch=master)](https://travis-ci.org/posterior/treecat)
