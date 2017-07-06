@@ -88,7 +88,7 @@ def jit_add_row(
         ragged_index,
         data_row,
         tree_grid,
-        schedule,
+        program,
         assignments,
         vert_ss,
         edge_ss,
@@ -98,9 +98,10 @@ def jit_add_row(
         edge_probs,
         feat_probs,
         meas_probs, ):
+    # Sample latent assignments using dynamic programming.
     messages = vert_probs.copy()
-    for i in xrange(len(schedule)):
-        op, v, v2, e = schedule[i]
+    for i in xrange(len(program)):
+        op, v, v2, e = program[i]
         message = messages[v, :]
         if op == 0:  # OP_UP
             # Propagate upward from observed to latent.
@@ -133,13 +134,12 @@ def jit_add_row(
             assignments[v] = np.random.multinomial(1, message).argmax()
 
     # Update sufficient statistics.
-    E = tree_grid.shape[1]
     for v, m in enumerate(assignments):
         vert_ss[v, m] += 1
-    for e in xrange(E):
-        edge_ss[e,  #
-                assignments[tree_grid[1, e]],  #
-                assignments[tree_grid[2, e]]] += 1
+    for e in xrange(tree_grid.shape[1]):
+        m1 = assignments[tree_grid[1, e]]
+        m2 = assignments[tree_grid[2, e]]
+        edge_ss[e, m1, m2] += 1
     for v, m in enumerate(assignments):
         beg, end = ragged_index[v:v + 2]
         feat_ss[beg:end, m] += data_row[beg:end]
@@ -157,15 +157,13 @@ def jit_remove_row(
         edge_ss,
         feat_ss,
         meas_ss, ):
-
     # Update sufficient statistics.
-    E = tree_grid.shape[1]
     for v, m in enumerate(assignments):
         vert_ss[v, m] -= 1
-    for e in xrange(E):
-        edge_ss[e,  #
-                assignments[tree_grid[1, e]],  #
-                assignments[tree_grid[2, e]]] -= 1
+    for e in xrange(tree_grid.shape[1]):
+        m1 = assignments[tree_grid[1, e]]
+        m2 = assignments[tree_grid[2, e]]
+        edge_ss[e, m1, m2] -= 1
     for v, m in enumerate(assignments):
         beg, end = ragged_index[v:v + 2]
         feat_ss[beg:end, m] -= data_row[beg:end]
@@ -202,7 +200,7 @@ class TreeCatTrainer(object):
         self._assignments = np.zeros([N, V], dtype=np.int8)
         self._tree = TreeStructure(V)
         assert self._tree.num_vertices == V
-        self._schedule = make_propagation_program(self._tree.tree_grid)
+        self._program = make_propagation_program(self._tree.tree_grid)
 
         # These are useful dimensions to import into locals().
         E = V - 1  # Number of edges in the tree.
@@ -236,7 +234,7 @@ class TreeCatTrainer(object):
         assignments = self._assignments[sorted(self._assigned_rows), :]
         for e, v1, v2 in self._tree.tree_grid.T:
             self._edge_ss[e, :, :] = count_pairs(assignments, v1, v2, M)
-        self._schedule = make_propagation_program(self._tree.tree_grid)
+        self._program = make_propagation_program(self._tree.tree_grid)
 
     @profile
     def add_row(self, row_id):
@@ -254,7 +252,7 @@ class TreeCatTrainer(object):
             self._ragged_index,
             self._data[row_id, :],
             self._tree.tree_grid,
-            self._schedule,
+            self._program,
             self._assignments[row_id, :],
             self._vert_ss,
             self._edge_ss,
