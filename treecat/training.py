@@ -129,7 +129,7 @@ def jit_add_row(
                     trans = trans.T
                 message *= trans[assignments[v2], :]
                 message /= vert_probs[v, :]
-            message *= 0.999999 / message.sum()  # Avoid np.binom errors.
+            message *= 0.99999 / message.sum()  # Avoid np.binom errors.
             assignments[v] = np.random.multinomial(1, message).argmax()
 
     # Update sufficient statistics.
