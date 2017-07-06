@@ -165,6 +165,7 @@ def test_ensemble_unconditional_gof(N, V, C, M):
     validate_gof(N, V, C, M, server, conditional=False)
 
 
+@pytest.mark.xfail
 @pytest.mark.parametrize('N,V,C,M', NVCM_EXAMPLES_FOR_GOF)
 def test_ensemble_conditional_gof(N, V, C, M):
     ensemble = generate_fake_ensemble(N, V, C, M)
