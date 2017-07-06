@@ -24,18 +24,33 @@ def correlation(probs):
     return np.sqrt(1.0 - np.exp(-2.0 * mutual_information))
 
 
-class TreeCatServer(object):
+class ServerBase(object):
+    """Base class for TreeCat and Ensemble servers."""
+
+    def __init__(self, ragged_index):
+        self._ragged_index = ragged_index
+        self._zero_row = np.zeros(ragged_index[-1], np.int8)
+
+    @property
+    def ragged_index(self):
+        return self._ragged_index
+
+    def make_zero_row(self):
+        """Make an empty data row."""
+        return self._zero_row.copy()
+
+
+class TreeCatServer(ServerBase):
     """Class for serving queries against a trained TreeCat model."""
 
     def __init__(self, tree, suffstats, config):
         logger.info('TreeCatServer with %d features', tree.num_vertices)
         assert isinstance(tree, TreeStructure)
         ragged_index = suffstats['ragged_index']
+        ServerBase.__init__(self, ragged_index)
         self._tree = tree
         self._config = config
-        self._ragged_index = ragged_index
         self._program = make_propagation_program(tree.tree_grid)
-        self._zero_row = np.zeros(self._ragged_index[-1], np.int8)
 
         # These are useful dimensions to import into locals().
         V = self._tree.num_vertices
@@ -71,10 +86,6 @@ class TreeCatServer(object):
         for v in range(V):
             beg, end = ragged_index[v:v + 2]
             self._feat_cond[beg:end, :] /= meas_probs[v, np.newaxis, :]
-
-    def zero_row(self):
-        """Make an empty data row."""
-        return self._zero_row.copy()
 
     @profile
     def sample(self, N, counts, data=None):
@@ -237,21 +248,17 @@ def serve_model(tree, suffstats, config):
     return TreeCatServer(tree, suffstats, config)
 
 
-class EnsembleServer(object):
+class EnsembleServer(ServerBase):
     """Class for serving queries against a trained TreeCat ensemble model."""
 
     def __init__(self, ensemble):
         logger.info('EnsembleServer of size %d', len(ensemble))
         assert ensemble
+        ServerBase.__init__(self, ensemble[0]['suffstats']['ragged_index'])
         self._ensemble = [
             TreeCatServer(model['tree'], model['suffstats'], model['config'])
             for model in ensemble
         ]
-        self._zero_row = self._ensemble[0]._zero_row.copy()
-
-    def zero_row(self):
-        """Make an empty data row."""
-        return self._zero_row.copy()
 
     def sample(self, N, counts, data=None):
         size = len(self._ensemble)

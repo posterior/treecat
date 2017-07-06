@@ -179,9 +179,9 @@ def validate_gof(N, V, C, M, server, conditional):
     num_samples = 1000 * expected
     ones = np.ones(V, dtype=np.int8)
     if conditional:
-        cond_data = server.sample(1, ones).reshape(server.zero_row().shape)
+        cond_data = server.sample(1, ones)[0, :]
     else:
-        cond_data = server.zero_row()
+        cond_data = server.make_zero_row()
     samples = server.sample(num_samples, ones, cond_data)
     logprobs = server.logprob(samples + cond_data[np.newaxis, :])
     counts = {}
