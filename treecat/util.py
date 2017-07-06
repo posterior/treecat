@@ -5,6 +5,7 @@ from __future__ import print_function
 import atexit
 import functools
 import logging
+import multiprocessing
 import os
 import sys
 from collections import Counter
@@ -107,6 +108,19 @@ def make_ragged_index(columns):
     for v, column in enumerate(columns):
         ragged_index[v + 1] = ragged_index[v] + column.shape[-1]
     return ragged_index
+
+
+POOL = None
+
+
+def parallel_map(fun, args):
+    global POOL
+    args = list(args)
+    if len(args) < 2:
+        return map(fun, args)
+    if POOL is None:
+        POOL = multiprocessing.Pool()
+    return POOL.map(fun, args)
 
 
 class ProfilingSet(defaultdict):

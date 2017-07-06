@@ -51,10 +51,10 @@ def run_with_tool(cmd, tool, dirname):
 @parsable
 def train_files(dataset_path, config_path):
     """INTERNAL Train from pickled dataset, config."""
-    from treecat.training import train_model
+    from treecat.training import train_ensemble
     dataset = pickle_load(dataset_path)
     config = pickle_load(config_path)
-    train_model(dataset['ragged_index'], dataset['data'], config['config'])
+    train_ensemble(dataset['ragged_index'], dataset['data'], config['config'])
 
 
 @parsable
@@ -73,13 +73,14 @@ def serve_files(model_path, config_path):
 
 
 @parsable
-def train(rows=100, cols=10, epochs=5, tool='timers'):
+def train(rows=100, cols=10, epochs=5, ensemble=1, tool='timers'):
     """Profile TreeCatTrainer on a random dataset.
     Available tools: timers, time, snakeviz, line_profiler, pdb
     """
     from treecat.generate import generate_dataset_file
     config = make_default_config()
     config['learning_annealing_epochs'] = epochs
+    config['model_ensemble_size'] = ensemble
     dataset_path = generate_dataset_file(rows, cols)
     with tempdir() as dirname:
         config_path = os.path.join(dirname, 'config.pkl.gz')

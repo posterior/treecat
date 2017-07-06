@@ -4,7 +4,6 @@ from __future__ import print_function
 
 import itertools
 import logging
-import multiprocessing
 
 import numpy as np
 from scipy.special import gammaln
@@ -15,6 +14,7 @@ from treecat.structure import make_propagation_program
 from treecat.structure import sample_tree
 from treecat.util import art_logger
 from treecat.util import jit
+from treecat.util import parallel_map
 from treecat.util import profile
 from treecat.util import set_random_seed
 
@@ -430,4 +430,4 @@ def train_ensemble(ragged_index, data, config):
         sub_config = config.copy()
         sub_config['seed'] += sub_seed
         tasks.append((ragged_index, data, sub_config))
-    return multiprocessing.Pool().map(_train_model, tasks)
+    return parallel_map(_train_model, tasks)

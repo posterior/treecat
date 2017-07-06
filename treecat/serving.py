@@ -225,9 +225,9 @@ class TreeCatServer(object):
                     trans = edge_probs[e, :, :]
                     if v > v2:
                         trans = trans.T
-                    messages[v, :, :] = np.dot(
-                        trans / vert_probs[v2, np.newaxis, :],
-                        messages[v2, :, :])
+                    messages[v, :, :] = np.dot(trans /
+                                               vert_probs[v2, np.newaxis, :],
+                                               messages[v2, :, :])
             for v in range(V):
                 result[root, v] = correlation(messages[v, :, :])
         return result
