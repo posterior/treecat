@@ -29,7 +29,7 @@ categorical and ordinal values, possibly with missing observations.
 
 ## Installing
 
-First install `numba` (conda make this easy). Then
+First install `numba` (conda makes this easy). Then
 
 ```sh
 $ pip install pytreecat
@@ -37,7 +37,7 @@ $ pip install pytreecat
 
 ## Quick Start
 
-1.  Format your data a `data.csv` file with a header row.
+1.  Format your data as a `data.csv` file with a header row.
     It's fine to include extra columns that won't be used.
     
     | title     | genre    | decade | rating |
@@ -51,10 +51,10 @@ $ pip install pytreecat
 2.  Create a `schema.csv` with a header row `name,type`, where the
     first column is the feature name (genre, decade, rating), and the
     second column is the feature type (categorical or ordinal).
-    It's easiest to let TreeCat guess the feature types to start out:
+    It's easiest to let TreeCat guess the feature types:
 
     ```sh
-    treecat.format guess-schema data.csv schema.csv    # Creates schema.csv
+    $ treecat guess-schema data.csv schema.csv    # Creates schema.csv
     ```
 
     You can then edit the feature types in case TreeCat guessed incorrectly.
@@ -68,26 +68,15 @@ $ pip install pytreecat
 3.  Import your csv files into treecat's internal format.
     We'll call our dataset `dataset.pkz` (a gzipped pickle file).
 
-    ```python
-    from treecat.format import import_data
-
-    import_data('schema.csv', 'data.csv', 'dataset.pkz')
+    ```sh
+    $ treecat import-data data.csv schema.csv dataset.pkz
     ```
 
 4.  Train an ensemble model on your dataset.
     This typically takes ~15minutes for a 1M cell dataset.
 
-    ```python
-    from treecat.config import make_default_config
-    from treecat.format import pickle_load, pickle_dump
-    from treecat.training import train_ensemble
-
-    dataset = pickle_load('dataset.pkz')
-    config = make_default_config()
-    ensemble = train_ensemble(dataset['ragged_index'],
-                              dataset['data'], config)
-    # ...wait for a while...
-    pickle_dump(ensemble, 'ensemble.plk.gz')
+    ```sh
+    $ treecat train dataset.pkz ensemble.pkz
     ```
 
 5.  Load your trained model into a server
@@ -95,7 +84,7 @@ $ pip install pytreecat
     ```python
     from treecat.serving import EnsembleServer
 
-    server = EnsembleServer('ensemble.plk.gz')
+    server = EnsembleServer('ensemble.pkz')
     ```
 
 6.  Run queries against the server.

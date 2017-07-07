@@ -111,8 +111,9 @@ def guess_schema(data_csv_in, schema_csv_out):
 
 
 @parsable
-def import_data(schema_csv_in, data_csv_in, dataset_out):
+def import_data(data_csv_in, schema_csv_in, dataset_out):
     """Import a csv file into internal treecat format."""
+    logger.info('Loading data from %s and %s', data_csv_in, schema_csv_in)
     # Load schema.
     features = []
     types = {}
