@@ -37,17 +37,8 @@ $ pip install pytreecat
 
 ## Quick Start
 
-1.  Create two csv files: a `schema.csv` and a `data.csv`.
-    The `schema.csv` specifies the column types in `data.csv`, for example
-    
-    | name   | type        |
-    | ------ | ----------- |
-    | genre  | categorical |
-    | decade | categorical |
-    | rating | ordinal     |
-    
-    The `data.csv` file should have column headings matching the schema,
-    but it can have extra columns that will be ignored (e.g. `title`).
+1.  Format your data a `data.csv` file with a header row.
+    It's fine to include extra columns that won't be used.
     
     | title     | genre    | decade | rating |
     | --------- | -------- | ------ | ------ |
@@ -57,7 +48,24 @@ $ pip install pytreecat
     | santapaws | family   | 2010s  | 1      |
     | chinatown | mystery  | 1970s  | 4      |
 
-2.  Import your csv files into treecat's internal format.
+2.  Create a `schema.csv` with a header row `name,type`, where the
+    first column is the feature name (genre, decade, rating), and the
+    second column is the feature type (categorical or ordinal).
+    It's easiest to let TreeCat guess the feature types to start out:
+
+    ```sh
+    treecat.format guess-schema data.csv schema.csv    # Creates schema.csv
+    ```
+
+    You can then edit the feature types in case TreeCat guessed incorrectly.
+
+    | name   | type        |
+    | ------ | ----------- |
+    | genre  | categorical |
+    | decade | categorical |
+    | rating | ordinal     |
+
+3.  Import your csv files into treecat's internal format.
     We'll call our dataset `dataset.pkz` (a gzipped pickle file).
 
     ```python
@@ -66,7 +74,7 @@ $ pip install pytreecat
     import_data('schema.csv', 'data.csv', 'dataset.pkz')
     ```
 
-3.  Train an ensemble model on your dataset.
+4.  Train an ensemble model on your dataset.
     This typically takes ~15minutes for a 1M cell dataset.
 
     ```python
@@ -82,7 +90,7 @@ $ pip install pytreecat
     pickle_dump(ensemble, 'ensemble.plk.gz')
     ```
 
-4.  Load your trained model into a server
+5.  Load your trained model into a server
 
     ```python
     from treecat.serving import EnsembleServer
@@ -90,7 +98,7 @@ $ pip install pytreecat
     server = EnsembleServer('ensemble.plk.gz')
     ```
 
-5.  Run queries against the server.
+6.  Run queries against the server.
     For example we can compute marginals
     ```python
     server.sample(100, np.ones(V)).mean(axis=0)

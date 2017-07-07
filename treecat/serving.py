@@ -255,9 +255,9 @@ class TreeCatServer(ServerBase):
                     trans = edge_probs[e, :, :]
                     if v > v2:
                         trans = trans.T
-                    messages[v, :, :] = np.dot(trans /
-                                               vert_probs[v2, np.newaxis, :],
-                                               messages[v2, :, :])
+                    messages[v, :, :] = np.dot(
+                        trans / vert_probs[v2, np.newaxis, :],
+                        messages[v2, :, :])
             for v in range(V):
                 result[root, v] = correlation(messages[v, :, :])
         return result
@@ -270,10 +270,7 @@ class EnsembleServer(ServerBase):
         logger.info('EnsembleServer of size %d', len(ensemble))
         assert ensemble
         ServerBase.__init__(self, ensemble[0]['suffstats']['ragged_index'])
-        self._ensemble = [
-            TreeCatServer(model)
-            for model in ensemble
-        ]
+        self._ensemble = [TreeCatServer(model) for model in ensemble]
 
     def sample(self, N, counts, data=None):
         size = len(self._ensemble)

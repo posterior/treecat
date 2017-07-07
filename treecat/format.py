@@ -5,6 +5,7 @@ from __future__ import print_function
 import csv
 import gzip
 import logging
+from collections import defaultdict
 from contextlib import contextmanager
 
 import numpy as np
@@ -34,7 +35,7 @@ def pickle_load(filename):
 
 @contextmanager
 def csv_reader(filename):
-    with open(filename, 'rb') as f:
+    with open(filename, 'rUb') as f:
         yield csv.reader(f)
 
 
@@ -42,6 +43,59 @@ def csv_reader(filename):
 def csv_writer(filename):
     with open(filename, 'wb') as f:
         yield csv.writer(f)
+
+
+NA_STRINGS = frozenset(['', 'na', 'null', 'none'])
+MAX_ORDINAL = 20
+
+
+def is_small_int(value):
+    try:
+        int_value = int(value)
+        return 0 <= int_value and int_value <= MAX_ORDINAL
+    except ValueError:
+        return False
+
+
+def guess_feature_type(count, values):
+    if len(values) <= 1:
+        return None  # Feature is useless.
+    if len(values) <= 1 + MAX_ORDINAL and all(map(is_small_int, values)):
+        return 'ordinal'
+    if len(values) <= min(count / 2, MAX_ORDINAL):
+        return 'categorical'
+    return None
+
+
+@parsable
+def guess_schema(data_csv_in, schema_csv_out):
+    """Create a best-guess type schema for a given dataset."""
+    logger.info('Guessing schema of %s', data_csv_in)
+    counts = defaultdict(lambda: 0)
+    values = defaultdict(set)
+    with csv_reader(data_csv_in) as reader:
+        features = list(map(intern, reader.next()))
+        for row in reader:
+            for name, value in zip(features, row):
+                value = value.lower()
+                if value in NA_STRINGS:
+                    continue
+                counts[name] += 1
+                values[name].add(value)
+    types = [guess_feature_type(counts[f], values[f]) for f in features]
+    num_categoricals = sum(t == 'categorical' for t in types)
+    num_ordinals = sum(t == 'categorical' for t in types)
+    logger.info('Found %d features: %d categoricals + %d ordinals',
+                len(features), num_categoricals, num_ordinals)
+    with csv_writer(schema_csv_out) as writer:
+        writer.writerow(['name', 'type', 'count', 'unique'])
+        for feature, typ in zip(features, types):
+            writer.writerow([
+                feature,
+                typ if typ else '',
+                counts[feature],
+                len(values[feature]),
+            ])
 
 
 @parsable
