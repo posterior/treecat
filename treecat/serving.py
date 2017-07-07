@@ -263,10 +263,6 @@ class TreeCatServer(ServerBase):
         return result
 
 
-def serve_model(model):
-    return TreeCatServer(model)
-
-
 class EnsembleServer(ServerBase):
     """Class for serving queries against a trained TreeCat ensemble model."""
 
@@ -298,7 +294,3 @@ class EnsembleServer(ServerBase):
         logprobs -= np.log(len(self._ensemble))
         assert logprobs.shape == (data.shape[0], )
         return logprobs
-
-
-def serve_ensemble(ensemble):
-    return EnsembleServer(ensemble)

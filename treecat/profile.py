@@ -60,12 +60,12 @@ def train_files(dataset_path, config_path):
 @parsable
 def serve_files(model_path, config_path):
     """INTERNAL Serve from pickled model, config."""
-    from treecat.serving import serve_model
+    from treecat.serving import TreeCatServer
     import numpy as np
     model = pickle_load(model_path)
     config = pickle_load(config_path)
     model['config'] = config
-    server = serve_model(model)
+    server = TreeCatServer(model)
     num_samples = config['serving_samples']
     counts = np.ones(model['tree'].num_vertices, np.int8)
     samples = server.sample(num_samples, counts)

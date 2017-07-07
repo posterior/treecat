@@ -85,9 +85,9 @@ $ pip install pytreecat
 4.  Load your trained model into a server
 
     ```python
-    from treecat.serving import serve_ensemble
+    from treecat.serving import EnsembleServer
 
-    server = serve_ensemble('ensemble.plk.gz')
+    server = EnsembleServer('ensemble.plk.gz')
     ```
 
 5.  Run queries against the server.

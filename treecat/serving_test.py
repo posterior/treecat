@@ -10,8 +10,8 @@ from goftests import multinomial_goodness_of_fit
 
 from treecat.generate import generate_fake_ensemble
 from treecat.generate import generate_fake_model
-from treecat.serving import serve_ensemble
-from treecat.serving import serve_model
+from treecat.serving import EnsembleServer
+from treecat.serving import TreeCatServer
 from treecat.testutil import TINY_CONFIG
 from treecat.testutil import TINY_DATA
 from treecat.testutil import TINY_RAGGED_INDEX
@@ -53,20 +53,20 @@ def validate_sample_shape(ragged_index, data, server):
 def test_server_sample_shape(model):
     ragged_index = TINY_RAGGED_INDEX
     data = TINY_DATA
-    server = serve_model(model)
+    server = TreeCatServer(model)
     validate_sample_shape(ragged_index, data, server)
 
 
 def test_ensemble_sample_shape(ensemble):
     ragged_index = TINY_RAGGED_INDEX
     data = TINY_DATA
-    server = serve_ensemble(ensemble)
+    server = EnsembleServer(ensemble)
     validate_sample_shape(ragged_index, data, server)
 
 
 def test_server_logprob_shape(model):
     data = TINY_DATA
-    server = serve_model(model)
+    server = TreeCatServer(model)
     logprobs = server.logprob(data)
     N = data.shape[0]
     assert logprobs.dtype == np.float32
@@ -76,7 +76,7 @@ def test_server_logprob_shape(model):
 
 def test_ensemble_logprob_shape(ensemble):
     data = TINY_DATA
-    server = serve_ensemble(ensemble)
+    server = EnsembleServer(ensemble)
     logprobs = server.logprob(data)
     N = data.shape[0]
     assert logprobs.dtype == np.float32
@@ -103,7 +103,7 @@ def test_server_logprob_normalized(N, V, C, M):
     config = TINY_CONFIG.copy()
     config['model_num_clusters'] = M
     model['config'] = config
-    server = serve_model(model)
+    server = TreeCatServer(model)
 
     # The total probability of all categorical rows should be 1.
     ragged_index = model['suffstats']['ragged_index']
@@ -145,7 +145,7 @@ def test_server_unconditional_gof(N, V, C, M):
     config = TINY_CONFIG.copy()
     config['model_num_clusters'] = M
     model['config'] = config
-    server = serve_model(model)
+    server = TreeCatServer(model)
     validate_gof(N, V, C, M, server, conditional=False)
 
 
@@ -156,7 +156,7 @@ def test_server_conditional_gof(N, V, C, M):
     config = TINY_CONFIG.copy()
     config['model_num_clusters'] = M
     model['config'] = config
-    server = serve_model(model)
+    server = TreeCatServer(model)
     validate_gof(N, V, C, M, server, conditional=True)
 
 
@@ -164,7 +164,7 @@ def test_server_conditional_gof(N, V, C, M):
 @pytest.mark.parametrize('N,V,C,M', NVCM_EXAMPLES_FOR_GOF)
 def test_ensemble_unconditional_gof(N, V, C, M):
     ensemble = generate_fake_ensemble(N, V, C, M)
-    server = serve_ensemble(ensemble)
+    server = EnsembleServer(ensemble)
     validate_gof(N, V, C, M, server, conditional=False)
 
 
@@ -172,7 +172,7 @@ def test_ensemble_unconditional_gof(N, V, C, M):
 @pytest.mark.parametrize('N,V,C,M', NVCM_EXAMPLES_FOR_GOF)
 def test_ensemble_conditional_gof(N, V, C, M):
     ensemble = generate_fake_ensemble(N, V, C, M)
-    server = serve_ensemble(ensemble)
+    server = EnsembleServer(ensemble)
     validate_gof(N, V, C, M, server, conditional=True)
 
 
@@ -234,7 +234,7 @@ def test_correlation(N, V, C, M):
     config = TINY_CONFIG.copy()
     config['model_num_clusters'] = M
     model['config'] = config
-    server = serve_model(model)
+    server = TreeCatServer(model)
 
     correlation = server.correlation()
     print(correlation)
