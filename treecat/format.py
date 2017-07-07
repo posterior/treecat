@@ -5,6 +5,8 @@ from __future__ import print_function
 import csv
 import gzip
 import logging
+import re
+from collections import Counter
 from collections import defaultdict
 from contextlib import contextmanager
 
@@ -45,8 +47,12 @@ def csv_writer(filename):
         yield csv.writer(f)
 
 
-NA_STRINGS = frozenset(['', 'na', 'null', 'none'])
+NA_STRINGS = frozenset(['', 'null', 'none'])
 MAX_ORDINAL = 20
+
+
+def normalize_string(string):
+    return re.sub(r'\s+', ' ', string.strip().lower())
 
 
 def is_small_int(value):
@@ -71,31 +77,37 @@ def guess_feature_type(count, values):
 def guess_schema(data_csv_in, schema_csv_out):
     """Create a best-guess type schema for a given dataset."""
     logger.info('Guessing schema of %s', data_csv_in)
-    counts = defaultdict(lambda: 0)
-    values = defaultdict(set)
+    counts = Counter()
+    values = defaultdict(Counter)
     with csv_reader(data_csv_in) as reader:
         features = list(map(intern, reader.next()))
         for row in reader:
             for name, value in zip(features, row):
-                value = value.lower()
+                value = normalize_string(value)
                 if value in NA_STRINGS:
                     continue
                 counts[name] += 1
-                values[name].add(value)
+                values[name][value] += 1
+    for feature in features:
+        # Ignore singleton values.
+        values[feature] = [v for v, c in values[feature].items() if c >= 2]
     types = [guess_feature_type(counts[f], values[f]) for f in features]
     num_categoricals = sum(t == 'categorical' for t in types)
     num_ordinals = sum(t == 'categorical' for t in types)
     logger.info('Found %d features: %d categoricals + %d ordinals',
                 len(features), num_categoricals, num_ordinals)
     with csv_writer(schema_csv_out) as writer:
-        writer.writerow(['name', 'type', 'count', 'unique'])
+        writer.writerow(['name', 'type', 'count', 'unique', 'values'])
         for feature, typ in zip(features, types):
-            writer.writerow([
+            row = [
                 feature,
                 typ if typ else '',
                 counts[feature],
                 len(values[feature]),
-            ])
+            ]
+            if typ:
+                row += sorted(values[feature])
+            writer.writerow(row)
 
 
 @parsable
