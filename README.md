@@ -127,14 +127,14 @@ Let `K[n,v]` be the number of observations of feature `v` in row `n`
 `k` for an ordinal value with minimum 0 and maximum `k`).
 
 TreeCat is the following generative model:
-```bugs
+```python
 E ~ UniformSpanningTree(V)    # An undirected tree.
 for v in V:
     Pv[v] ~ Dirichlet(size = [M], alpha = 1/2)
 for (u,v) in E:
-    Pe[u,v] ~ Dirichlet(size = [M,M], alpha = 1/(2M))
-    assume Pv[u] == sum(Pe[u,v], axis=1)
-    assume Pv[v] == sum(Pe[u,v], axis=0)
+    Pe[u,v] ~ Dirichlet(size = [M,M], alpha = 1/(2*M))
+    assume(Pv[u] == sum(Pe[u,v], axis = 1))
+    assume(Pv[v] == sum(Pe[u,v], axis = 0))
 for v in V:
     for i in 1:M:
         Q[v,i] ~ Dirichlet(size = [C[v]])
