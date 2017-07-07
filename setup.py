@@ -16,7 +16,7 @@ for line in open('treecat/__init__.py'):
         version = line.strip().split()[-1][1:-1]
 
 setup(
-    name='tree-cat',
+    name='pytreecat',
     version=version,
     description=(
         'A Bayesian latent tree model of multivariate multinomial data'),

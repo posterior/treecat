@@ -3,7 +3,7 @@
 # TreeCat
 
 [![Build Status](https://travis-ci.org/posterior/treecat.svg?branch=master)](https://travis-ci.org/posterior/treecat)
-[![Latest Version](https://badge.fury.io/py/tree-cat.svg)](https://pypi.python.org/pypi/tree-cat)
+[![Latest Version](https://badge.fury.io/py/pytreecat.svg)](https://pypi.python.org/pypi/pytreecat)
 [![DOI](https://zenodo.org/badge/93913649.svg)](https://zenodo.org/badge/latestdoi/93913649)
 
 ## Intended Use
@@ -32,7 +32,7 @@ categorical and ordinal values, possibly with missing observations.
 First install `numba` (conda make this easy). Then
 
 ```sh
-$ pip install tree-cat
+$ pip install pytreecat
 ```
 
 ## Quick Start
