@@ -83,10 +83,10 @@ def guess_feature_type(count, values):
 @parsable
 def guess_schema(data_csv_in, schema_csv_out):
     """Create a best-guess type schema for a given dataset."""
-    logger.info('Guessing schema of %s', data_csv_in)
+    print('Guessing schema of {}'.format(data_csv_in))
 
     # Collect statistics.
-    counts = Counter()
+    totals = Counter()
     values = defaultdict(Counter)
     with csv_reader(data_csv_in) as reader:
         features = list(map(intern, reader.next()))
@@ -95,31 +95,32 @@ def guess_schema(data_csv_in, schema_csv_out):
                 value = normalize_string(value)
                 if value in NA_STRINGS:
                     continue
-                counts[feature] += 1
+                totals[feature] += 1
                 values[feature][value] += 1
 
-    # Exclude singleton values.
+    # Exclude singleton values, because they provide no statistical value,
+    # and they often leak identifying info.
     for feature in features:
-        singletons = [v for v, c in values[feature].items() if c == 1]
+        counts = values[feature]
+        singletons = [v for v, c in counts.items() if c == 1]
         for value in singletons:
-            del values[feature][v]
-            counts[feature] -= 1
-        values[feature] = sorted(values[feature].keys())
+            del counts[value]
+            totals[feature] -= 1
+        values[feature] = [v for (v, c) in counts.most_common(1 + MAX_ORDINAL)]
 
     # Guess feature types.
-    types = [guess_feature_type(counts[f], values[f]) for f in features]
-    logger.info('Found %d features: %d categoricals + %d ordinals',
-                len(features),
-                sum(t == 'categorical' for t in types),
-                sum(t == 'categorical' for t in types))
+    types = [guess_feature_type(totals[f], values[f]) for f in features]
+    print('Found {} features: {} categoricals + {} ordinals'.format(
+        len(features),
+        sum(t == 'categorical' for t in types),
+        sum(t == 'ordinal' for t in types)))
 
     # Write result.
     with csv_writer(schema_csv_out) as writer:
         writer.writerow(['name', 'type', 'count', 'unique', 'values'])
         for feature, typ in zip(features, types):
-            row = [feature, typ, counts[feature], len(values[feature])]
-            if typ:
-                row += values[feature]
+            row = [feature, typ, totals[feature], len(values[feature])]
+            row += values[feature]
             writer.writerow(row)
 
 
