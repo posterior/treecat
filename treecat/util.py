@@ -117,7 +117,7 @@ def parallel_map(fun, args):
     global POOL
     args = list(args)
     if len(args) < 2:
-        return map(fun, args)
+        return list(map(fun, args))
     if POOL is None:
         POOL = multiprocessing.Pool()
     return POOL.map(fun, args)

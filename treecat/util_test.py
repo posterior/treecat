@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 from goftests import multinomial_goodness_of_fit
 
+from treecat.util import parallel_map
 from treecat.util import sample_from_probs
 from treecat.util import sample_from_probs2
 from treecat.util import set_random_seed
@@ -55,3 +56,15 @@ def test_sample_from_probs2_gof(size):
     print(probs * num_samples)
     gof = multinomial_goodness_of_fit(probs, counts, num_samples, plot=True)
     assert 1e-2 < gof
+
+
+def _simple_function(x):
+    return x * (x + 1) // 2
+
+
+@pytest.mark.parametrize('size', range(10))
+def test_parallel_map(size):
+    args = list(range(10))
+    expected = list(map(_simple_function, args))
+    actual = parallel_map(_simple_function, args)
+    assert actual == expected
