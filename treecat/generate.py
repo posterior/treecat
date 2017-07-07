@@ -47,7 +47,7 @@ def generate_dataset_file(num_rows, num_cols, num_cats=4, rate=1.0):
     Returns:
       The path to a gzipped pickled data table.
     """
-    path = os.path.join(DATA, '{}-{}-{}-{:0.1f}.dataset.pkl.gz'.format(
+    path = os.path.join(DATA, '{}-{}-{}-{:0.1f}.dataset.pkz'.format(
         num_rows, num_cols, num_cats, rate))
     if os.path.exists(path):
         return path
@@ -139,7 +139,7 @@ def generate_model_file(num_rows, num_cols, num_cats=4, rate=1.0):
     Returns:
       The path to a gzipped pickled model.
     """
-    path = os.path.join(DATA, '{}-{}-{}-{:0.1f}.model.pkl.gz'.format(
+    path = os.path.join(DATA, '{}-{}-{}-{:0.1f}.model.pkz'.format(
         num_rows, num_cols, num_cats, rate))
     if os.path.exists(path):
         return path

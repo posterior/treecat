@@ -57,12 +57,13 @@ $ pip install pytreecat
     | santapaws | family   | 2010s  | 1      |
     | chinatown | mystery  | 1970s  | 4      |
 
-2.  Import your csv files into treecat's internal format. We'll call our dataset `dataset.pkl.gz`.
+2.  Import your csv files into treecat's internal format.
+    We'll call our dataset `dataset.pkz` (a gzipped pickle file).
 
     ```python
     from treecat.format import import_data
 
-    import_data('schema.csv', 'data.csv', 'dataset.pkl.gz')
+    import_data('schema.csv', 'data.csv', 'dataset.pkz')
     ```
 
 3.  Train an ensemble model on your dataset.
@@ -73,7 +74,7 @@ $ pip install pytreecat
     from treecat.format import pickle_load, pickle_dump
     from treecat.training import train_ensemble
 
-    dataset = pickle_load('dataset.pkl.gz')
+    dataset = pickle_load('dataset.pkz')
     config = make_default_config()
     ensemble = train_ensemble(dataset['ragged_index'],
                               dataset['data'], config)

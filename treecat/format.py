@@ -168,9 +168,9 @@ def export_data(dataset_in, schema_csv_out, data_csv_out):
 
 @parsable
 def cat(*paths):
-    """Print .pkl.gz files in human readable form."""
+    """Print .pkz files in human readable form."""
     for path in paths:
-        assert path.endswith('.pkl.gz')
+        assert path.endswith('.pkz')
         print(pickle_load(path))
 
 
