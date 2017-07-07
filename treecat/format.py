@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 parsable = parsable.Parsable()
 
 VALID_TYPES = ('categorical', 'ordinal')
+MAX_ORDINAL = 20
+NA_STRINGS = frozenset(['', 'null', 'none'])
 
 
 def pickle_dump(data, filename):
@@ -47,10 +49,6 @@ def csv_writer(filename):
         yield csv.writer(f)
 
 
-NA_STRINGS = frozenset(['', 'null', 'none'])
-MAX_ORDINAL = 20
-
-
 def normalize_string(string):
     return re.sub(r'\s+', ' ', string.strip().lower())
 
@@ -64,49 +62,64 @@ def is_small_int(value):
 
 
 def guess_feature_type(count, values):
+    """Guess the type of a feature, given statistics about the feature.
+
+    Args:
+      count: Total number of observations of the feature.
+      values: A list of uniqe observed values of the feature.
+
+    Returns:
+      One of: 'ordinal', 'categorical', or ''
+    """
     if len(values) <= 1:
-        return None  # Feature is useless.
+        return ''  # Feature is useless.
     if len(values) <= 1 + MAX_ORDINAL and all(map(is_small_int, values)):
         return 'ordinal'
     if len(values) <= min(count / 2, MAX_ORDINAL):
         return 'categorical'
-    return None
+    return ''
 
 
 @parsable
 def guess_schema(data_csv_in, schema_csv_out):
     """Create a best-guess type schema for a given dataset."""
     logger.info('Guessing schema of %s', data_csv_in)
+
+    # Collect statistics.
     counts = Counter()
     values = defaultdict(Counter)
     with csv_reader(data_csv_in) as reader:
         features = list(map(intern, reader.next()))
         for row in reader:
-            for name, value in zip(features, row):
+            for feature, value in zip(features, row):
                 value = normalize_string(value)
                 if value in NA_STRINGS:
                     continue
-                counts[name] += 1
-                values[name][value] += 1
+                counts[feature] += 1
+                values[feature][value] += 1
+
+    # Exclude singleton values.
     for feature in features:
-        # Ignore singleton values.
-        values[feature] = [v for v, c in values[feature].items() if c >= 2]
+        singletons = [v for v, c in values[feature].items() if c == 1]
+        for value in singletons:
+            del values[feature][v]
+            counts[feature] -= 1
+        values[feature] = sorted(values[feature].keys())
+
+    # Guess feature types.
     types = [guess_feature_type(counts[f], values[f]) for f in features]
-    num_categoricals = sum(t == 'categorical' for t in types)
-    num_ordinals = sum(t == 'categorical' for t in types)
     logger.info('Found %d features: %d categoricals + %d ordinals',
-                len(features), num_categoricals, num_ordinals)
+                len(features),
+                sum(t == 'categorical' for t in types),
+                sum(t == 'categorical' for t in types))
+
+    # Write result.
     with csv_writer(schema_csv_out) as writer:
         writer.writerow(['name', 'type', 'count', 'unique', 'values'])
         for feature, typ in zip(features, types):
-            row = [
-                feature,
-                typ if typ else '',
-                counts[feature],
-                len(values[feature]),
-            ]
+            row = [feature, typ, counts[feature], len(values[feature])]
             if typ:
-                row += sorted(values[feature])
+                row += values[feature]
             writer.writerow(row)
 
 
