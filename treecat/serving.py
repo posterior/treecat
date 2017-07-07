@@ -17,7 +17,15 @@ logger = logging.getLogger(__name__)
 
 
 def correlation(probs):
-    """Compute correlation rho(X,Y) = sqrt(1 - exp(-2 I(X;Y)))."""
+    """Compute correlation rho(X,Y) = sqrt(1 - exp(-2 I(X;Y))).
+
+    Args:
+      probs: An [M, M]-shaped numpy array representing a joint distribution.
+
+    Returns:
+      A number in [0,1) representing the information-theoretic correlation.
+    """
+    assert len(probs.shape) == 2
     assert probs.shape[0] == probs.shape[1]
     mutual_information = (entropy(probs.sum(0)) + entropy(probs.sum(1)) -
                           entropy(probs.flatten()))
@@ -43,7 +51,18 @@ class ServerBase(object):
 class TreeCatServer(ServerBase):
     """Class for serving queries against a trained TreeCat model."""
 
-    def __init__(self, tree, suffstats, config):
+    def __init__(self, model):
+        """Create a TreeCat server.
+
+        Args:
+          model: A dict with fields:
+            tree: A TreeStructure.
+            suffstats: A dict of sufficient statistics.
+            config: A global config dict.
+        """
+        tree = model['tree']
+        suffstats = model['suffstats']
+        config = model['config']
         logger.info('TreeCatServer with %d features', tree.num_vertices)
         assert isinstance(tree, TreeStructure)
         ragged_index = suffstats['ragged_index']
@@ -244,8 +263,8 @@ class TreeCatServer(ServerBase):
         return result
 
 
-def serve_model(tree, suffstats, config):
-    return TreeCatServer(tree, suffstats, config)
+def serve_model(model):
+    return TreeCatServer(model)
 
 
 class EnsembleServer(ServerBase):
@@ -256,7 +275,7 @@ class EnsembleServer(ServerBase):
         assert ensemble
         ServerBase.__init__(self, ensemble[0]['suffstats']['ragged_index'])
         self._ensemble = [
-            TreeCatServer(model['tree'], model['suffstats'], model['config'])
+            TreeCatServer(model)
             for model in ensemble
         ]
 

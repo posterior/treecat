@@ -53,7 +53,7 @@ def validate_sample_shape(ragged_index, data, server):
 def test_server_sample_shape(model):
     ragged_index = TINY_RAGGED_INDEX
     data = TINY_DATA
-    server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
+    server = serve_model(model)
     validate_sample_shape(ragged_index, data, server)
 
 
@@ -66,7 +66,7 @@ def test_ensemble_sample_shape(ensemble):
 
 def test_server_logprob_shape(model):
     data = TINY_DATA
-    server = serve_model(model['tree'], model['suffstats'], TINY_CONFIG)
+    server = serve_model(model)
     logprobs = server.logprob(data)
     N = data.shape[0]
     assert logprobs.dtype == np.float32
@@ -102,7 +102,8 @@ def test_server_logprob_normalized(N, V, C, M):
     model = generate_fake_model(N, V, C, M)
     config = TINY_CONFIG.copy()
     config['model_num_clusters'] = M
-    server = serve_model(model['tree'], model['suffstats'], config)
+    model['config'] = config
+    server = serve_model(model)
 
     # The total probability of all categorical rows should be 1.
     ragged_index = model['suffstats']['ragged_index']
@@ -143,7 +144,8 @@ def test_server_unconditional_gof(N, V, C, M):
     model = generate_fake_model(N, V, C, M)
     config = TINY_CONFIG.copy()
     config['model_num_clusters'] = M
-    server = serve_model(model['tree'], model['suffstats'], config)
+    model['config'] = config
+    server = serve_model(model)
     validate_gof(N, V, C, M, server, conditional=False)
 
 
@@ -153,7 +155,8 @@ def test_server_conditional_gof(N, V, C, M):
     model = generate_fake_model(N, V, C, M)
     config = TINY_CONFIG.copy()
     config['model_num_clusters'] = M
-    server = serve_model(model['tree'], model['suffstats'], config)
+    model['config'] = config
+    server = serve_model(model)
     validate_gof(N, V, C, M, server, conditional=True)
 
 
@@ -230,7 +233,8 @@ def test_correlation(N, V, C, M):
     model = generate_fake_model(N, V, C, M)
     config = TINY_CONFIG.copy()
     config['model_num_clusters'] = M
-    server = serve_model(model['tree'], model['suffstats'], config)
+    model['config'] = config
+    server = serve_model(model)
 
     correlation = server.correlation()
     print(correlation)

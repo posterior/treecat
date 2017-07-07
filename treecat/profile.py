@@ -54,7 +54,7 @@ def train_files(dataset_path, config_path):
     from treecat.training import train_ensemble
     dataset = pickle_load(dataset_path)
     config = pickle_load(config_path)
-    train_ensemble(dataset['ragged_index'], dataset['data'], config['config'])
+    train_ensemble(dataset['ragged_index'], dataset['data'], config)
 
 
 @parsable
@@ -64,8 +64,9 @@ def serve_files(model_path, config_path):
     import numpy as np
     model = pickle_load(model_path)
     config = pickle_load(config_path)
-    server = serve_model(model['tree'], model['suffstats'], config['config'])
-    num_samples = config['config']['serving_samples']
+    model['config'] = config
+    server = serve_model(model)
+    num_samples = config['serving_samples']
     counts = np.ones(model['tree'].num_vertices, np.int8)
     samples = server.sample(num_samples, counts)
     server.logprob(samples)
@@ -84,7 +85,7 @@ def train(rows=100, cols=10, epochs=5, ensemble=1, tool='timers'):
     dataset_path = generate_dataset_file(rows, cols)
     with tempdir() as dirname:
         config_path = os.path.join(dirname, 'config.pkl.gz')
-        pickle_dump({'config': config}, config_path)
+        pickle_dump(config, config_path)
         cmd = [FILE, 'train_files', dataset_path, config_path]
         run_with_tool(cmd, tool, dirname)
 
@@ -99,7 +100,7 @@ def serve(rows=100, cols=10, cats=4, tool='timers'):
     model_path = generate_model_file(rows, cols, cats)
     with tempdir() as dirname:
         config_path = os.path.join(dirname, 'config.pkl.gz')
-        pickle_dump({'config': config}, config_path)
+        pickle_dump(config, config_path)
         cmd = [FILE, 'serve_files', model_path, config_path]
         run_with_tool(cmd, tool, dirname)
 
