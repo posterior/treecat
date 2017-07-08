@@ -74,15 +74,9 @@ def sizeof(array):
     return size
 
 
-def sample_from_probs(probs):
-    """Equivalent to np.random.choice(len(probs), p=probs)."""
-    # Note: np.random.multinomial is faster than np.random.choice,
-    # but np.random.multinomial is pickier about non-normalized probs.
-    try:
-        return np.random.multinomial(1, probs).argmax()
-    except ValueError:
-        COUNTERS.np_random_multinomial_value_error += 1
-        return probs.argmax()
+@jit(nopython=True, cache=True)
+def jit_sample_from_probs(probs):
+    return (np.random.rand() < probs.cumsum()).argmax()
 
 
 def sample_from_probs2(probs, out=None):

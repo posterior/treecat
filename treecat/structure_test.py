@@ -155,7 +155,7 @@ def test_make_propagation_program(edges, root):
     assert np.all(state == 2)
 
 
-@pytest.mark.parametrize('num_edges', [1, 2, 3, 4])
+@pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
 def test_sample_tree_gof(num_edges):
     set_random_seed(0)
     E = num_edges
@@ -167,7 +167,7 @@ def test_sample_tree_gof(num_edges):
     edge_probs_dict = {(v1, v2): edge_probs[k] for k, v1, v2 in grid.T}
 
     # Generate many samples via MCMC.
-    num_samples = 2000
+    num_samples = 20 * NUM_SPANNING_TREES[V]
     counts = defaultdict(lambda: 0)
     edges = [(v, v + 1) for v in range(V - 1)]
     for _ in range(num_samples):

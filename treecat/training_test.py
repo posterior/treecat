@@ -180,7 +180,7 @@ def test_assignment_sampler_gof(N, V, C, M):
     print(data)
 
     # Add all rows.
-    set_random_seed(0)
+    set_random_seed(1)
     for row_id in range(N):
         trainer.add_row(row_id)
 

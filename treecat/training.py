@@ -14,6 +14,7 @@ from treecat.structure import make_propagation_program
 from treecat.structure import sample_tree
 from treecat.util import art_logger
 from treecat.util import jit
+from treecat.util import jit_sample_from_probs
 from treecat.util import parallel_map
 from treecat.util import profile
 from treecat.util import set_random_seed
@@ -130,8 +131,8 @@ def jit_add_row(
                     trans = trans.T
                 message *= trans[assignments[v2], :]
                 message /= vert_probs[v, :]
-            message *= 0.99999 / message.sum()  # Avoid np.binom errors.
-            assignments[v] = np.random.multinomial(1, message).argmax()
+            message /= message.sum()
+            assignments[v] = jit_sample_from_probs(message)
 
     # Update sufficient statistics.
     for v, m in enumerate(assignments):
