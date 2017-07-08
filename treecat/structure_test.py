@@ -2,6 +2,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import itertools
 from collections import defaultdict
 
 import numpy as np
@@ -14,6 +15,7 @@ from treecat.structure import OP_ROOT
 from treecat.structure import OP_UP
 from treecat.structure import estimate_tree
 from treecat.structure import find_center_of_tree
+from treecat.structure import find_complete_edge
 from treecat.structure import make_complete_graph
 from treecat.structure import make_propagation_program
 from treecat.structure import make_tree
@@ -196,6 +198,47 @@ def test_sample_tree_gof(num_edges):
     assert 1e-2 < gof
 
 
+def permute_tree(perm, tree):
+    return tuple(sorted(tuple(sorted([perm[u], perm[v]])) for (u, v) in tree))
+
+
+def iter_permuted_trees(vertices, tree):
+    return set(
+        permute_tree(perm, tree) for perm in itertools.permutations(vertices))
+
+
+def close_under_permutations(V, tree_generators):
+    vertices = list(range(V))
+    return set.union(
+        * [iter_permuted_trees(vertices, tree) for tree in tree_generators])
+
+
+# These topologically distinct sets of trees generate sets of all trees
+# under permutation of vertices.
+TREE_GENERATORS = [
+    [[]],
+    [[]],
+    [[(0, 1)]],
+    [[(0, 1), (0, 2)]],
+    [
+        [(0, 1), (0, 2), (0, 3)],
+        [(0, 1), (1, 2), (2, 3)],
+    ],
+    [
+        [(0, 1), (0, 2), (0, 3), (0, 4)],
+        [(0, 1), (0, 2), (0, 3), (1, 4)],
+        [(0, 1), (1, 2), (2, 3), (3, 4)],
+    ],
+]
+
+
+def get_spanning_trees(V):
+    """Compute set of spanning trees on V vertices."""
+    all_trees = close_under_permutations(V, TREE_GENERATORS[V])
+    assert len(all_trees) == NUM_SPANNING_TREES[V]
+    return all_trees
+
+
 @pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5, 6, 7])
 def test_estimate_tree(num_edges):
     set_random_seed(0)
@@ -205,5 +248,21 @@ def test_estimate_tree(num_edges):
     K = grid.shape[1]
     edge_logits = np.random.random([K])
     edges = estimate_tree(grid, edge_logits)
+
+    # Check size.
+    assert len(edges) == E
     for v in range(V):
         assert any(v in edge for edge in edges)
+
+    # Check optimality.
+    edges = tuple(edges)
+    if V < len(TREE_GENERATORS):
+        all_trees = get_spanning_trees(V)
+        assert edges in all_trees
+        all_trees = list(all_trees)
+        logits = []
+        for tree in all_trees:
+            logits.append(
+                sum(edge_logits[find_complete_edge(u, v)] for (u, v) in tree))
+        expected = all_trees[np.argmax(logits)]
+        assert edges == expected

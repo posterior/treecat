@@ -386,8 +386,10 @@ def estimate_tree(grid, edge_logits):
     weights[grid[1, :], grid[2, :]] = edge_logits
     weights[grid[2, :], grid[1, :]] = edge_logits
     weights *= -1
+    weights += 1 - weights.min()
     csr = minimum_spanning_tree(weights, overwrite=True)
     coo = csr.tocoo()
     edges = zip(coo.row, coo.col)
     edges = sorted(tuple(sorted(pair)) for pair in edges)
+    assert len(edges) == V - 1
     return edges
