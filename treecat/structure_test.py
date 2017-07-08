@@ -181,5 +181,15 @@ def test_sample_tree_gof(num_edges):
     probs = np.array(
         [np.prod([edge_probs_dict[edge] for edge in key]) for key in keys])
     probs /= probs.sum()
-    gof = multinomial_goodness_of_fit(probs, counts, num_samples, plot=True)
+
+    # Possibly truncate.
+    T = 100
+    truncated = False
+    if len(counts) > T:
+        counts = counts[:T]
+        probs = probs[:T]
+        truncated = True
+
+    gof = multinomial_goodness_of_fit(
+        probs, counts, num_samples, plot=True, truncated=truncated)
     assert 1e-2 < gof
