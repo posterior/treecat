@@ -7,6 +7,7 @@ import gzip
 import io
 import logging
 import re
+import sys
 from collections import Counter
 from collections import defaultdict
 from contextlib import contextmanager
@@ -43,7 +44,10 @@ def pickle_load(filename):
 @contextmanager
 def csv_reader(filename, encoding='utf-8'):
     with io.open(filename, 'r', encoding=encoding) as f:
-        yield csv.reader(f)
+        if sys.version_info >= (3, 0):
+            yield csv.reader(f)
+        else:
+            yield csv.reader(line.encode(encoding, 'ignore') for line in f)
 
 
 @contextmanager
@@ -133,7 +137,7 @@ def guess_schema(data_csv_in, schema_csv_out, encoding='utf-8'):
             writer.writerow(row)
 
 
-def load_schema(schema_csv_in):
+def load_schema(schema_csv_in, encoding='utf-8'):
     print('Loading schema from {}'.format(schema_csv_in))
 
     # Load names, types, and values.
@@ -142,7 +146,7 @@ def load_schema(schema_csv_in):
     categorical_values = {}
     categorical_index = {}
     ordinal_ranges = {}
-    with csv_reader(schema_csv_in) as reader:
+    with csv_reader(schema_csv_in, encoding) as reader:
         header = next(reader)
         assert header[0].lower() == 'name'
         assert header[1].lower() == 'type'
@@ -250,9 +254,9 @@ def import_data(data_csv_in, schema_csv_in, dataset_out, encoding='utf-8'):
 
     Common encodings include: utf-8, cp1252.
     """
-    schema = load_schema(schema_csv_in)
+    schema = load_schema(schema_csv_in, encoding)
     data = load_data(schema, data_csv_in, encoding)
-    print('Imported {} rows x {} colums'.format(data.shape[0], data.shape[1]))
+    print('Imported data shape: [{}, {}]'.format(data.shape[0], data.shape[1]))
     dataset = {'schema': schema, 'data': data}
     pickle_dump(dataset, dataset_out)
 
