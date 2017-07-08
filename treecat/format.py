@@ -39,13 +39,13 @@ def pickle_load(filename):
 
 @contextmanager
 def csv_reader(filename):
-    with open(filename, 'rUb') as f:
+    with open(filename, 'rU') as f:
         yield csv.reader(f)
 
 
 @contextmanager
 def csv_writer(filename):
-    with open(filename, 'wb') as f:
+    with open(filename, 'w') as f:
         yield csv.writer(f)
 
 
@@ -89,7 +89,7 @@ def guess_schema(data_csv_in, schema_csv_out):
     totals = Counter()
     values = defaultdict(Counter)
     with csv_reader(data_csv_in) as reader:
-        features = list(map(intern, reader.next()))
+        features = list(map(intern, next(reader)))
         for row in reader:
             for feature, value in zip(features, row):
                 value = normalize_string(value)
@@ -107,6 +107,7 @@ def guess_schema(data_csv_in, schema_csv_out):
             del counts[value]
             totals[feature] -= 1
         values[feature] = [v for (v, c) in counts.most_common(1 + MAX_ORDINAL)]
+        values[feature].sort(key=lambda v: (-counts[v], v))  # Braek ties.
 
     # Guess feature types.
     types = [guess_feature_type(totals[f], values[f]) for f in features]

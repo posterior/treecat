@@ -23,8 +23,22 @@ setup(
     long_description=long_description,
     author='Fritz Obermeyer',
     author_email='fritz.obermeyer@gmail.com',
+    url='https://github.com/posterior/treecat',
     packages=['treecat'],
+    package_data={'treecat': 'testdata/*.csv'},
     entry_points=parsable.find_entry_points('treecat'),
     install_requires=['numpy', 'parsable', 'scipy', 'six'],
     tests_require=['pytest', 'flake8', 'goftests'],
-    license='Apache License 2.0')
+    license='Apache License 2.0',
+    classifiers=[
+        'Development Status :: 3 - Alpha',
+        'Intended Audience :: Developers',
+        'Intended Audience :: Science/Research',
+        'License :: OSI Approved :: Apache Software License',
+        'Operating System :: MacOS :: MacOS X',
+        'Operating System :: Microsoft :: Windows',
+        'Operating System :: POSIX :: Linux',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3.4',
+        'Topic :: Scientific/Engineering :: Information Analysis',
+    ])
