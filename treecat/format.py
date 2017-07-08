@@ -20,9 +20,11 @@ from six.moves import zip
 logger = logging.getLogger(__name__)
 parsable = parsable.Parsable()
 
-VALID_TYPES = ('categorical', 'ordinal')
+CATEGORICAL = intern('categorical')
+ORDINAL = intern('ordinal')
+VALID_TYPES = (CATEGORICAL, ORDINAL)
 MAX_ORDINAL = 20
-NA_STRINGS = frozenset(['', 'null', 'none'])
+NA_STRINGS = frozenset([intern(''), intern('null'), intern('none')])
 
 
 def pickle_dump(data, filename):
@@ -74,9 +76,9 @@ def guess_feature_type(count, values):
     if len(values) <= 1:
         return ''  # Feature is useless.
     if len(values) <= 1 + MAX_ORDINAL and all(map(is_small_int, values)):
-        return 'ordinal'
+        return ORDINAL
     if len(values) <= min(count / 2, MAX_ORDINAL):
-        return 'categorical'
+        return CATEGORICAL
     return ''
 
 
@@ -89,163 +91,158 @@ def guess_schema(data_csv_in, schema_csv_out):
     totals = Counter()
     values = defaultdict(Counter)
     with csv_reader(data_csv_in) as reader:
-        features = list(map(intern, next(reader)))
+        feature_names = [intern(n) for n in next(reader)]
         for row in reader:
-            for feature, value in zip(features, row):
+            for name, value in zip(feature_names, row):
                 value = normalize_string(value)
                 if value in NA_STRINGS:
                     continue
-                totals[feature] += 1
-                values[feature][value] += 1
+                totals[name] += 1
+                values[name][value] += 1
 
     # Exclude singleton values, because they provide no statistical value,
     # and they often leak identifying info.
-    for feature in features:
-        counts = values[feature]
+    for name in feature_names:
+        counts = values[name]
         singletons = [v for v, c in counts.items() if c == 1]
         for value in singletons:
             del counts[value]
-            totals[feature] -= 1
-        values[feature] = [v for (v, c) in counts.most_common(1 + MAX_ORDINAL)]
-        values[feature].sort(key=lambda v: (-counts[v], v))  # Braek ties.
+            totals[name] -= 1
+        values[name] = [v for (v, c) in counts.most_common(1 + MAX_ORDINAL)]
+        values[name].sort(key=lambda v: (-counts[v], v))  # Brake ties.
 
     # Guess feature types.
-    types = [guess_feature_type(totals[f], values[f]) for f in features]
+    feature_types = [
+        guess_feature_type(totals[f], values[f]) for f in feature_names
+    ]
     print('Found {} features: {} categoricals + {} ordinals'.format(
-        len(features),
-        sum(t == 'categorical' for t in types),
-        sum(t == 'ordinal' for t in types)))
+        len(feature_names),
+        sum(t is CATEGORICAL for t in feature_types),
+        sum(t is ORDINAL for t in feature_types)))
 
     # Write result.
     with csv_writer(schema_csv_out) as writer:
         writer.writerow(['name', 'type', 'count', 'unique', 'values'])
-        for feature, typ in zip(features, types):
-            row = [feature, typ, totals[feature], len(values[feature])]
-            row += values[feature]
+        for name, typ in zip(feature_names, feature_types):
+            row = [name, typ, totals[name], len(values[name])]
+            row += values[name]
             writer.writerow(row)
+
+
+def load_schema(schema_csv_in):
+    print('Loading schema from {}'.format(schema_csv_in))
+
+    # Load names, types, and values.
+    feature_names = []
+    feature_types = {}
+    categorical_values = {}
+    categorical_index = {}
+    ordinal_ranges = {}
+    with csv_reader(schema_csv_in) as reader:
+        header = next(reader)
+        assert header[0].lower() == 'name'
+        assert header[1].lower() == 'type'
+        assert header[4].lower() == 'values'
+        for row in reader:
+            if len(row) < 6:
+                continue
+            name = intern(row[0])
+            typename = intern(row[1])
+            if not typename:
+                continue
+            if typename not in VALID_TYPES:
+                raise ValueError('Invalid type: {}\n  expected one of: {}'.
+                                 format(typename, ', '.join(VALID_TYPES)))
+            feature_names.append(name)
+            feature_types[name] = typename
+            if typename is CATEGORICAL:
+                values = tuple(map(intern, row[4:]))
+                categorical_values[name] = values
+                categorical_index[name] = {v: i for i, v in enumerate(values)}
+            elif typename is ORDINAL:
+                values = sorted(map(int, row[4:]))
+                ordinal_ranges[name] = (values[0], values[-1])
+    print('Found {} features'.format(len(feature_names)))
+    if not feature_names:
+        raise ValueError('Found no features')
+
+    # Create a ragged index.
+    ragged_index = np.zeros(len(feature_names) + 1, dtype=np.int32)
+    feature_index = {}
+    for pos, name in enumerate(feature_names):
+        feature_index[name] = pos
+        typename = feature_types[name]
+        if typename is CATEGORICAL:
+            dim = len(categorical_values[name])
+        elif typename is ORDINAL:
+            dim = 2
+        ragged_index[pos + 1] = ragged_index[pos] + dim
+
+    return {
+        'feature_names': feature_names,
+        'feature_index': feature_index,
+        'feature_types': feature_types,
+        'categorical_values': categorical_values,
+        'categorical_index': categorical_index,
+        'ordinal_ranges': ordinal_ranges,
+        'ragged_index': ragged_index,
+    }
+
+
+def load_data(schema, data_csv_in):
+    print('Loading data from {}'.format(data_csv_in))
+    feature_index = schema['feature_index']
+    feature_types = schema['feature_types']
+    categorical_index = schema['categorical_index']
+    ordinal_ranges = schema['ordinal_ranges']
+    ragged_index = schema['ragged_index']
+    prototype_row = np.zeros(ragged_index[-1], np.int8)
+
+    # Load data in binary format.
+    rows = []
+    with csv_reader(data_csv_in) as reader:
+        header = list(map(intern, next(reader)))
+        metas = [None] * len(header)
+        for i, name in enumerate(header):
+            if name in feature_types:
+                metas[i] = (
+                    feature_types[name],
+                    feature_index[name],
+                    categorical_index.get(name),
+                    ordinal_ranges.get(name), )
+        for external_row in reader:
+            internal_row = prototype_row.copy()
+            for value, meta in zip(external_row, metas):
+                if meta is None or not value:
+                    continue
+                typename, pos, index, min_max = meta
+                if typename is CATEGORICAL:
+                    try:
+                        value = index[value]
+                    except KeyError:
+                        continue
+                    internal_row[pos + value] = 1
+                elif typename is ORDINAL:
+                    try:
+                        value = int(value)
+                    except ValueError:
+                        continue
+                    if value < min_max[0] or min_max[1] < value:
+                        continue
+                    internal_row[pos + 0] = value - min_max[0]
+                    internal_row[pos + 1] = min_max[1] - value
+            rows.append(internal_row)
+    return np.stack(rows)
 
 
 @parsable
 def import_data(data_csv_in, schema_csv_in, dataset_out):
-    """Import a csv file into internal treecat format."""
-    logger.info('Loading data from %s and %s', data_csv_in, schema_csv_in)
-    # Load schema.
-    features = []
-    types = {}
-    with csv_reader(schema_csv_in) as reader:
-        header = reader.next()
-        assert header[0].lower() == 'name'
-        assert header[1].lower() == 'type'
-        for row in reader:
-            if len(row) < 2:
-                continue
-            name = intern(row[0])
-            typename = intern(row[1].lower())
-            features.append(name)
-            if typename not in VALID_TYPES:
-                raise ValueError('Invalid type: {}\n  expected one of: {}'.
-                                 format(typename, ', '.join(VALID_TYPES)))
-            types[name] = typename
-    logger.info('Found %d features', len(features))
-    if not features:
-        raise ValueError('Found no features')
-
-    # Load data.
-    rows = []
-    all_values = {key: set() for key in types.keys()}
-    num_cells = 0
-    with csv_reader(data_csv_in) as reader:
-        header = list(map(intern, reader.next()))
-        row_dict = {}
-        for i, row in enumerate(reader):
-            for name, value in zip(header, row):
-                if value and name in types:
-                    value = intern(value)
-                    row_dict[name] = value
-                    all_values[name].add(value)
-            rows.append(row_dict)
-            num_cells += len(row_dict)
-    logger.info('Found %d rows and %d cells', len(rows), num_cells)
-
-    # Convert to internal format.
-    feature_pos = {n: i for i, n in enumerate(features)}
-    categorical_values = {
-        key: tuple(sorted(values))
-        for key, values in all_values.items() if types[key] == 'categorical'
-    }
-    ordinal_ranges = {
-        key: (min(map(int, values)), max(map(int, values)))
-        for key, values in all_values.items() if types[key] == 'ordinal'
-    }
-    ragged_index = np.zeros(len(features) + 1, dtype=np.int32)
-    for pos, name in enumerate(features):
-        typename = types[name]
-        if typename == 'categorical':
-            dim = len(all_values[name])
-        elif typename == 'ordinal':
-            dim = 2
-        ragged_index[pos + 1] = ragged_index[pos] + dim
-    data = np.zeros([len(rows), ragged_index[-1]], dtype=np.int8)
-    for row_id, row in enumerate(rows):
-        for name, value in row.items():
-            pos = ragged_index[feature_pos[name]]
-            typename = types[name]
-            if typename == 'categorical':
-                data[row_id, pos + categorical_values[name].index(value)] = 1
-            elif typename == 'ordinal':
-                value = int(value)
-                min_value, max_value = ordinal_ranges[name]
-                data[row_id, pos] = value - min_value
-                data[row_id, pos + 1] = max_value - value
-    dataset = {
-        'schema': {
-            'features': features,
-            'types': types,
-            'categorical_values': categorical_values,
-            'ordinal_ranges': ordinal_ranges,
-        },
-        'ragged_index': ragged_index,
-        'data': data,
-    }
+    """Import a data.csv file into internal treecat format."""
+    schema = load_schema(schema_csv_in)
+    data = load_data(schema, data_csv_in)
+    print('Imported {} rows x {} colums'.format(data.shape[0], data.shape[1]))
+    dataset = {'schema': schema, 'data': data}
     pickle_dump(dataset, dataset_out)
-
-
-@parsable
-def export_data(dataset_in, schema_csv_out, data_csv_out):
-    """Export a treecat dataset file to a schema and data csv."""
-    dataset = pickle_load(dataset_in)
-    schema = dataset['schema']
-    features = schema['features']
-    types = schema['types']
-    categorical_values = schema['categorical_values']
-    ordinal_ranges = schema['ordinal_ranges']
-    ragged_index = dataset['ragged_index']
-    data = dataset['data']
-
-    # Write schema csv.
-    with csv_writer(schema_csv_out) as writer:
-        writer.write(['name', 'type'])
-        for name in features:
-            writer.write([name, types[name]])
-
-    # Write data csv.
-    N = data.shape[0]
-    V = len(features)
-    with csv_writer(data_csv_out) as writer:
-        writer.writerow(features)
-        for row_id in range(N):
-            row = [''] * V
-            for v in range(V):
-                cell = data[row_id, ragged_index[v]:ragged_index[v + 1]]
-                if np.all(cell == 0):
-                    continue
-                typename = types[features[v]]
-                if typename == 'categorical':
-                    row[v] = categorical_values[name][cell.argmax()]
-                elif typename == 'ordinal':
-                    min_value, max_value = ordinal_ranges[name]
-                    row[v] = str(cell[0] + min_value)
-            writer.writerow(row)
 
 
 @parsable
