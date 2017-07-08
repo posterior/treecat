@@ -6,6 +6,7 @@ import csv
 import gzip
 import logging
 import re
+import io
 from collections import Counter
 from collections import defaultdict
 from contextlib import contextmanager
@@ -40,8 +41,8 @@ def pickle_load(filename):
 
 
 @contextmanager
-def csv_reader(filename):
-    with open(filename, 'rU') as f:
+def csv_reader(filename, encoding='utf-8'):
+    with io.open(filename, 'r', encoding=encoding) as f:
         yield csv.reader(f)
 
 
@@ -83,14 +84,17 @@ def guess_feature_type(count, values):
 
 
 @parsable
-def guess_schema(data_csv_in, schema_csv_out):
-    """Create a best-guess type schema for a given dataset."""
+def guess_schema(data_csv_in, schema_csv_out, encoding='utf-8'):
+    """Create a best-guess type schema for a given dataset.
+
+    Common encodings include: utf-8, cp1252.
+    """
     print('Guessing schema of {}'.format(data_csv_in))
 
     # Collect statistics.
     totals = Counter()
     values = defaultdict(Counter)
-    with csv_reader(data_csv_in) as reader:
+    with csv_reader(data_csv_in, encoding) as reader:
         feature_names = [intern(n) for n in next(reader)]
         for row in reader:
             for name, value in zip(feature_names, row):
@@ -189,7 +193,7 @@ def load_schema(schema_csv_in):
     }
 
 
-def load_data(schema, data_csv_in):
+def load_data(schema, data_csv_in, encoding='utf-8'):
     print('Loading data from {}'.format(data_csv_in))
     feature_index = schema['feature_index']
     feature_types = schema['feature_types']
@@ -200,7 +204,7 @@ def load_data(schema, data_csv_in):
 
     # Load data in binary format.
     rows = []
-    with csv_reader(data_csv_in) as reader:
+    with csv_reader(data_csv_in, encoding) as reader:
         header = list(map(intern, next(reader)))
         metas = [None] * len(header)
         for i, name in enumerate(header):
@@ -236,10 +240,13 @@ def load_data(schema, data_csv_in):
 
 
 @parsable
-def import_data(data_csv_in, schema_csv_in, dataset_out):
-    """Import a data.csv file into internal treecat format."""
+def import_data(data_csv_in, schema_csv_in, dataset_out, encoding='utf-8'):
+    """Import a data.csv file into internal treecat format.
+
+    Common encodings include: utf-8, cp1252.
+    """
     schema = load_schema(schema_csv_in)
-    data = load_data(schema, data_csv_in)
+    data = load_data(schema, data_csv_in, encoding)
     print('Imported {} rows x {} colums'.format(data.shape[0], data.shape[1]))
     dataset = {'schema': schema, 'data': data}
     pickle_dump(dataset, dataset_out)
