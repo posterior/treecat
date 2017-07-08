@@ -167,7 +167,7 @@ def test_sample_tree_gof(num_edges):
     edge_probs_dict = {(v1, v2): edge_probs[k] for k, v1, v2 in grid.T}
 
     # Generate many samples via MCMC.
-    num_samples = 20 * NUM_SPANNING_TREES[V]
+    num_samples = 30 * NUM_SPANNING_TREES[V]
     counts = defaultdict(lambda: 0)
     edges = [(v, v + 1) for v in range(V - 1)]
     for _ in range(num_samples):
