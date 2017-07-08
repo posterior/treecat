@@ -10,9 +10,9 @@ from scipy.special import gammaln
 
 from six.moves import xrange
 from treecat.structure import TreeStructure
+from treecat.structure import estimate_tree
 from treecat.structure import make_propagation_program
 from treecat.structure import sample_tree
-from treecat.util import art_logger
 from treecat.util import jit
 from treecat.util import jit_sample_from_probs
 from treecat.util import parallel_map
@@ -229,13 +229,6 @@ class TreeCatTrainer(object):
         self._feat_probs = np.empty(self._feat_ss.shape, np.float32)
         self._meas_probs = np.empty(self._meas_ss.shape, np.float32)
 
-    def _update_tree(self):
-        V, E, K, M = self._VEKM
-        assignments = self._assignments[sorted(self._assigned_rows), :]
-        for e, v1, v2 in self._tree.tree_grid.T:
-            self._edge_ss[e, :, :] = count_pairs(assignments, v1, v2, M)
-        self._program = make_propagation_program(self._tree.tree_grid)
-
     @profile
     def add_row(self, row_id):
         logger.debug('TreeCatTrainer.add_row %d', row_id)
@@ -279,12 +272,27 @@ class TreeCatTrainer(object):
             self._feat_ss,
             self._meas_ss, )
 
-    @profile
-    def sample_tree(self):
-        logger.info('TreeCatTrainer.sample_tree given %d rows',
-                    len(self._assigned_rows))
+    def get_edges(self):
+        return [tuple(edge) for edge in self._tree.tree_grid[1:3, :].T]
+
+    def set_edges(self, edges):
         V, E, K, M = self._VEKM
+        self._tree.set_edges(edges)
         assignments = self._assignments[sorted(self._assigned_rows), :]
+        for e, v1, v2 in self._tree.tree_grid.T:
+            self._edge_ss[e, :, :] = count_pairs(assignments, v1, v2, M)
+        self._program = make_propagation_program(self._tree.tree_grid)
+
+    def get_edge_logits(self):
+        """Compute non-normalized logprob of all V(V-1)/2 candidate edges.
+
+        This is used for sampling and estimating the latent tree.
+        """
+        V, E, K, M = self._VEKM
+        if len(self._assigned_rows) == V:
+            assignments = self._assignments
+        else:
+            assignments = self._assignments[sorted(self._assigned_rows), :]
         vertex_logits = logprob_dc(self._vert_ss + self._vert_prior, axis=1)
         edge_logits = np.zeros([K], np.float32)
         for k, v1, v2 in self._tree.tree_grid.T:
@@ -292,24 +300,41 @@ class TreeCatTrainer(object):
             # This is the most expensive part of tree sampling:
             edge_logits[k] = (logprob_dc(counts + self._edge_prior) -
                               vertex_logits[v1] - vertex_logits[v2])
+        return edge_logits
 
-        # Sample the tree.
+    @profile
+    def sample_tree(self):
+        """Samples a random tree.
+
+        Returns: A list of (vertex, vertex) pairs.
+        """
+        logger.info('TreeCatTrainer.sample_tree given %d rows',
+                    len(self._assigned_rows))
         complete_grid = self._tree.complete_grid
+        edge_logits = self.get_edge_logits()
         assert edge_logits.shape[0] == complete_grid.shape[1]
-        edges = [tuple(edge) for edge in self._tree.tree_grid[1:3, :].T]
-        edges = sample_tree(
+        edges = self.get_edges()
+        return sample_tree(
             complete_grid,
             edge_logits,
             edges,
             steps=self._config['learning_sample_tree_steps'])
-        self._tree.set_edges(edges)
-        self._update_tree()
+
+    def estimate_tree(self):
+        """Compute a maximum likelihood tree.
+
+        Returns: A list of (vertex, vertex) pairs.
+        """
+        logger.info('TreeCatTrainer.estimate_tree given %d rows',
+                    len(self._assigned_rows))
+        complete_grid = self._tree.complete_grid
+        edge_logits = self.get_edge_logits()
+        return estimate_tree(complete_grid, edge_logits)
 
     def logprob(self):
         """Compute non-normalized log probability of data and assignments.
 
-        This is mainly useful for testing goodness of fit of the category
-        kernel.
+        This is used for testing goodness of fit of the category kernel.
         """
         assert len(self._assigned_rows) == self._assignments.shape[0]
         V, E, K, M = self._VEKM
@@ -324,11 +349,6 @@ class TreeCatTrainer(object):
             logprob += logprob_dc(feat_probs) - logprob_dc(feat_probs.sum(0))
         return logprob
 
-    def finish(self):
-        logger.info('TreeCatTrainer.finish with %d rows',
-                    len(self._assigned_rows))
-        self._tree.gc()
-
     def train(self):
         """Train a TreeCat model using subsample-annealed MCMC.
 
@@ -342,20 +362,29 @@ class TreeCatTrainer(object):
             assignments: An [N, V] numpy array of latent cluster ids for each
               cell in the dataset.
         """
-        logger.info('train()')
+        logger.info('TreeCatTrainer.train')
         set_random_seed(self._config['seed'])
+
+        # Run subsample annealing.
         num_rows = self._assignments.shape[0]
         for action, row_id in get_annealing_schedule(num_rows, self._config):
             if action == 'add_row':
-                art_logger('+')
                 self.add_row(row_id)
             elif action == 'remove_row':
-                art_logger('-')
                 self.remove_row(row_id)
             else:
-                art_logger('\n')
-                self.sample_tree()
-        self.finish()
+                edges = self.sample_tree()
+                self.set_edges(edges)
+
+        # Compute a maximum likelihood tree and update all assignments.
+        for step in range(self._config['learning_estimate_tree_steps']):
+            edges = self.estimate_tree()
+            self.set_edges(edges)
+            for row_id in range(num_rows):
+                self.remove_row(row_id)
+                self.add_row(row_id)
+
+        self._tree.gc()
         return {
             'config': self._config,
             'tree': self._tree,

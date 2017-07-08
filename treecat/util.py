@@ -7,7 +7,6 @@ import functools
 import logging
 import multiprocessing
 import os
-import sys
 from collections import Counter
 from collections import defaultdict
 from timeit import default_timer
@@ -17,7 +16,6 @@ import numpy as np
 TREECAT_JIT = int(os.environ.get('TREECAT_JIT', 1))
 DEBUG_LEVEL = int(os.environ.get('TREECAT_DEBUG_LEVEL', 0))
 LOG_LEVEL = int(os.environ.get('TREECAT_LOG_LEVEL', logging.CRITICAL))
-LOG_ART = int(os.environ.get('TREECAT_LOG_ART', 0))
 PROFILING = (LOG_LEVEL <= 15)
 LOG_FILENAME = os.environ.get('TREECAT_LOG_FILE')
 LOG_FORMAT = '%(levelname).1s %(name)s %(message)s'
@@ -49,14 +47,6 @@ def set_random_seed(seed):
     """Set random seeds for both numpy and numba."""
     np.random.seed(seed)
     jit_random_seed(seed)
-
-
-def log_art(art):
-    sys.stderr.write(art)
-    sys.stderr.flush()
-
-
-art_logger = log_art if LOG_ART else (lambda art: None)
 
 
 def sizeof(array):
