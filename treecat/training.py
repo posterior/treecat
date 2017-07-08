@@ -131,7 +131,6 @@ def jit_add_row(
                     trans = trans.T
                 message *= trans[assignments[v2], :]
                 message /= vert_probs[v, :]
-            message /= message.sum()
             assignments[v] = jit_sample_from_probs(message)
 
     # Update sufficient statistics.

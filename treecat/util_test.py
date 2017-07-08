@@ -31,11 +31,11 @@ def test_sizeof_numpy(shape, dtype, expected_size):
 def test_jit_sample_from_probs_gof(size):
     set_random_seed(size)
     probs = np.exp(2 * np.random.random(size)).astype(np.float32)
-    probs /= probs.sum()
     counts = np.zeros(size, dtype=np.int32)
     num_samples = 2000 * size
     for _ in range(num_samples):
         counts[jit_sample_from_probs(probs)] += 1
+    probs /= probs.sum()  # Normalize afterwards.
     print(counts)
     print(probs * num_samples)
     gof = multinomial_goodness_of_fit(probs, counts, num_samples, plot=True)

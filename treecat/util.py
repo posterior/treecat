@@ -76,7 +76,9 @@ def sizeof(array):
 
 @jit(nopython=True, cache=True)
 def jit_sample_from_probs(probs):
-    return (np.random.rand() < probs.cumsum()).argmax()
+    """Sample from a vector of non-normalized probabilitites."""
+    cdf = probs.cumsum()
+    return (np.random.rand() * cdf[-1] < cdf).argmax()
 
 
 def sample_from_probs2(probs, out=None):
