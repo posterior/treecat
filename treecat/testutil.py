@@ -11,7 +11,7 @@ import numpy as np
 from treecat.config import make_default_config
 
 TINY_CONFIG = make_default_config()
-TINY_CONFIG['learning_annealing_epochs'] = 2
+TINY_CONFIG['learning_epochs'] = 2
 TINY_CONFIG['model_num_clusters'] = 7
 TINY_CONFIG['model_ensemble_size'] = 3
 

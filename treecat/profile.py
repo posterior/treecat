@@ -80,7 +80,7 @@ def train(rows=100, cols=10, epochs=5, ensemble=1, tool='timers'):
     """
     from treecat.generate import generate_dataset_file
     config = make_default_config()
-    config['learning_annealing_epochs'] = epochs
+    config['learning_epochs'] = epochs
     config['model_ensemble_size'] = ensemble
     dataset_path = generate_dataset_file(rows, cols)
     with tempdir() as dirname:

@@ -155,7 +155,7 @@ def generate_model_file(num_rows, num_cols, num_cats=4, rate=1.0):
     dataset = pickle_load(dataset_path)
     schema = dataset['schema']
     config = make_default_config()
-    config['learning_annealing_epochs'] = 5
+    config['learning_epochs'] = 5
     model = train_model(schema['ragged_index'], dataset['data'], config)
     pickle_dump(model, path)
     return path

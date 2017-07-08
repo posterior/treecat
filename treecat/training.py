@@ -59,10 +59,10 @@ def get_annealing_schedule(num_rows, config):
     row_to_remove = itertools.cycle(row_ids)
 
     # Use a linear annealing schedule.
-    epochs = float(config['learning_annealing_epochs'])
+    epochs = float(config['learning_epochs'])
     add_rate = epochs
     remove_rate = epochs - 1.0
-    state = epochs * config['learning_annealing_init_rows']
+    state = epochs * config['learning_init_rows']
 
     # Sample the tree after each batch.
     sampling_tree = (config['learning_sample_tree_steps'] > 0)

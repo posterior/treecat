@@ -24,6 +24,9 @@ def train(dataset_in, ensemble_out, **options):
     data = dataset['data']
     config = make_default_config()
     for key, value in options.items():
+        if key not in config:
+            raise ValueError('Unknown option: {}. Try one of: {}'.format(
+                key, ' '.join(sorted(config.keys()))))
         config[key] = int(value)
     ensemble = train_ensemble(ragged_index, data, config)
     pickle_dump(ensemble, ensemble_out)
