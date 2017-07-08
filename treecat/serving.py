@@ -229,7 +229,7 @@ class TreeCatServer(ServerBase):
                 return logprob
 
     @profile
-    def correlation(self):
+    def latent_correlation(self):
         """Compute correlation matrix among latent features.
 
         This computes the generalization of Pearson's correlation to discrete
@@ -240,7 +240,7 @@ class TreeCatServer(ServerBase):
         Returns:
           An [V, V] numpy array of feature-feature correlations.
         """
-        logger.debug('computing correlation')
+        logger.debug('computing latent correlation')
         V, E, M = self._VEM
         edge_probs = self._edge_probs
         vert_probs = self._vert_probs

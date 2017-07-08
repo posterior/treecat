@@ -228,7 +228,7 @@ def validate_gof(N, V, C, M, server, conditional):
     (10, 6, 2, 7),
     (10, 7, 2, 8),
 ])
-def test_correlation(N, V, C, M):
+def test_latent_correlation(N, V, C, M):
     set_random_seed(0)
     model = generate_fake_model(N, V, C, M)
     config = TINY_CONFIG.copy()
@@ -236,7 +236,7 @@ def test_correlation(N, V, C, M):
     model['config'] = config
     server = TreeCatServer(model)
 
-    correlation = server.correlation()
+    correlation = server.latent_correlation()
     print(correlation)
     assert np.all(0 <= correlation)
     assert np.all(correlation <= 1)

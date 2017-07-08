@@ -94,7 +94,7 @@ $ pip install pytreecat
     ```
     or compute a latent correlation matrix
     ```python
-    print(server.correlation())
+    print(server.latent_correlation())
     ```
     
 ## The Server Interface
