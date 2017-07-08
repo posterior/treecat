@@ -4,9 +4,9 @@ from __future__ import print_function
 
 import csv
 import gzip
+import io
 import logging
 import re
-import io
 from collections import Counter
 from collections import defaultdict
 from contextlib import contextmanager
@@ -204,6 +204,7 @@ def load_data(schema, data_csv_in, encoding='utf-8'):
 
     # Load data in binary format.
     rows = []
+    cells = 0
     with csv_reader(data_csv_in, encoding) as reader:
         header = list(map(intern, next(reader)))
         metas = [None] * len(header)
@@ -226,6 +227,7 @@ def load_data(schema, data_csv_in, encoding='utf-8'):
                     except KeyError:
                         continue
                     internal_row[pos + value] = 1
+                    cells += 1
                 elif typename is ORDINAL:
                     try:
                         value = int(value)
@@ -235,7 +237,10 @@ def load_data(schema, data_csv_in, encoding='utf-8'):
                         continue
                     internal_row[pos + 0] = value - min_max[0]
                     internal_row[pos + 1] = min_max[1] - value
+                    cells += 1
             rows.append(internal_row)
+    print('Loaded {} cells in {} rows, {:0.1f}% observed'.format(
+        cells, len(rows), 100.0 * cells / len(rows) / len(feature_types)))
     return np.stack(rows)
 
 

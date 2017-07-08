@@ -54,7 +54,7 @@ def train_files(dataset_path, config_path):
     from treecat.training import train_ensemble
     dataset = pickle_load(dataset_path)
     config = pickle_load(config_path)
-    train_ensemble(dataset['ragged_index'], dataset['data'], config)
+    train_ensemble(dataset['schema']['ragged_index'], dataset['data'], config)
 
 
 @parsable

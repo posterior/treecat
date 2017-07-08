@@ -20,10 +20,12 @@ def train(dataset_in, ensemble_out, **options):
     """Train a TreeCat ensemble model on imported data."""
     from treecat.training import train_ensemble
     dataset = pickle_load(dataset_in)
+    ragged_index = dataset['schema']['ragged_index']
+    data = dataset['data']
     config = make_default_config()
     for key, value in options.items():
         config[key] = int(value)
-    ensemble = train_ensemble(dataset['ragged_index'], dataset['data'], config)
+    ensemble = train_ensemble(ragged_index, data, config)
     pickle_dump(ensemble, ensemble_out)
 
 

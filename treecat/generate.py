@@ -38,7 +38,12 @@ def generate_dataset(num_rows, num_cols, num_cats=4, rate=1.0):
         for n in range(num_rows):
             count = np.random.poisson(rate)
             column[n, :] = np.random.multinomial(count, probs)
-    return {'ragged_index': ragged_index, 'data': data}
+    return {
+        'schema': {
+            'ragged_index': ragged_index
+        },
+        'data': data,
+    }
 
 
 def generate_dataset_file(num_rows, num_cols, num_cats=4, rate=1.0):
@@ -79,7 +84,7 @@ def generate_fake_model(num_rows,
     assignments = assignments.astype(np.int32)
     if dataset is None:
         dataset = generate_dataset(num_rows, num_cols, num_cats)
-    ragged_index = dataset['ragged_index']
+    ragged_index = dataset['schema']['ragged_index']
     data = dataset['data']
     N = num_rows
     V = num_cols
@@ -148,9 +153,10 @@ def generate_model_file(num_rows, num_cols, num_cats=4, rate=1.0):
         os.makedirs(DATA)
     dataset_path = generate_dataset_file(num_rows, num_cols, num_cats, rate)
     dataset = pickle_load(dataset_path)
+    schema = dataset['schema']
     config = make_default_config()
     config['learning_annealing_epochs'] = 5
-    model = train_model(dataset['ragged_index'], dataset['data'], config)
+    model = train_model(schema['ragged_index'], dataset['data'], config)
     pickle_dump(model, path)
     return path
 

@@ -48,22 +48,22 @@ $ pip install pytreecat
     | santapaws | family   | 2010s  | 1      |
     | chinatown | mystery  | 1970s  | 4      |
 
-2.  Create a `schema.csv` with a header row `name,type`, where the
-    first column is the feature name (genre, decade, rating), and the
-    second column is the feature type (categorical or ordinal).
-    It's easiest to let TreeCat guess the feature types:
+2.  Create a `schema.csv` using TreeCat's `guess-schema` command
 
     ```sh
     $ treecat guess-schema data.csv schema.csv    # Creates schema.csv
     ```
 
-    You can then edit the feature types in case TreeCat guessed incorrectly.
+    and then fix any incorrectly guessed feature types.
+    The schema has columns `name,type,count,uniqu,values`, where the
+    first column is the feature name (genre, decade, rating), the
+    second column is the feature type (categorical or ordinal).
 
-    | name   | type        |
-    | ------ | ----------- |
-    | genre  | categorical |
-    | decade | categorical |
-    | rating | ordinal     |
+    | name   | type        | ... |
+    | ------ | ----------- | --- |
+    | genre  | categorical | ... |
+    | decade | categorical | ... |
+    | rating | ordinal     | ... |
 
 3.  Import your csv files into treecat's internal format.
     We'll call our dataset `dataset.pkz` (a gzipped pickle file).

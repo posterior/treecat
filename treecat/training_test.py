@@ -117,7 +117,7 @@ def test_train_model(N, V, C, M):
     config = make_default_config()
     config['model_num_clusters'] = M
     dataset = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
-    ragged_index = dataset['ragged_index']
+    ragged_index = dataset['schema']['ragged_index']
     data = dataset['data']
     model = train_model(ragged_index, data, config)
     validate_model(ragged_index, data, model, config)
@@ -135,7 +135,7 @@ def test_train_ensemble(N, V, C, M):
     config = make_default_config()
     config['model_num_clusters'] = M
     dataset = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
-    ragged_index = dataset['ragged_index']
+    ragged_index = dataset['schema']['ragged_index']
     data = dataset['data']
     ensemble = train_ensemble(ragged_index, data, config)
 
@@ -173,7 +173,7 @@ def test_assignment_sampler_gof(N, V, C, M):
     config['learning_sample_tree_steps'] = 0  # Disable tree kernel.
     config['model_num_clusters'] = M
     dataset = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
-    ragged_index = dataset['ragged_index']
+    ragged_index = dataset['schema']['ragged_index']
     data = dataset['data']
     trainer = TreeCatTrainer(ragged_index, data, config)
     print('Data:')
