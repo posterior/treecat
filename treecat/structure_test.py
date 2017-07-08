@@ -12,6 +12,7 @@ from treecat.structure import OP_IN
 from treecat.structure import OP_OUT
 from treecat.structure import OP_ROOT
 from treecat.structure import OP_UP
+from treecat.structure import estimate_tree
 from treecat.structure import find_center_of_tree
 from treecat.structure import make_complete_graph
 from treecat.structure import make_propagation_program
@@ -193,3 +194,16 @@ def test_sample_tree_gof(num_edges):
     gof = multinomial_goodness_of_fit(
         probs, counts, num_samples, plot=True, truncated=truncated)
     assert 1e-2 < gof
+
+
+@pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5, 6, 7])
+def test_estimate_tree(num_edges):
+    set_random_seed(0)
+    E = num_edges
+    V = 1 + E
+    grid = make_complete_graph(V)
+    K = grid.shape[1]
+    edge_logits = np.random.random([K])
+    edges = estimate_tree(grid, edge_logits)
+    for v in range(V):
+        assert any(v in edge for edge in edges)

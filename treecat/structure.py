@@ -6,6 +6,7 @@ import logging
 from collections import deque
 
 import numpy as np
+from scipy.sparse.csgraph import minimum_spanning_tree
 
 from treecat.util import COUNTERS
 from treecat.util import HISTOGRAMS
@@ -364,4 +365,29 @@ def sample_tree(grid, edge_logits, edges, steps=1):
 
     edges = sorted((grid[1, k], grid[2, k]) for k in tree.e2k.values())
     assert len(edges) == E
+    return edges
+
+
+@profile
+def estimate_tree(grid, edge_logits):
+    """Compute a maximum likelihood spanning tree of a dense weighted graph.
+
+    Args:
+      grid: A 3 x K array as returned by make_complete_graph().
+      edge_logits: A length-K array of nonnormalized log probabilities.
+
+    Returns:
+      A list of (vertex, vertex) pairs.
+    """
+    K = grid.shape[1]
+    V = int(round(0.5 + (0.25 + 2 * K)**0.5))
+    assert K == V * (V - 1) // 2
+    weights = np.zeros([V, V], dtype=np.float32)
+    weights[grid[1, :], grid[2, :]] = edge_logits
+    weights[grid[2, :], grid[1, :]] = edge_logits
+    weights *= -1
+    csr = minimum_spanning_tree(weights, overwrite=True)
+    coo = csr.tocoo()
+    edges = zip(coo.row, coo.col)
+    edges = sorted(tuple(sorted(pair)) for pair in edges)
     return edges
