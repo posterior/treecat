@@ -7,7 +7,6 @@ from collections import defaultdict
 from collections import deque
 
 import numpy as np
-import scipy
 from scipy.sparse.csgraph import minimum_spanning_tree
 
 from treecat.util import COUNTERS
@@ -411,26 +410,17 @@ def estimate_tree(grid, edge_logits):
     return edges
 
 
-def layout_tree(grid, edge_logits):
-    """Layout tree for visualization with e.g. matplotlib.
+def print_tree(edges, feature_names, root):
+    """Returns a text representation of the feature tree.
 
     Args:
-      grid: A 3 x K array as returned by make_complete_graph().
-      edge_logits: A length-K array of nonnormalized log probabilities.
+      edges: A list of (vertex, vertex) pairs.
+      feature_names: A list of feature names.
+      root: The name of the root feature.
 
     Returns:
-      A [V, 2]-shaped numpy array of spectral positions.
+      A text representation of the tree with one feature per line.
     """
-    edge_probs = np.exp(edge_logits - edge_logits.max())
-    laplacian = triangular_to_square(grid, -edge_probs)
-    np.fill_diagonal(laplacian, -laplacian.sum(axis=0))
-    evals, evects = scipy.linalg.eigh(laplacian, eigvals=[1, 2])
-    assert np.all(evals > 0)
-    assert evects.shape[1] == 2
-    return evects
-
-
-def print_tree(edges, feature_names, root):
     neighbors = defaultdict(set)
     for v1, v2 in edges:
         neighbors[v1].add(v2)
