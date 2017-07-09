@@ -23,8 +23,9 @@ parsable = parsable.Parsable()
 CATEGORICAL = intern('categorical')
 ORDINAL = intern('ordinal')
 VALID_TYPES = (CATEGORICAL, ORDINAL)
-MAX_ORDINAL = 20
+MAX_CATEGORIES = 20
 NA_STRINGS = frozenset([intern(''), intern('null'), intern('none')])
+OTHER = intern('_OTHER')
 
 
 def pickle_dump(data, filename):
@@ -61,7 +62,7 @@ def normalize_string(string):
 def is_small_int(value):
     try:
         int_value = int(value)
-        return 0 <= int_value and int_value <= MAX_ORDINAL
+        return 0 <= int_value and int_value <= MAX_CATEGORIES
     except ValueError:
         return False
 
@@ -78,16 +79,17 @@ def guess_feature_type(count, values):
     """
     if len(values) <= 1:
         return ''  # Feature is useless.
-    if len(values) <= 1 + MAX_ORDINAL and all(map(is_small_int, values)):
-        return ORDINAL
-    if len(values) <= min(count / 2, MAX_ORDINAL):
+    if len(values) <= MAX_CATEGORIES:
+        if all(is_small_int(v) for (v, c) in values if v is not OTHER):
+            return ORDINAL
+    if len(values) <= min(count / 2, MAX_CATEGORIES):
         return CATEGORICAL
     return ''
 
 
 @parsable
-def guess_schema(data_csv_in, schema_csv_out, encoding='utf-8'):
-    """Create a best-guess type schema for a given dataset.
+def guess_schema(data_csv_in, types_csv_out, values_csv_out, encoding='utf-8'):
+    """Create a best-guess types and values for a given dataset.
 
     Common encodings include: utf-8, cp1252.
     """
@@ -105,17 +107,20 @@ def guess_schema(data_csv_in, schema_csv_out, encoding='utf-8'):
                     continue
                 totals[name] += 1
                 values[name][value] += 1
+    uniques = {n: len(v) for n, v in values.items()}
 
-    # Exclude singleton values, because they provide no statistical value,
+    # Exclude singleton values, because they provide no statistical value
     # and they often leak identifying info.
+    singletons = Counter()
     for name in feature_names:
         counts = values[name]
-        singletons = [v for v, c in counts.items() if c == 1]
-        for value in singletons:
+        singles = [v for v, c in counts.items() if c == 1]
+        for value in singles:
             del counts[value]
-            totals[name] -= 1
-        values[name] = [v for (v, c) in counts.most_common(1 + MAX_ORDINAL)]
-        values[name].sort(key=lambda v: (-counts[v], v))  # Brake ties.
+            counts[OTHER] += 1
+            singletons[name] += 1
+        values[name] = counts.most_common(MAX_CATEGORIES)
+        values[name].sort(key=lambda vc: (-vc[1], vc[0]))  # Brake ties.
 
     # Guess feature types.
     feature_types = [
@@ -126,31 +131,33 @@ def guess_schema(data_csv_in, schema_csv_out, encoding='utf-8'):
         sum(t is CATEGORICAL for t in feature_types),
         sum(t is ORDINAL for t in feature_types)))
 
-    # Write result.
-    with csv_writer(schema_csv_out) as writer:
-        writer.writerow(['name', 'type', 'count', 'unique', 'values'])
+    # Write types.
+    with csv_writer(types_csv_out) as writer:
+        writer.writerow(['name', 'type', 'total', 'unique', 'singletons'])
         for name, typ in zip(feature_names, feature_types):
-            row = [name, typ, totals[name], len(values[name])]
-            row += values[name]
-            writer.writerow(row)
+            writer.writerow(
+                [name, typ, totals[name], uniques[name], singletons[name]])
+
+    # Write values.
+    with csv_writer(values_csv_out) as writer:
+        writer.writerow(['name', 'value', 'count'])
+        for name, typ in zip(feature_names, feature_types):
+            for value, count in values[name]:
+                writer.writerow([name, str(value), str(count)])
 
 
-def load_schema(schema_csv_in, encoding='utf-8'):
-    print('Loading schema from {}'.format(schema_csv_in))
+def load_schema(types_csv_in, values_csv_in, encoding='utf-8'):
+    print('Loading schema from {} and {}'.format(types_csv_in, values_csv_in))
 
-    # Load names, types, and values.
+    # Load types.
     feature_names = []
     feature_types = {}
-    categorical_values = {}
-    categorical_index = {}
-    ordinal_ranges = {}
-    with csv_reader(schema_csv_in, encoding) as reader:
+    with csv_reader(types_csv_in, encoding) as reader:
         header = next(reader)
         assert header[0].lower() == 'name'
         assert header[1].lower() == 'type'
-        assert header[4].lower() == 'values'
         for row in reader:
-            if len(row) < 6:
+            if len(row) < 2:
                 continue
             name = intern(row[0])
             typename = intern(row[1])
@@ -161,16 +168,46 @@ def load_schema(schema_csv_in, encoding='utf-8'):
                                  format(typename, ', '.join(VALID_TYPES)))
             feature_names.append(name)
             feature_types[name] = typename
+
+    # Load values.
+    categorical_values = defaultdict(list)
+    ordinal_values = defaultdict(list)
+    with csv_reader(values_csv_in, encoding) as reader:
+        header = next(reader)
+        assert header[0].lower() == 'name'
+        assert header[1].lower() == 'value'
+        for row in reader:
+            if len(row) < 2:
+                continue
+            name = intern(row[0])
+            if name not in feature_types:
+                continue
+            value = intern(row[1])
+            typename = feature_types[name]
             if typename is CATEGORICAL:
-                values = tuple(map(intern, row[4:]))
-                categorical_values[name] = values
-                categorical_index[name] = {v: i for i, v in enumerate(values)}
+                categorical_values[name].append(value)
             elif typename is ORDINAL:
-                values = sorted(map(int, row[4:]))
-                ordinal_ranges[name] = (values[0], values[-1])
+                if value is not OTHER:
+                    ordinal_values[name].append(int(value))
+            else:
+                raise ValueError(typename)
     print('Found {} features'.format(len(feature_names)))
     if not feature_names:
         raise ValueError('Found no features')
+
+    # Create value indices.
+    categorical_index = {}
+    ordinal_ranges = {}
+    for name, typename in feature_types.items():
+        if typename is CATEGORICAL:
+            values = tuple(categorical_values[name])
+            categorical_values[name] = values
+            categorical_index[name] = {v: i for i, v in enumerate(values)}
+        elif typename is ORDINAL:
+            values = sorted(ordinal_values[name])
+            ordinal_ranges[name] = (values[0], values[-1])
+        else:
+            raise ValueError(typename)
 
     # Create a ragged index.
     ragged_index = np.zeros(len(feature_names) + 1, dtype=np.int32)
@@ -245,12 +282,16 @@ def load_data(schema, data_csv_in, encoding='utf-8'):
 
 
 @parsable
-def import_data(data_csv_in, schema_csv_in, dataset_out, encoding='utf-8'):
+def import_data(data_csv_in,
+                types_csv_in,
+                values_csv_in,
+                dataset_out,
+                encoding='utf-8'):
     """Import a data.csv file into internal treecat format.
 
     Common encodings include: utf-8, cp1252.
     """
-    schema = load_schema(schema_csv_in, encoding)
+    schema = load_schema(types_csv_in, values_csv_in, encoding)
     data = load_data(schema, data_csv_in, encoding)
     print('Imported data shape: [{}, {}]'.format(data.shape[0], data.shape[1]))
     dataset = {'schema': schema, 'data': data}

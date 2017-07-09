@@ -1,5 +1,0 @@
-name,type,count,unique,values
-title,,0,0
-genre,categorical,7,3,drama,family,fantasy
-decade,categorical,8,3,1950s,2010s,1970s
-rating,ordinal,8,3,4,3,5

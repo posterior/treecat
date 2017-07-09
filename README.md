@@ -37,39 +37,57 @@ $ pip install pytreecat
 
 ## Quick Start
 
-1.  Format your data as a `data.csv` file with a header row.
+1.  Format your data as a [`data.csv`](treecat/testdata/tiny_data.csv)
+    file with a header row.
     It's fine to include extra columns that won't be used.
-    
+
+    Contents of [`data.csv`](treecat/testdata/tiny_data.csv):
+
     | title     | genre    | decade | rating |
     | --------- | -------- | ------ | ------ |
     | vertigo   | thriller | 1950s  | 5      |
     | up        | family   | 2000s  | 3      |
     | desk set  | comedy   | 1950s  | 4      |
-    | santapaws | family   | 2010s  | 1      |
-    | chinatown | mystery  | 1970s  | 4      |
+    | santapaws | family   | 2010s  |        |
+    | ...       | ...      | ...    | ...    |
 
-2.  Create a `schema.csv` using TreeCat's `guess-schema` command
+2.  Generate two schema files
+    [`types.csv`](treecat/testdata/tiny_types.csv) and
+    [`values.csv`](treecat/testdata/tiny_values.csv)
+    using TreeCat's `guess-schema` command:
 
     ```sh
-    $ treecat guess-schema data.csv schema.csv    # Creates schema.csv
+    $ treecat guess-schema data.csv types.csv values.csv
     ```
 
-    and then fix any incorrectly guessed feature types.
-    The schema has columns `name,type,count,uniqu,values`, where the
-    first column is the feature name (genre, decade, rating), the
-    second column is the feature type (categorical or ordinal).
+    You can manually fix any incorrectly guessed feature types,
+    or add/remove feature values.
+    TreeCat ignore features with an empty type field.
 
-    | name   | type        | ... |
-    | ------ | ----------- | --- |
-    | genre  | categorical | ... |
-    | decade | categorical | ... |
-    | rating | ordinal     | ... |
+    Contents of [`types.csv`](treecat/testdata/tiny_types.csv):
+
+    | name   | type        | total | unique | singletons |
+    | ------ | ----------- | ----- | ------ | ---------- |
+    | title  |             |    11 |     11 |         11 |
+    | genre  | categorical |    11 |      7 |          4 |
+    | decade | categorical |    11 |      6 |          3 |
+    | rating | ordinal     |    10 |      5 |          2 |
+
+    Contents of [`values.csv`](treecat/testdata/tiny_values.csv):
+
+    | name   | value    | count |
+    | ------ | -------- | ----- |
+    | title  | _OTHER   |    11 |
+    | genre  | _OTHER   |    11 |
+    | genre  | drama    |     3 |
+    | genre  | family   |     2 |
+    | ...    | ...      |   ... |
 
 3.  Import your csv files into treecat's internal format.
     We'll call our dataset `dataset.pkz` (a gzipped pickle file).
 
     ```sh
-    $ treecat import-data data.csv schema.csv dataset.pkz
+    $ treecat import-data data.csv types.csv values dataset.pkz
     ```
 
 4.  Train an ensemble model on your dataset.
