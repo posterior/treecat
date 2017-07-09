@@ -9,6 +9,7 @@ from scipy.misc import logsumexp
 from scipy.stats import entropy
 
 from treecat.structure import TreeStructure
+from treecat.structure import estimate_tree
 from treecat.structure import make_propagation_program
 from treecat.util import profile
 from treecat.util import sample_from_probs2
@@ -58,6 +59,7 @@ class TreeCatServer(ServerBase):
           model: A dict with fields:
             tree: A TreeStructure.
             suffstats: A dict of sufficient statistics.
+            edge_logits: A K-sized array of nonnormalized edge probabilities.
             config: A global config dict.
         """
         tree = model['tree']
@@ -105,6 +107,20 @@ class TreeCatServer(ServerBase):
         for v in range(V):
             beg, end = ragged_index[v:v + 2]
             self._feat_cond[beg:end, :] /= meas_probs[v, np.newaxis, :]
+
+        # These are used to inspect and visualize latent structure.
+        self._edge_logits = model['edge_logits']
+        self._estimated_tree = tuple(
+            estimate_tree(self._tree.complete_grid, self._edge_logits))
+        self._tree.gc()
+
+    @property
+    def edge_logits(self):
+        return self._edge_logits
+
+    @property
+    def estimate_tree(self):
+        return self._estimated_tree
 
     @profile
     def sample(self, N, counts, data=None):
@@ -271,6 +287,23 @@ class EnsembleServer(ServerBase):
         assert ensemble
         ServerBase.__init__(self, ensemble[0]['suffstats']['ragged_index'])
         self._ensemble = [TreeCatServer(model) for model in ensemble]
+
+        # These are used to inspect and visualize latent structure.
+        self._edge_logits = self._ensemble[0].edge_logits.copy()
+        for server in self._ensemble[1:]:
+            self._edge_logits += server.edge_logits
+        self._edge_logits /= len(self._ensemble)
+        grid = self._ensemble[0]._tree.complete_grid
+        self._estimated_tree = tuple(estimate_tree(grid, self._edge_logits))
+        self._ensemble[0]._tree.gc()
+
+    @property
+    def edge_logits(self):
+        return self._edge_logits
+
+    @property
+    def estimate_tree(self):
+        return self._estimated_tree
 
     def sample(self, N, counts, data=None):
         size = len(self._ensemble)

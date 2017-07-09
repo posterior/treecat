@@ -384,10 +384,12 @@ class TreeCatTrainer(object):
                 self.remove_row(row_id)
                 self.add_row(row_id)
 
+        edge_logits = self.get_edge_logits()
         self._tree.gc()
         return {
             'config': self._config,
             'tree': self._tree,
+            'edge_logits': edge_logits,
             'assignments': self._assignments,
             'suffstats': {
                 'ragged_index': self._ragged_index,

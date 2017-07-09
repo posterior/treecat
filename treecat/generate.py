@@ -89,6 +89,7 @@ def generate_fake_model(num_rows,
     N = num_rows
     V = num_cols
     E = V - 1
+    K = V * (V - 1) // 2
     C = num_cats
     M = num_components
     vert_ss = np.zeros((V, M), dtype=np.int32)
@@ -107,9 +108,11 @@ def generate_fake_model(num_rows,
         for n in range(N):
             feat_ss_block[:, assignments[n, v]] += data_block[n, :]
             meas_ss[v, assignments[n, v]] += data_block[n, :].sum()
+    edge_logits = np.exp(-np.random.rand(K))
     model = {
         'tree': tree,
         'assignments': assignments,
+        'edge_logits': edge_logits,
         'suffstats': {
             'ragged_index': ragged_index,
             'vert_ss': vert_ss,
