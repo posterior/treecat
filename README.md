@@ -77,10 +77,10 @@ $ pip install pytreecat
 
     | name   | value    | count |
     | ------ | -------- | ----- |
-    | title  | _OTHER   |    11 |
-    | genre  | _OTHER   |    11 |
     | genre  | drama    |     3 |
     | genre  | family   |     2 |
+    | genre  | fantasy  |     2 |
+    | decade | 1950s    |     3 |
     | ...    | ...      |   ... |
 
 3.  Import your csv files into treecat's internal format.

@@ -24,8 +24,10 @@ CATEGORICAL = intern('categorical')
 ORDINAL = intern('ordinal')
 VALID_TYPES = (CATEGORICAL, ORDINAL)
 MAX_CATEGORIES = 20
-NA_STRINGS = frozenset([intern(''), intern('null'), intern('none')])
-OTHER = intern('_OTHER')
+NA_STRINGS = {
+    intern('null'): intern(''),
+    intern('none'): intern(''),
+}
 
 
 def pickle_dump(data, filename):
@@ -56,7 +58,8 @@ def csv_writer(filename):
 
 
 def normalize_string(string):
-    return re.sub(r'\s+', ' ', string.strip().lower())
+    string = re.sub(r'\s+', ' ', string.strip().lower())
+    return NA_STRINGS.get(string, string)
 
 
 def is_small_int(value):
@@ -80,7 +83,7 @@ def guess_feature_type(count, values):
     if len(values) <= 1:
         return ''  # Feature is useless.
     if len(values) <= MAX_CATEGORIES:
-        if all(is_small_int(v) for (v, c) in values if v is not OTHER):
+        if all(is_small_int(v) for (v, c) in values):
             return ORDINAL
     if len(values) <= min(count / 2, MAX_CATEGORIES):
         return CATEGORICAL
@@ -103,7 +106,7 @@ def guess_schema(data_csv_in, types_csv_out, values_csv_out, encoding='utf-8'):
         for row in reader:
             for name, value in zip(feature_names, row):
                 value = normalize_string(value)
-                if value in NA_STRINGS:
+                if not value:
                     continue
                 totals[name] += 1
                 values[name][value] += 1
@@ -119,7 +122,6 @@ def guess_schema(data_csv_in, types_csv_out, values_csv_out, encoding='utf-8'):
         singles = [v for v, c in counts.items() if c == 1]
         for value in singles:
             del counts[value]
-            counts[OTHER] += 1
             singletons[name] += 1
         values[name] = counts.most_common(MAX_CATEGORIES)
         values[name].sort(key=lambda vc: (-vc[1], vc[0]))  # Brake ties.
@@ -189,8 +191,7 @@ def load_schema(types_csv_in, values_csv_in, encoding='utf-8'):
             if typename is CATEGORICAL:
                 categorical_values[name].append(value)
             elif typename is ORDINAL:
-                if value is not OTHER:
-                    ordinal_values[name].append(int(value))
+                ordinal_values[name].append(int(value))
             else:
                 raise ValueError(typename)
     print('Found {} features'.format(len(feature_names)))
@@ -257,7 +258,10 @@ def load_data(schema, data_csv_in, encoding='utf-8'):
         for external_row in reader:
             internal_row = prototype_row.copy()
             for value, meta in zip(external_row, metas):
-                if meta is None or not value:
+                if meta is None:
+                    continue
+                value = normalize_string(value)
+                if not value:
                     continue
                 typename, pos, index, min_max = meta
                 if typename is CATEGORICAL:
