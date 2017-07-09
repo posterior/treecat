@@ -247,12 +247,13 @@ def load_data(schema, data_csv_in, encoding='utf-8'):
     # Load data in binary format.
     rows = []
     cells = 0
+    column_counts = Counter()
     with csv_reader(data_csv_in, encoding) as reader:
         header = list(map(intern, next(reader)))
         metas = [None] * len(header)
         for i, name in enumerate(header):
             if name in feature_types:
-                metas[i] = (feature_types[name], feature_index[name],
+                metas[i] = (name, feature_types[name], feature_index[name],
                             categorical_index.get(name),
                             ordinal_ranges.get(name), )
         for external_row in reader:
@@ -263,14 +264,13 @@ def load_data(schema, data_csv_in, encoding='utf-8'):
                 value = normalize_string(value)
                 if not value:
                     continue
-                typename, pos, index, min_max = meta
+                name, typename, pos, index, min_max = meta
                 if typename is CATEGORICAL:
                     try:
                         value = index[value]
                     except KeyError:
                         continue
                     internal_row[pos + value] = 1
-                    cells += 1
                 elif typename is ORDINAL:
                     try:
                         value = int(value)
@@ -280,10 +280,16 @@ def load_data(schema, data_csv_in, encoding='utf-8'):
                         continue
                     internal_row[pos + 0] = value - min_max[0]
                     internal_row[pos + 1] = min_max[1] - value
-                    cells += 1
+                else:
+                    raise ValueError(typename)
+                cells += 1
+                column_counts[name] += 1
             rows.append(internal_row)
     print('Loaded {} cells in {} rows, {:0.1f}% observed'.format(
         cells, len(rows), 100.0 * cells / len(rows) / len(feature_types)))
+    for name in feature_types.keys():
+        if column_counts[name] == 0:
+            print('WARNING: No values found for feature {}'.format(name))
     return np.stack(rows)
 
 
