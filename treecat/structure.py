@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import logging
+from collections import defaultdict
 from collections import deque
 
 import numpy as np
@@ -427,3 +428,27 @@ def layout_tree(grid, edge_logits):
     assert np.all(evals > 0)
     assert evects.shape[1] == 2
     return evects
+
+
+def print_tree(edges, feature_names, root):
+    neighbors = defaultdict(set)
+    for v1, v2 in edges:
+        neighbors[v1].add(v2)
+        neighbors[v2].add(v1)
+    stack = [feature_names.index(root)]
+    seen = set(stack)
+    lines = []
+    while stack:
+        backtrack = True
+        for neighbor in sorted(neighbors[stack[-1]], reverse=True):
+            if neighbor not in seen:
+                seen.add(neighbor)
+                stack.append(neighbor)
+                backtrack = False
+                break
+        if backtrack:
+            name = feature_names[stack.pop()]
+            lines.append((len(stack), name))
+    lines.reverse()
+    return '\n'.join(
+        ['{}{}'.format('  ' * indent, name) for indent, name in lines])

@@ -20,6 +20,7 @@ from treecat.structure import layout_tree
 from treecat.structure import make_complete_graph
 from treecat.structure import make_propagation_program
 from treecat.structure import make_tree
+from treecat.structure import print_tree
 from treecat.structure import sample_tree
 from treecat.testutil import numpy_seterr
 from treecat.util import set_random_seed
@@ -279,3 +280,14 @@ def test_layout_tree(num_edges):
     edge_logits = np.random.random([K])
     XY = layout_tree(grid, edge_logits)
     assert XY.shape == (V, 2)
+
+
+@pytest.mark.parametrize('edges', sum(TREE_GENERATORS, []))
+def test_print_tree(edges):
+    V = 1 + len(edges)
+    feature_names = ['feature-{}'.format(v) for v in range(V)]
+    for root in feature_names:
+        print('-' * 32)
+        text = print_tree(edges, feature_names, root)
+        print(text)
+        assert len(text.split('\n')) == V
