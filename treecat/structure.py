@@ -450,5 +450,4 @@ def print_tree(edges, feature_names, root):
             name = feature_names[stack.pop()]
             lines.append((len(stack), name))
     lines.reverse()
-    return '\n'.join(
-        ['{}{}'.format('  ' * indent, name) for indent, name in lines])
+    return '\n'.join(['{}{}'.format('  ' * i, n) for i, n in lines])
