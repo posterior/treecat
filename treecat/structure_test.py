@@ -16,6 +16,7 @@ from treecat.structure import OP_UP
 from treecat.structure import estimate_tree
 from treecat.structure import find_center_of_tree
 from treecat.structure import find_complete_edge
+from treecat.structure import layout_tree
 from treecat.structure import make_complete_graph
 from treecat.structure import make_propagation_program
 from treecat.structure import make_tree
@@ -239,7 +240,7 @@ def get_spanning_trees(V):
     return all_trees
 
 
-@pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5, 6, 7])
+@pytest.mark.parametrize('num_edges', range(1, 10))
 def test_estimate_tree(num_edges):
     set_random_seed(0)
     E = num_edges
@@ -266,3 +267,15 @@ def test_estimate_tree(num_edges):
                 sum(edge_logits[find_complete_edge(u, v)] for (u, v) in tree))
         expected = all_trees[np.argmax(logits)]
         assert edges == expected
+
+
+@pytest.mark.parametrize('num_edges', range(2, 10))
+def test_layout_tree(num_edges):
+    set_random_seed(0)
+    E = num_edges
+    V = 1 + E
+    grid = make_complete_graph(V)
+    K = grid.shape[1]
+    edge_logits = np.random.random([K])
+    XY = layout_tree(grid, edge_logits)
+    assert XY.shape == (V, 2)

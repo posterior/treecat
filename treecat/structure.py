@@ -6,6 +6,7 @@ import logging
 from collections import deque
 
 import numpy as np
+import scipy
 from scipy.sparse.csgraph import minimum_spanning_tree
 
 from treecat.util import COUNTERS
@@ -368,6 +369,25 @@ def sample_tree(grid, edge_logits, edges, steps=1):
     return edges
 
 
+def triangular_to_square(grid, triangle):
+    """Convert a packed triangular matrix to a square matrix.
+
+    Args:
+      grid: A 3 x K array as returned by make_complete_graph().
+      triangle: A length-K array.
+
+    Returns:
+      A square symmetric V x V array with zero on the diagonal.
+    """
+    K = grid.shape[1]
+    V = int(round(0.5 + (0.25 + 2 * K)**0.5))
+    assert K == V * (V - 1) // 2
+    square = np.zeros([V, V], dtype=triangle.dtype)
+    square[grid[1, :], grid[2, :]] = triangle
+    square[grid[2, :], grid[1, :]] = triangle
+    return square
+
+
 @profile
 def estimate_tree(grid, edge_logits):
     """Compute a maximum likelihood spanning tree of a dense weighted graph.
@@ -379,17 +399,31 @@ def estimate_tree(grid, edge_logits):
     Returns:
       A list of (vertex, vertex) pairs.
     """
-    K = grid.shape[1]
-    V = int(round(0.5 + (0.25 + 2 * K)**0.5))
-    assert K == V * (V - 1) // 2
-    weights = np.zeros([V, V], dtype=np.float32)
-    weights[grid[1, :], grid[2, :]] = edge_logits
-    weights[grid[2, :], grid[1, :]] = edge_logits
+    weights = triangular_to_square(grid, edge_logits)
     weights *= -1
     weights += 1 - weights.min()
     csr = minimum_spanning_tree(weights, overwrite=True)
     coo = csr.tocoo()
     edges = zip(coo.row, coo.col)
     edges = sorted(tuple(sorted(pair)) for pair in edges)
-    assert len(edges) == V - 1
+    assert len(edges) == weights.shape[0] - 1
     return edges
+
+
+def layout_tree(grid, edge_logits):
+    """Layout tree for visualization with e.g. matplotlib.
+
+    Args:
+      grid: A 3 x K array as returned by make_complete_graph().
+      edge_logits: A length-K array of nonnormalized log probabilities.
+
+    Returns:
+      A [V, 2]-shaped numpy array of spectral positions.
+    """
+    edge_probs = np.exp(edge_logits - edge_logits.max())
+    laplacian = triangular_to_square(grid, -edge_probs)
+    np.fill_diagonal(laplacian, -laplacian.sum(axis=0))
+    evals, evects = scipy.linalg.eigh(laplacian, eigvals=[1, 2])
+    assert np.all(evals > 0)
+    assert evects.shape[1] == 2
+    return evects
