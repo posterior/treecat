@@ -5,7 +5,6 @@ from __future__ import print_function
 import csv
 import gzip
 import io
-import logging
 import re
 import sys
 from collections import Counter
@@ -19,7 +18,6 @@ from six.moves import cPickle as pickle
 from six.moves import intern
 from six.moves import zip
 
-logger = logging.getLogger(__name__)
 parsable = parsable.Parsable()
 
 CATEGORICAL = intern('categorical')

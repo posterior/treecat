@@ -14,6 +14,12 @@ DEFAULT_CONFIG = {
 }
 
 
-def make_default_config():
+def make_default_config(**options):
     """Create a new global config dict with default values."""
-    return DEFAULT_CONFIG.copy()
+    config = DEFAULT_CONFIG.copy()
+    for key, value in options.items():
+        if key not in config:
+            raise ValueError('Unknown option: {}. Try one of:\n  {}'.format(
+                key, '\n  '.join(sorted(config.keys()))))
+        config[key] = int(value)
+    return config
