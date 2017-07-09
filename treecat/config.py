@@ -14,7 +14,7 @@ DEFAULT_CONFIG = {
 }
 
 
-def make_default_config(**options):
+def make_config(**options):
     """Create a new global config dict with default values."""
     config = DEFAULT_CONFIG.copy()
     for key, value in options.items():

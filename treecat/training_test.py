@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from goftests import multinomial_goodness_of_fit
 
-from treecat.config import make_default_config
+from treecat.config import make_config
 from treecat.generate import generate_dataset
 from treecat.structure import TreeStructure
 from treecat.testutil import TINY_CONFIG
@@ -114,7 +114,7 @@ def validate_model(ragged_index, data, model, config):
     (6, 6, 6, 6),
 ])
 def test_train_model(N, V, C, M):
-    config = make_default_config()
+    config = make_config()
     config['model_num_clusters'] = M
     dataset = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
     ragged_index = dataset['schema']['ragged_index']
@@ -132,7 +132,7 @@ def test_train_model(N, V, C, M):
     (6, 6, 6, 6),
 ])
 def test_train_ensemble(N, V, C, M):
-    config = make_default_config()
+    config = make_config()
     config['model_num_clusters'] = M
     dataset = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
     ragged_index = dataset['schema']['ragged_index']
@@ -169,7 +169,7 @@ def hash_assignments(assignments):
     (4, 1, 2, 2),
 ])
 def test_assignment_sampler_gof(N, V, C, M):
-    config = make_default_config()
+    config = make_config()
     config['learning_sample_tree_steps'] = 0  # Disable tree kernel.
     config['model_num_clusters'] = M
     dataset = generate_dataset(num_rows=N, num_cols=V, num_cats=C)

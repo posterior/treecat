@@ -8,7 +8,7 @@ import shutil
 import numpy as np
 from parsable import parsable
 
-from treecat.config import make_default_config
+from treecat.config import make_config
 from treecat.format import pickle_dump
 from treecat.format import pickle_load
 from treecat.structure import TreeStructure
@@ -127,7 +127,7 @@ def generate_fake_model(num_rows,
 def generate_fake_ensemble(num_rows, num_cols, num_cats, num_components):
     dataset = generate_dataset(num_rows, num_cols, num_cats)
     ensemble = []
-    config = make_default_config()
+    config = make_config()
     config['model_num_clusters'] = num_components
     config['seed'] = 0
     for sub_seed in range(3):
@@ -157,7 +157,7 @@ def generate_model_file(num_rows, num_cols, num_cats=4, rate=1.0):
     dataset_path = generate_dataset_file(num_rows, num_cols, num_cats, rate)
     dataset = pickle_load(dataset_path)
     schema = dataset['schema']
-    config = make_default_config()
+    config = make_config()
     config['learning_epochs'] = 5
     model = train_model(schema['ragged_index'], dataset['data'], config)
     pickle_dump(model, path)

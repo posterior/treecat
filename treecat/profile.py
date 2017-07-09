@@ -11,7 +11,7 @@ from subprocess import check_call
 
 from parsable import parsable
 
-from treecat.config import make_default_config
+from treecat.config import make_config
 from treecat.format import pickle_dump
 from treecat.format import pickle_load
 from treecat.testutil import tempdir
@@ -79,7 +79,7 @@ def train(rows=100, cols=10, epochs=5, ensemble=1, tool='timers'):
     Available tools: timers, time, snakeviz, line_profiler, pdb
     """
     from treecat.generate import generate_dataset_file
-    config = make_default_config()
+    config = make_config()
     config['learning_epochs'] = epochs
     config['model_ensemble_size'] = ensemble
     dataset_path = generate_dataset_file(rows, cols)
@@ -96,7 +96,7 @@ def serve(rows=100, cols=10, cats=4, tool='timers'):
     Available tools: timers, time, snakeviz, line_profiler, pdb
     """
     from treecat.generate import generate_model_file
-    config = make_default_config()
+    config = make_config()
     model_path = generate_model_file(rows, cols, cats)
     with tempdir() as dirname:
         config_path = os.path.join(dirname, 'config.pkz')

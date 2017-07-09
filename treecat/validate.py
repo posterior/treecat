@@ -5,7 +5,7 @@ from __future__ import print_function
 import numpy as np
 from parsable import parsable
 
-from treecat.config import make_default_config
+from treecat.config import make_config
 from treecat.format import pickle_dump
 from treecat.format import pickle_load
 from treecat.serving import TreeCatServer
@@ -52,16 +52,33 @@ def plan_crossvalidation(key, ragged_index, data, config):
 
 @parsable
 def tune_epochs(dataset_path, result_path, *epochs, **options):
-    """Tune training_epochs by crossvalidating posterior predictive."""
-    epochs = list(map(int, epochs))
+    """Tune learning_epochs by crossvalidating posterior predictive."""
+    keys = list(map(int, epochs))
     tasks = []
     dataset = pickle_load(dataset_path)
     ragged_index = dataset['schema']['ragged_index']
     data = dataset['data']
-    for epoch in epochs:
-        config = make_default_config(**options)
-        config['training_epochs'] = epoch
-        tasks += plan_crossvalidation(epoch, ragged_index, data, config)
+    for key in keys:
+        config = make_config(learning_epochs=key, **options)
+        tasks += plan_crossvalidation(key, ragged_index, data, config)
+    print('tuning via {} tasks'.format(len(tasks)))
+    result = parallel_map(_crossvalidate, tasks)
+    for line in sorted(result):
+        print(line)
+    pickle_dump(result, result_path)
+
+
+@parsable
+def tune_clusters(dataset_path, result_path, *clusters, **options):
+    """Tune model_num_clusters by crossvalidating posterior predictive."""
+    keys = list(map(int, clusters))
+    tasks = []
+    dataset = pickle_load(dataset_path)
+    ragged_index = dataset['schema']['ragged_index']
+    data = dataset['data']
+    for key in keys:
+        config = make_config(model_num_clusters=key, **options)
+        tasks += plan_crossvalidation(key, ragged_index, data, config)
     print('tuning via {} tasks'.format(len(tasks)))
     result = parallel_map(_crossvalidate, tasks)
     for line in sorted(result):
