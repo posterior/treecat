@@ -107,7 +107,9 @@ def guess_schema(data_csv_in, types_csv_out, values_csv_out, encoding='utf-8'):
                     continue
                 totals[name] += 1
                 values[name][value] += 1
-    uniques = {n: len(v) for n, v in values.items()}
+    uniques = defaultdict(lambda: 0)
+    for name, counts in values.items():
+        uniques[name] = len(counts)
 
     # Exclude singleton values, because they provide no statistical value
     # and they often leak identifying info.
