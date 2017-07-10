@@ -8,7 +8,7 @@
 
 ## Intended Use
 
-TreeCat is an inference engine intended to power higher-level machine learning tools.
+TreeCat is an inference engine for machine learning and Bayesian inference.
 TreeCat is appropriate for analyzing medium-sized tabular data with
 categorical and ordinal values, possibly with missing observations.
 
@@ -114,7 +114,34 @@ $ pip install pytreecat
     ```python
     print(server.latent_correlation())
     ```
-    
+
+## Tuning Hyperparameters
+
+TreeCat requires tuning of two parameters:
+`learning_epochs` (like the number of iterations) and
+`model_num_clusters` (the number of latent classes above each feature).
+The easiest way to tune these is to do grid search using the `treecat.validate` module
+with a csv file of example parameters.
+
+Contents of [`tuning.csv`](treecat/testdata/tuning.csv):
+
+| model_num_clusters | learning_epochs |
+| ------------------ | --------------- |
+|                  2 |               2 |
+|                  2 |               3 |
+|                  4 |               2 |
+
+```sh
+# This reads parameters from tuning.csv and dumps results to tuning.pkz
+$ treecat.validate tune-csv dataset.pkz tuning.csv tuning.pkz
+```
+
+The `tune-csv` command prints its results, but if you want to seem them later, you can
+
+```sh
+$ treecat.format cat tuning.pkz
+```
+
 ## The Server Interface
 
 TreeCat's
