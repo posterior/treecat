@@ -72,7 +72,7 @@ class ServerBase(object):
         assert data.dtype == np.int8
 
         # Compute marginals (this is the bulk of the work).
-        marginals = self.marginals(self, data)
+        marginals = self.marginals(data)
 
         # Quantize the marginals.
         V = len(self._ragged_index) - 1

@@ -145,6 +145,34 @@ def test_server_marginals(N, V, C, M):
         assert np.allclose(totals, 1.0)
 
 
+@pytest.mark.parametrize('N,V,C,M', [
+    (10, 1, 2, 2),
+    (10, 2, 2, 2),
+    (10, 2, 2, 3),
+    (10, 3, 4, 5),
+    (10, 4, 5, 6),
+    (10, 5, 6, 7),
+])
+def test_server_median(N, V, C, M):
+    model = generate_fake_model(N, V, C, M)
+    config = TINY_CONFIG.copy()
+    config['model_num_clusters'] = M
+    model['config'] = config
+    server = TreeCatServer(model)
+
+    # Evaluate on random data.
+    counts = np.random.randint(10, size=[V], dtype=np.int8)
+    data = generate_dataset(N, V, C)['data']
+    median = server.median(counts, data)
+    assert median.shape == data.shape
+    assert median.dtype == np.int8
+    ragged_index = model['suffstats']['ragged_index']
+    for v in range(V):
+        beg, end = ragged_index[v:v + 2]
+        totals = median[:, beg:end].sum(axis=1)
+        assert np.all(totals == counts[v])
+
+
 NVCM_EXAMPLES_FOR_GOF = [
     (10, 1, 2, 2),
     (10, 1, 2, 3),
