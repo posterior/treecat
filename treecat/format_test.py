@@ -7,9 +7,9 @@ import os
 from treecat.format import guess_schema
 from treecat.format import load_data
 from treecat.format import load_schema
+from treecat.testutil import TESTDATA
 from treecat.testutil import tempdir
 
-TESTDATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'testdata')
 DATA_CSV = os.path.join(TESTDATA, 'tiny_data.csv')
 TYPES_CSV = os.path.join(TESTDATA, 'tiny_types.csv')
 VALUES_CSV = os.path.join(TESTDATA, 'tiny_values.csv')

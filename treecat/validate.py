@@ -8,6 +8,7 @@ import numpy as np
 from parsable import parsable
 
 from treecat.config import make_config
+from treecat.format import csv_reader
 from treecat.format import pickle_dump
 from treecat.format import pickle_load
 from treecat.serving import TreeCatServer
@@ -99,6 +100,35 @@ def tune_clusters(dataset_path, result_path, *clusters, **options):
     data = dataset['data']
     for key in keys:
         config = make_config(model_num_clusters=key, **options)
+        tasks += plan_crossvalidation(key, ragged_index, data, config)
+    print('tuning via {} tasks'.format(len(tasks)))
+    result = parallel_map(_crossvalidate, tasks)
+    for line in sorted(result):
+        print(line)
+    pickle_dump(result, result_path)
+
+
+@parsable
+def tune_csv(dataset_path, param_csv_path, result_path, **options):
+    """Tune parameters specified in a csv file."""
+    # Read csv file of parameters.
+    configs = {}
+    with csv_reader(param_csv_path) as reader:
+        header = next(reader)
+        for row in reader:
+            if len(row) != len(header) or row[0].startswith('#'):
+                continue
+            row = tuple(map(int, row))
+            for key, value in zip(header, row):
+                options[key] = int(value)
+            configs[row] = make_config(**options)
+
+    # Run grid search.
+    dataset = pickle_load(dataset_path)
+    ragged_index = dataset['schema']['ragged_index']
+    data = dataset['data']
+    tasks = []
+    for key, config in configs.items():
         tasks += plan_crossvalidation(key, ragged_index, data, config)
     print('tuning via {} tasks'.format(len(tasks)))
     result = parallel_map(_crossvalidate, tasks)

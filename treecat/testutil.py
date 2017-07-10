@@ -3,12 +3,15 @@ from __future__ import division
 from __future__ import print_function
 
 import contextlib
+import os
 import shutil
 import tempfile
 
 import numpy as np
 
 from treecat.config import make_config
+
+TESTDATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'testdata')
 
 TINY_CONFIG = make_config()
 TINY_CONFIG['learning_epochs'] = 2
