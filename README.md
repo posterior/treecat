@@ -60,10 +60,6 @@ $ pip install pytreecat
     $ treecat guess-schema data.csv types.csv values.csv
     ```
 
-    You can manually fix any incorrectly guessed feature types,
-    or add/remove feature values.
-    TreeCat ignore features with an empty type field.
-
     Contents of [`types.csv`](treecat/testdata/tiny_types.csv):
 
     | name   | type        | total | unique | singletons |
@@ -82,12 +78,16 @@ $ pip install pytreecat
     | genre  | fantasy  |     2 |
     | decade | 1950s    |     3 |
     | ...    | ...      |   ... |
+    
+    You can manually fix any incorrectly guessed feature types,
+    or add/remove feature values.
+    TreeCat ignores any feature with an empty type field.
 
 3.  Import your csv files into treecat's internal format.
     We'll call our dataset `dataset.pkz` (a gzipped pickle file).
 
     ```sh
-    $ treecat import-data data.csv types.csv values dataset.pkz
+    $ treecat import-data data.csv types.csv values.csv dataset.pkz
     ```
 
 4.  Train an ensemble model on your dataset.
