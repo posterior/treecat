@@ -12,6 +12,7 @@ from treecat.structure import TreeStructure
 from treecat.structure import estimate_tree
 from treecat.structure import make_propagation_program
 from treecat.util import profile
+from treecat.util import quantize_from_probs2
 from treecat.util import sample_from_probs2
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,37 @@ class ServerBase(object):
     def make_zero_row(self):
         """Make an empty data row."""
         return self._zero_row.copy()
+
+    def median(self, counts, data):
+        """Compute L1-loss-minimizing quantized marginals conditioned on data.
+
+        Args:
+          counts: A [V]-shaped numpy array of quantization resolutions.
+          data: An [N, R]-shaped numpy array of row of conditioning data, as a
+            ragged nummpy array of multinomial counts,
+            where R = server.ragged_size.
+
+        Returns:
+          An array of the same shape as data, but with specified counts.
+        """
+        logger.debug('computing median')
+        R = self.ragged_size
+        N = data.shape[0]
+        assert data.shape == (N, R)
+        assert data.dtype == np.int8
+
+        # Compute marginals (this is the bulk of the work).
+        marginals = self.marginals(self, data)
+
+        # Quantize the marginals.
+        V = len(self._ragged_index) - 1
+        result = np.zeros_like(data)
+        for v in range(V):
+            beg, end = self._ragged_index[v:v + 2]
+            result[:, beg:end] = quantize_from_probs2(marginals[:, beg:end],
+                                                      counts[v])
+
+        return result
 
 
 class TreeCatServer(ServerBase):
@@ -249,6 +281,68 @@ class TreeCatServer(ServerBase):
                 return logprob
 
     @profile
+    def marginals(self, data):
+        """Compute observed marginals conditioned on data.
+
+        Args:
+          data: An [N, R]-shaped numpy array of row of conditioning data, as a
+            ragged nummpy array of multinomial counts,
+            where R = server.ragged_size.
+
+        Returns:
+          An real-valued array of the same shape as data.
+        """
+        logger.debug('computing marginals')
+        V, E, M, R = self._VEMR
+        N = data.shape[0]
+        assert data.shape == (N, R)
+        assert data.dtype == np.int8
+        edge_trans = self._edge_trans
+        feat_cond = self._feat_cond
+
+        messages_in = np.empty([V, M, N], dtype=np.float32)
+        messages_in[...] = self._vert_probs[:, :, np.newaxis]
+        messages_out = np.empty_like(messages_in.copy())
+        result = np.zeros([N, R], np.float32)
+
+        for op, v, v2, e in self._program:
+            if op == 0:  # OP_UP
+                # Propagate upward from observed to latent.
+                message = messages_in[v, :, :]
+                beg, end = self._ragged_index[v:v + 2]
+                for r in range(beg, end):
+                    # This uses a with-replacement approximation that is exact
+                    # for categorical data but approximate for multinomial.
+                    power = data[np.newaxis, :, r]
+                    message *= feat_cond[r, :, np.newaxis]**power
+                messages_out[v, :, :] = message
+            elif op == 1:  # OP_IN
+                # Propagate latent state inward from children to v.
+                message = messages_in[v, :, :]
+                trans = edge_trans[e, :, :]
+                if v > v2:
+                    trans = trans.T
+                message *= np.dot(trans, messages_in[v2, :, :])
+                message /= message.sum(axis=0, keepdims=True)
+            else:  # OP_ROOT or OP_OUT
+                message = messages_in[v, :, :]
+                # Propagate latent state outward from parent to v.
+                if op == 3:  # OP_OUT
+                    trans = edge_trans[e, :, :]
+                    if v > v2:
+                        trans = trans.T
+                    from_parent = np.dot(trans, messages_out[v2, :, :])
+                    messages_out[v, :, :] *= from_parent
+                    message *= from_parent
+                # Propagate downward from latent state to observations.
+                beg, end = self._ragged_index[v:v + 2]
+                marginal = result[:, beg:end]
+                marginal[...] = np.dot(feat_cond[beg:end, :], message).T
+                marginal /= marginal.sum(axis=1, keepdims=True)
+
+        return result
+
+    @profile
     def latent_correlation(self):
         """Compute correlation matrix among latent features.
 
@@ -275,16 +369,16 @@ class TreeCatServer(ServerBase):
                     trans = edge_probs[e, :, :]
                     if v > v2:
                         trans = trans.T
-                    messages[v, :, :] = np.dot(
-                        trans / vert_probs[v2, np.newaxis, :],
-                        messages[v2, :, :])
+                    messages[v, :, :] = np.dot(trans /
+                                               vert_probs[v2, np.newaxis, :],
+                                               messages[v2, :, :])
             for v in range(V):
                 result[root, v] = correlation(messages[v, :, :])
         return result
 
 
 class EnsembleServer(ServerBase):
-    """Class for serving queries against a trained TreeCat ensemble model."""
+    """Class for serving queries against a trained TreeCat ensemble."""
 
     def __init__(self, ensemble):
         logger.info('EnsembleServer of size %d', len(ensemble))
@@ -328,3 +422,6 @@ class EnsembleServer(ServerBase):
         logprobs -= np.log(len(self._ensemble))
         assert logprobs.shape == (data.shape[0], )
         return logprobs
+
+    def marginals(self, data):
+        raise NotImplementedError()

@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 from goftests import multinomial_goodness_of_fit
 
+from treecat.generate import generate_dataset
 from treecat.generate import generate_fake_ensemble
 from treecat.generate import generate_fake_model
 from treecat.serving import EnsembleServer
@@ -117,6 +118,31 @@ def test_server_logprob_normalized(N, V, C, M):
     logprobs = server.logprob(data)
     logtotal = np.logaddexp.reduce(logprobs)
     assert logtotal == pytest.approx(0.0, abs=1e-5)
+
+
+@pytest.mark.parametrize('N,V,C,M', [
+    (10, 1, 2, 2),
+    (10, 2, 2, 2),
+    (10, 2, 2, 3),
+    (10, 3, 4, 5),
+    (10, 4, 5, 6),
+    (10, 5, 6, 7),
+])
+def test_server_marginals(N, V, C, M):
+    model = generate_fake_model(N, V, C, M)
+    config = TINY_CONFIG.copy()
+    config['model_num_clusters'] = M
+    model['config'] = config
+    server = TreeCatServer(model)
+
+    # Evaluate on random data.
+    data = generate_dataset(N, V, C)['data']
+    marginals = server.marginals(data)
+    ragged_index = model['suffstats']['ragged_index']
+    for v in range(V):
+        beg, end = ragged_index[v:v + 2]
+        totals = marginals[:, beg:end].sum(axis=1)
+        assert np.allclose(totals, 1.0)
 
 
 NVCM_EXAMPLES_FOR_GOF = [
