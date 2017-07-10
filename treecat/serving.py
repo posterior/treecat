@@ -38,11 +38,15 @@ class ServerBase(object):
 
     def __init__(self, ragged_index):
         self._ragged_index = ragged_index
-        self._zero_row = np.zeros(ragged_index[-1], np.int8)
+        self._zero_row = np.zeros(self.ragged_size, np.int8)
 
     @property
     def ragged_index(self):
         return self._ragged_index
+
+    @property
+    def ragged_size(self):
+        return self._ragged_index[-1]
 
     def make_zero_row(self):
         """Make an empty data row."""
@@ -76,9 +80,9 @@ class TreeCatServer(ServerBase):
         # These are useful dimensions to import into locals().
         V = self._tree.num_vertices
         E = V - 1  # Number of edges in the tree.
-        M = self._config[
-            'model_num_clusters']  # Clusters in each mixture model.
-        self._VEM = (V, E, M)
+        M = self._config['model_num_clusters']  # Number of latent clusters.
+        R = ragged_index[-1]  # Size of ragged data.
+        self._VEMR = (V, E, M, R)
 
         # Use Jeffreys priors.
         vert_prior = 0.5
@@ -130,18 +134,19 @@ class TreeCatServer(ServerBase):
           size: The number of samples to draw.
           counts: A [V]-shaped numpy array of requested counts of multinomials
             to sample.
-          data: An optional single row of conditioning data, as a ragged nummpy
-            array of multinomial counts.
+          data: An optional single row of conditioning data, as a [R]-shaped
+            ragged numpy array of multinomial counts,
+            where R = server.ragged_size.
 
         Returns:
-          An [N, _]-shaped numpy array of sampled multinomial data.
+          An [N, R]-shaped numpy array of sampled multinomial data.
         """
         logger.debug('sampling data')
-        V, E, M = self._VEM
+        V, E, M, R = self._VEMR
         if data is None:
             data = self._zero_row
-        assert data.shape == self._zero_row.shape
-        assert data.dtype == self._zero_row.dtype
+        assert data.shape == (R, )
+        assert data.dtype == np.int8
         assert counts.shape == (V, )
         assert counts.dtype == np.int8
         edge_trans = self._edge_trans
@@ -150,7 +155,7 @@ class TreeCatServer(ServerBase):
         messages_in = self._vert_probs.copy()
         messages_out = np.tile(self._vert_probs[:, np.newaxis, :], (1, N, 1))
         vert_samples = np.zeros([V, N], np.int8)
-        feat_samples = np.zeros([N, self._zero_row.shape[0]], np.int8)
+        feat_samples = np.zeros([N, R], np.int8)
         range_N = np.arange(N, dtype=np.int32)
 
         for op, v, v2, e in self._program:
@@ -159,7 +164,7 @@ class TreeCatServer(ServerBase):
                 message = messages_in[v, :]
                 beg, end = self._ragged_index[v:v + 2]
                 for r in range(beg, end):
-                    # This uses a with-replacement approximation which is exact
+                    # This uses a with-replacement approximation that is exact
                     # for categorical data but approximate for multinomial.
                     message *= feat_cond[r, :]**data[r]
             elif op == 1:  # OP_IN
@@ -201,18 +206,17 @@ class TreeCatServer(ServerBase):
                                 - server.logprob(cond_data)
 
         Args:
-          data: A [N, _]-shaped ragged nummpy array of multinomial count data,
-            where N is the number of rows.
+          data: A [N, R]-shaped ragged nummpy array of multinomial count data,
+            where N is the number of rows, and R is server.ragged_size.
 
         Returns:
           An [N]-shaped numpy array of log probabilities.
         """
         logger.debug('computing logprob')
-        assert len(data.shape) == 2
-        assert data.shape[1] == self._ragged_index[-1]
-        assert data.dtype == np.int8
+        V, E, M, R = self._VEMR
         N = data.shape[0]
-        V, E, M = self._VEM
+        assert data.shape == (N, R)
+        assert data.dtype == np.int8
         edge_trans = self._edge_trans
         feat_cond = self._feat_cond
 
@@ -226,7 +230,7 @@ class TreeCatServer(ServerBase):
                 # Propagate upward from observed to latent.
                 beg, end = self._ragged_index[v:v + 2]
                 for r in range(beg, end):
-                    # This uses a with-replacement approximation which is exact
+                    # This uses a with-replacement approximation that is exact
                     # for categorical data but approximate for multinomial.
                     power = data[np.newaxis, :, r]
                     message *= feat_cond[r, :, np.newaxis]**power
@@ -257,7 +261,7 @@ class TreeCatServer(ServerBase):
           An [V, V] numpy array of feature-feature correlations.
         """
         logger.debug('computing latent correlation')
-        V, E, M = self._VEM
+        V, E, M, R = self._VEMR
         edge_probs = self._edge_probs
         vert_probs = self._vert_probs
         result = np.zeros([V, V], np.float32)
