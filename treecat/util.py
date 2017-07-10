@@ -66,18 +66,55 @@ def sizeof(array):
 
 @jit(nopython=True, cache=True)
 def jit_sample_from_probs(probs):
-    """Sample from a vector of non-normalized probabilitites."""
+    """Sample from a vector of non-normalized probabilitites.
+
+    Args:
+      probs: An [M]-shaped numpy array of non-normalized probabilities.
+
+    Returns:
+      An integer in range(M).
+    """
     cdf = probs.cumsum()
     return (np.random.rand() * cdf[-1] < cdf).argmax()
 
 
 def sample_from_probs2(probs, out=None):
-    """Vectorized sampler from categorical distribution."""
+    """Sample from multiple vectors of non-normalized probabilities.
+
+    Args:
+      probs: An [N, M]-shaped numpy array of non-normalized probabilities.
+      out: An optional destination for the result.
+
+    Returns:
+      An [N]-shaped numpy array of integers in range(M).
+    """
     # Adapted from https://stackoverflow.com/questions/40474436
     assert len(probs.shape) == 2
-    u = np.random.rand(probs.shape[0], 1)
     cdf = probs.cumsum(axis=1)
+    u = np.random.rand(probs.shape[0], 1) * cdf[:, -1, np.newaxis]
     return (u < cdf).argmax(axis=1, out=out)
+
+
+def quantize_from_probs2(probs, resolution):
+    """Quantize multiple non-normalized probs to given resolution.
+
+    Args:
+      probs: An [N, M]-shaped numpy array of non-normalized probabilities.
+
+    Returns:
+      An [N, M]-shaped array of quantized probabilities such that
+      np.all(result.sum(axis=1) == resolution).
+    """
+    assert len(probs.shape) == 2
+    N, M = probs.shape
+    probs = probs / probs.sum(axis=1, keepdims=True)
+    result = np.zeros(probs.shape, np.int8)
+    range_N = np.arange(N, dtype=np.int32)
+    for _ in range(resolution):
+        sample = probs.argmax(axis=1)
+        result[range_N, sample] += 1
+        probs[range_N, sample] -= 1.0 / resolution
+    return result
 
 
 def make_ragged_index(columns):
