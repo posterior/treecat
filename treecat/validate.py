@@ -2,6 +2,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from collections import namedtuple
+
 import numpy as np
 from parsable import parsable
 
@@ -13,6 +15,8 @@ from treecat.training import train_model
 from treecat.util import parallel_map
 
 parsable = parsable.Parsable()
+
+Stats = namedtuple('Stats', ['logprob', 'l1_loss'])
 
 
 def split_data(ragged_index, data, num_parts):
@@ -30,23 +34,40 @@ def split_data(ragged_index, data, num_parts):
     return parts
 
 
+def guess_counts(ragged_index, data):
+    """Guess the multinomial count of each feature.
+
+    This should guess 1 for categoricals and max-min for ordinals.
+    """
+    V = len(ragged_index) - 1
+    counts = np.zeros(V, np.int8)
+    for v in range(V):
+        beg, end = ragged_index[v:v + 2]
+        counts[v] = data[:, beg:end].sum(axis=1).max()
+    return counts
+
+
 def _crossvalidate(task):
-    key, ragged_index, data, part, config = task
+    (key, ragged_index, counts, data, part, config) = task
     print('training {}'.format(key))
     model = train_model(ragged_index, data, config)
     server = TreeCatServer(model)
     print('evaluating {}'.format(key))
-    return key, np.mean(server.logprob(data) - server.logprob(part))
+    logprob = np.mean(server.logprob(data) - server.logprob(part))
+    # FIXME This should restrict to the held-out portion of the median.
+    l1_loss = np.abs(server.median(counts, part) - data).sum()
+    return key, Stats(logprob, l1_loss)
 
 
 def plan_crossvalidation(key, ragged_index, data, config):
+    counts = guess_counts(ragged_index, data)
     num_parts = config['model_ensemble_size']
     parts = split_data(ragged_index, data, num_parts)
     tasks = []
     for sub_seed, part in enumerate(parts):
         sub_config = config.copy()
         sub_config['seed'] += sub_seed
-        tasks.append((key, ragged_index, data, part, sub_config))
+        tasks.append((key, ragged_index, counts, data, part, sub_config))
     return tasks
 
 
