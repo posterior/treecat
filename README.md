@@ -101,7 +101,6 @@ $ pip install pytreecat
 
     ```python
     from treecat.serving import EnsembleServer
-
     server = EnsembleServer('ensemble.pkz')
     ```
 
@@ -130,6 +129,7 @@ Contents of [`tuning.csv`](treecat/testdata/tuning.csv):
 |                  2 |               2 |
 |                  2 |               3 |
 |                  4 |               2 |
+|                ... |             ... |
 
 ```sh
 # This reads parameters from tuning.csv and dumps results to tuning.pkz
@@ -145,13 +145,17 @@ $ treecat.format cat tuning.pkz
 ## The Server Interface
 
 TreeCat's
-[server](https://github.com/fritzo/treecat/blob/master/treecat/serving.py)
-interface currently supports the two basic Bayesian operations:
+[server](https://github.com/posterior/treecat/blob/master/treecat/serving.py)
+interface currently supports a few basic Bayesian primitives:
 
 - `server.sample(N, counts, data=None)`
   draws N samples from the joint posterior distribution, optionally conditioned on `data`.
   
-- `server.logprob(data)` computes posterior log probability of data.
+- `server.logprob(data)` computes posterior log probability of `data`.
+
+- `server.marginals(data)` computes marginal distributions of observations, conditioned on `data`.
+
+- `server.median(counts, data)` computes L1-loss-minimizing estimates, conditiond on `data`.
 
 TreeCat's internal data representation is multinomial, and thus supports missing and repeated measurements, and even data adding. For example to compute conditional probability of data `A` given data `B`, we can simply compute
 
