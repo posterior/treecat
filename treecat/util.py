@@ -133,6 +133,28 @@ def make_ragged_index(columns):
     return ragged_index
 
 
+def make_ragged_mask(ragged_index, mask):
+    """Convert a boolean mask from dense to ragged format.
+
+    Args:
+      ragged_index: A [V+1]-shaped numpy array as returned by
+        make_ragged_index.
+      mask: A [V,...]-shaped numpy array of booleans.
+
+    Returns:
+      A [R,...]-shaped numpy array, where R = ragged_index[-1].
+    """
+    V = ragged_index.shape[0] - 1
+    R = ragged_index[-1]
+    assert mask.shape[0] == V
+    assert mask.dtype == np.bool_
+    ragged_mask = np.empty((R, ) + mask.shape[1:], dtype=np.bool_)
+    for v in range(V):
+        beg, end = ragged_index[v:v + 2]
+        ragged_mask[beg:end] = mask[v]
+    return ragged_mask
+
+
 POOL = None
 
 

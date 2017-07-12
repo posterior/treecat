@@ -13,6 +13,7 @@ from treecat.format import pickle_dump
 from treecat.format import pickle_load
 from treecat.serving import TreeCatServer
 from treecat.training import train_model
+from treecat.util import make_ragged_mask
 from treecat.util import parallel_map
 
 parsable = parsable.Parsable()
@@ -20,7 +21,7 @@ parsable = parsable.Parsable()
 Stats = namedtuple('Stats', ['logprob', 'l1_loss'])
 
 
-def split_data(ragged_index, data, num_parts):
+def make_splits(ragged_index, num_rows, num_parts):
     """Split a dataset for unsupervised crossvalidation.
 
     This splits a dataset into num_parts disjoint parts by randomly holding out
@@ -31,26 +32,24 @@ def split_data(ragged_index, data, num_parts):
     Args:
         ragged_index: A [V+1]-shaped numpy array of indices into the ragged
             data array, where V is the number of features.
-        data: A [N, R]-shaped ragged nummpy array of multinomial count data,
-            where N is the number of rows, and R is ragged_index[-1].
+        num_rows: An integer, the number of rows in the dataset.
         num_parts: An integer, the number of folds in n-fold crossvalidation.
 
     Returns:
-        A num_parts-long list of arrays shaped like data, each with some of its
-        cells zeroed out.
+        A num_parts-long list of mostly-empty [N,R]-shaped masks, where
+        N = num_rows, and R = ragged_index[-1].
     """
-    N = data.shape[0]
+    N = num_rows
     V = ragged_index.shape[0] - 1
+    R = ragged_index[-1]
     holdouts = np.random.randint(num_parts, size=(N, V))
-    parts = []
+    masks = []
     for i in range(num_parts):
-        holdout = (holdouts == i)
-        part = data.copy()
-        for v in range(V):
-            beg, end = ragged_index[v:v + 2]
-            part[holdout[:, v], beg:end] = 0
-        parts.append(part)
-    return parts
+        dense_mask = (holdouts == i)
+        ragged_mask = make_ragged_mask(ragged_index, dense_mask.T).T
+        assert ragged_mask.shape == (N, R)
+        masks.append(ragged_mask)
+    return masks
 
 
 def guess_counts(ragged_index, data):
@@ -67,26 +66,29 @@ def guess_counts(ragged_index, data):
 
 
 def _crossvalidate(task):
-    (key, ragged_index, counts, data, part, config) = task
+    (key, ragged_index, counts, data, mask, config) = task
+    part = data.copy()
+    part[mask] = 0
     print('training {}'.format(key))
-    model = train_model(ragged_index, data, config)
+    model = train_model(ragged_index, part, config)
     server = TreeCatServer(model)
     print('evaluating {}'.format(key))
     logprob = np.mean(server.logprob(data) - server.logprob(part))
-    # FIXME This should restrict to the held-out portion of the median.
-    l1_loss = np.abs(server.median(counts, part) - data).sum()
+    median = server.median(counts, part)
+    l1_loss = np.abs(median - data)[mask].sum()
     return key, Stats(logprob, l1_loss)
 
 
 def plan_crossvalidation(key, ragged_index, data, config):
     counts = guess_counts(ragged_index, data)
+    num_rows = data.shape[0]
     num_parts = config['model_ensemble_size']
-    parts = split_data(ragged_index, data, num_parts)
+    masks = make_splits(ragged_index, num_rows, num_parts)
     tasks = []
-    for sub_seed, part in enumerate(parts):
+    for sub_seed, mask in enumerate(masks):
         sub_config = config.copy()
         sub_config['seed'] += sub_seed
-        tasks.append((key, ragged_index, counts, data, part, sub_config))
+        tasks.append((key, ragged_index, counts, data, mask, sub_config))
     return tasks
 
 
