@@ -11,6 +11,7 @@ from scipy.stats import entropy
 from treecat.structure import TreeStructure
 from treecat.structure import estimate_tree
 from treecat.structure import make_propagation_program
+from treecat.util import guess_counts
 from treecat.util import profile
 from treecat.util import quantize_from_probs2
 from treecat.util import sample_from_probs2
@@ -53,6 +54,9 @@ class ServerBase(object):
         """Make an empty data row."""
         return self._zero_row.copy()
 
+    def marginals(self, data):
+        raise NotImplementedError
+
     def median(self, counts, data):
         """Compute L1-loss-minimizing quantized marginals conditioned on data.
 
@@ -83,6 +87,23 @@ class ServerBase(object):
                                                       counts[v])
 
         return result
+
+    def mode(self, counts, data):
+        """Compute a maximum a posteriori data value conditioned on data.
+
+        Args:
+          counts: A [V]-shaped numpy array of quantization resolutions.
+          data: An [N, R]-shaped numpy array of row of conditioning data, as a
+            ragged nummpy array of multinomial counts,
+            where R = server.ragged_size.
+
+        Returns:
+          An array of the same shape as data, but with specified counts.
+        """
+        raise NotImplementedError
+
+    def latent_correlation(self):
+        raise NotImplementedError
 
 
 class TreeCatServer(ServerBase):
@@ -385,9 +406,9 @@ class TreeCatServer(ServerBase):
                     trans = edge_probs[e, :, :]
                     if v > v2:
                         trans = trans.T
-                    messages[v, :, :] = np.dot(trans /
-                                               vert_probs[v2, np.newaxis, :],
-                                               messages[v2, :, :])
+                    messages[v, :, :] = np.dot(
+                        trans / vert_probs[v2, np.newaxis, :],
+                        messages[v2, :, :])
             for v in range(V):
                 result[root, v] = correlation(messages[v, :, :])
         return result
@@ -439,9 +460,6 @@ class EnsembleServer(ServerBase):
         assert logprobs.shape == (data.shape[0], )
         return logprobs
 
-    def marginals(self, data):
-        raise NotImplementedError()
-
     def latent_perplexity(self):
         """Compute perplexity = exp(entropy) of latent variables.
 
@@ -455,3 +473,71 @@ class EnsembleServer(ServerBase):
         result = np.stack(
             [server.latent_perplexity() for server in self._ensemble])
         return result.mean(axis=0)
+
+
+class DataServer(object):
+    """A schema-aware server interface."""
+
+    def __init__(self, dataset, ensemble):
+        self._schema = dataset['schema']
+        self._data = dataset['data']
+        self._counts = guess_counts(self._data)
+        if len(ensemble) == 1:
+            self._server = TreeCatServer(ensemble[0])
+        else:
+            self._server = EnsembleServer(ensemble)
+        self._feature_names = tuple(self._schema['feature_names'])
+
+    @property
+    def feature_names(self):
+        return self._feature_names
+
+    @property
+    def estimate_tree(self):
+        """Returns a tuple of edges. Each edge is a (vertex,vertex) pair."""
+        return self._server.estimated_tree
+
+    @property
+    def edge_logits(self):
+        return self._server.edge_logits
+
+    def latent_perplexity(self):
+        return self._server.latent_perplexity()
+
+    def latent_correlation(self):
+        return self._server.latent_correlation()
+
+    def _import_rows(self, rows):
+        """Convert to ragged multinomial format."""
+        raise NotImplementedError('TODO')
+
+    def _export_rows(self, rows):
+        """Convert from ragged multinomial format."""
+        raise NotImplementedError('TODO')
+
+    def logprob(self, rows, evidence=None):
+        data = self._import_rows(rows)
+        if evidence is None:
+            return self._server.logprob(data)
+        else:
+            ragged_evidence = self._import_rows([evidence])
+            return (self._server.logprob(data + ragged_evidence) -
+                    self._server.logprob(data + evidence))
+
+    def sample(self, N, evidence=None):
+        if evidence is None:
+            data = None
+        else:
+            data = self._import_rows([evidence])[0]
+        ragged_samples = self._server.sample(N, self._counts, data)
+        return self._export_rows(ragged_samples)
+
+    def median(self, evidence):
+        ragged_evidence = self._import_rows(evidence)
+        data = self._server.median(self, self._counts, ragged_evidence)
+        return self._export_rows(data)
+
+    def mode(self, evidence):
+        ragged_evidence = self._import_rows(evidence)
+        data = self._server.mode(self, self._counts, ragged_evidence)
+        return self._export_rows(data)

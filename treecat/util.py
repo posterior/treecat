@@ -155,6 +155,28 @@ def make_ragged_mask(ragged_index, mask):
     return ragged_mask
 
 
+def guess_counts(ragged_index, data):
+    """Guess the multinomial count of each feature.
+
+    This should guess 1 for categoricals and (max - min) for ordinals.
+
+    Args:
+      ragged_index: A [V+1]-shaped numpy array as returned by
+        make_ragged_index.
+      data: A [N, R]-shaped ragged array of multinomial count data, where
+        N is the number of rows and R = ragged_index[-1].
+
+    Returns:
+      A [V]-shaped array of multinomial totals.
+    """
+    V = len(ragged_index) - 1
+    counts = np.zeros(V, np.int8)
+    for v in range(V):
+        beg, end = ragged_index[v:v + 2]
+        counts[v] = data[:, beg:end].sum(axis=1).max()
+    return counts
+
+
 POOL = None
 
 

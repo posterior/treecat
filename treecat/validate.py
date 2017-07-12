@@ -13,6 +13,7 @@ from treecat.format import pickle_dump
 from treecat.format import pickle_load
 from treecat.serving import TreeCatServer
 from treecat.training import train_model
+from treecat.util import guess_counts
 from treecat.util import make_ragged_mask
 from treecat.util import parallel_map
 
@@ -50,19 +51,6 @@ def make_splits(ragged_index, num_rows, num_parts):
         assert ragged_mask.shape == (N, R)
         masks.append(ragged_mask)
     return masks
-
-
-def guess_counts(ragged_index, data):
-    """Guess the multinomial count of each feature.
-
-    This should guess 1 for categoricals and max-min for ordinals.
-    """
-    V = len(ragged_index) - 1
-    counts = np.zeros(V, np.int8)
-    for v in range(V):
-        beg, end = ragged_index[v:v + 2]
-        counts[v] = data[:, beg:end].sum(axis=1).max()
-    return counts
 
 
 def _crossvalidate(task):
