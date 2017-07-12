@@ -41,6 +41,14 @@ class TreeStructure(object):
         assert len(edges) == self._num_edges
         self._tree_grid = make_tree(edges)
 
+    def get_edges(self):
+        """Returns the edges of this tree.
+
+        Returns:
+          A list of (vertex, vertex) pairs.
+        """
+        return [(v1, v2) for e, v1, v2 in self._tree_grid.T]
+
     @property
     def num_vertices(self):
         return self._num_vertices
@@ -126,10 +134,10 @@ def find_center_of_tree(grid):
     """Finds a maximally central vertex in a tree graph.
 
     Args:
-        grid: A tree graph as returned by make_tree().
+      grid: A tree graph as returned by make_tree().
 
     Returns:
-        Vertex id of a maximally central vertex.
+      Vertex id of a maximally central vertex.
     """
     E = grid.shape[1]
     V = 1 + E
@@ -410,17 +418,21 @@ def estimate_tree(grid, edge_logits):
     return edges
 
 
-def print_tree(edges, feature_names, root):
+def print_tree(edges, feature_names, root=None):
     """Returns a text representation of the feature tree.
 
     Args:
       edges: A list of (vertex, vertex) pairs.
       feature_names: A list of feature names.
-      root: The name of the root feature.
+      root: The name of the root feature (optional).
 
     Returns:
       A text representation of the tree with one feature per line.
     """
+    assert len(feature_names) == 1 + len(edges)
+    if root is None:
+        root = feature_names[find_center_of_tree(make_tree(edges))]
+    assert root in feature_names
     neighbors = defaultdict(set)
     for v1, v2 in edges:
         neighbors[v1].add(v2)
