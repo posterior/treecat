@@ -306,6 +306,27 @@ def test_latent_perplexity(N, V, C, M):
     (10, 6, 2, 7),
     (10, 7, 2, 8),
 ])
+def test_ensemble_latent_perplexity(N, V, C, M):
+    set_random_seed(0)
+    ensemble = generate_fake_ensemble(N, V, C, M)
+    server = EnsembleServer(ensemble)
+
+    perplexity = server.latent_perplexity()
+    print(perplexity)
+    assert perplexity.shape == (V, )
+    assert np.all(1 <= perplexity)
+    assert np.all(perplexity <= M)
+
+
+@pytest.mark.parametrize('N,V,C,M', [
+    (10, 1, 2, 2),
+    (10, 2, 2, 3),
+    (10, 3, 2, 4),
+    (10, 4, 2, 5),
+    (10, 5, 2, 6),
+    (10, 6, 2, 7),
+    (10, 7, 2, 8),
+])
 def test_latent_correlation(N, V, C, M):
     set_random_seed(0)
     model = generate_fake_model(N, V, C, M)

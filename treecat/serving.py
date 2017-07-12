@@ -441,3 +441,17 @@ class EnsembleServer(ServerBase):
 
     def marginals(self, data):
         raise NotImplementedError()
+
+    def latent_perplexity(self):
+        """Compute perplexity = exp(entropy) of latent variables.
+
+        Perplexity is an information theoretic measure of the number of
+        clusters or latent classes. Perplexity is a real number in the range
+        [1, M], where M is model_num_clusters.
+
+        Returns:
+          A [V]-shaped numpy array of perplexity.
+        """
+        result = np.stack(
+            [server.latent_perplexity() for server in self._ensemble])
+        return result.mean(axis=0)

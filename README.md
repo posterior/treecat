@@ -155,7 +155,11 @@ interface currently supports a few basic Bayesian primitives:
 
 - `server.marginals(data)` computes marginal distributions of observations, conditioned on `data`.
 
-- `server.median(counts, data)` computes L1-loss-minimizing estimates, conditiond on `data`.
+- `server.median(counts, data)` computes L1-loss-minimizing estimates, conditioned on `data`.
+
+- `server.latent_perplexity()` estimates the number of latent classes behind each observed feature.
+
+- `server.latent_correlation()` computes the latent-latent correlation between each pair of latent variables.
 
 TreeCat's internal data representation is multinomial, and thus supports missing and repeated measurements, and even data adding. For example to compute conditional probability of data `A` given data `B`, we can simply compute
 
