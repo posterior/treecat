@@ -342,6 +342,22 @@ class TreeCatServer(ServerBase):
 
         return result
 
+    def latent_perplexity(self):
+        """Compute perplexity = exp(entropy) of latent variables.
+
+        Perplexity is an information theoretic measure of the number of
+        clusters or latent classes. Perplexity is a real number in the range
+        [1, M], where M is model_num_clusters.
+
+        Returns:
+          A [V]-shaped numpy array of perplexity.
+        """
+        V, E, M, R = self._VEMR
+        latent_entropy = np.array(
+            [entropy(self._vert_probs[v, :]) for v in range(V)],
+            dtype=np.float32)
+        return np.exp(latent_entropy)
+
     @profile
     def latent_correlation(self):
         """Compute correlation matrix among latent features.
