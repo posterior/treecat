@@ -169,6 +169,13 @@ cond = server.logprob(A + B) - server.logprob(B)
 
 ## The Model
 
+TreeCat's generative model is closest to Zhang and Poon's Latent Tree Analysis [1],
+with the notable difference that TreeCat fixes exactly one latent node per observed node.
+TreeCat is historically a successor to Mansinghka et al.'s CrossCat, where latent nodes
+("views" or "kinds") are completely independent.
+TreeCat addresses the same kind of high-dimensional categorical distribution
+that Dunson and Xing's mixture-of-product-multinomial models [3] addresses.
+
 Let `V` be a set of vertices (one vertex per feature).<br />
 Let `C[v]` be the dimension of the `v`th feature.<br />
 Let `N` be the number of datapoints.<br />
@@ -202,10 +209,10 @@ the model as a manifold with overlapping variables and constraints.
 ## The Inference Algorithm
 
 This package implements fully Bayesian MCMC inference using subsample-annealed
-Gibbs sampling. There are two pieces of latent state that are sampled:
+collapsed Gibbs sampling. There are two pieces of latent state that are sampled:
 
-- Latent classes for each row for each vertex.
-  These are sampled by single-site Gibbs sampling with a linear
+- Latent class assignments for each row for each vertex (feature).
+  These are sampled by single-site collapsed Gibbs sampler with a linear
   subsample-annealing schedule.
 
 - The latent tree structure is sampled by randomly removing an edge
@@ -219,6 +226,15 @@ program is created each time the tree structure changes. This program is
 interpreted by various virtual machines for different purposes (training the
 model, sampling from the posterior, computing log probability of the posterior).
 The virtual machine for training is jit-compiled using numba.
+
+## References
+
+1. Nevin L. Zhang, Leonard K. M. Poon (2016) <br />
+   [Latent Tree Analysis](https://arxiv.org/pdf/1610.00085.pdf)
+2. Vikash Mansinghka, Patrick Shafto, Eric Jonas, Cap Petschulat, Max Gasner, Joshua B. Tenenbaum (2015) <br />
+   [CrossCat: A Fully Bayesian Nonparametric Method for Analyzing Heterogeneous, High Dimensional Data](https://arxiv.org/pdf/1512.01272)
+3. David B. Dunson, Chuanhua Xing (2012) <br />
+   [Nonparametric Bayes Modeling of Multivariate Categorical Data](https://dx.doi.org/10.1198%2Fjasa.2009.tm08439)
 
 ## License
 
