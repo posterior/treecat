@@ -5,6 +5,7 @@ from __future__ import print_function
 import csv
 import gzip
 import io
+import logging
 import re
 import sys
 from collections import Counter
@@ -18,6 +19,7 @@ from six.moves import cPickle as pickle
 from six.moves import intern
 from six.moves import zip
 
+logger = logging.getLogger(__name__)
 parsable = parsable.Parsable()
 
 CATEGORICAL = intern('categorical')
@@ -132,8 +134,8 @@ def guess_schema(data_csv_in, types_csv_out, values_csv_out, encoding='utf-8'):
     ]
     print('Found {} features: {} categoricals + {} ordinals'.format(
         len(feature_names),
-        sum(t is CATEGORICAL for t in feature_types),
-        sum(t is ORDINAL for t in feature_types)))
+        sum(t == CATEGORICAL for t in feature_types),
+        sum(t == ORDINAL for t in feature_types)))
 
     # Write types.
     with csv_writer(types_csv_out) as writer:
@@ -188,9 +190,9 @@ def load_schema(types_csv_in, values_csv_in, encoding='utf-8'):
                 continue
             value = intern(row[1])
             typename = feature_types[name]
-            if typename is CATEGORICAL:
+            if typename == CATEGORICAL:
                 categorical_values[name].append(value)
-            elif typename is ORDINAL:
+            elif typename == ORDINAL:
                 ordinal_values[name].append(int(value))
             else:
                 raise ValueError(typename)
@@ -202,11 +204,11 @@ def load_schema(types_csv_in, values_csv_in, encoding='utf-8'):
     categorical_index = {}
     ordinal_ranges = {}
     for name, typename in feature_types.items():
-        if typename is CATEGORICAL:
+        if typename == CATEGORICAL:
             values = tuple(categorical_values[name])
             categorical_values[name] = values
             categorical_index[name] = {v: i for i, v in enumerate(values)}
-        elif typename is ORDINAL:
+        elif typename == ORDINAL:
             values = sorted(ordinal_values[name])
             ordinal_ranges[name] = (values[0], values[-1])
         else:
@@ -218,9 +220,9 @@ def load_schema(types_csv_in, values_csv_in, encoding='utf-8'):
     for pos, name in enumerate(feature_names):
         feature_index[name] = pos
         typename = feature_types[name]
-        if typename is CATEGORICAL:
+        if typename == CATEGORICAL:
             dim = len(categorical_values[name])
-        elif typename is ORDINAL:
+        elif typename == ORDINAL:
             dim = 2
         ragged_index[pos + 1] = ragged_index[pos] + dim
 
@@ -253,9 +255,12 @@ def load_data(schema, data_csv_in, encoding='utf-8'):
         metas = [None] * len(header)
         for i, name in enumerate(header):
             if name in feature_types:
-                metas[i] = (name, feature_types[name], feature_index[name],
-                            categorical_index.get(name),
-                            ordinal_ranges.get(name), )
+                metas[i] = (
+                    name,
+                    feature_types[name],
+                    ragged_index[feature_index[name]],
+                    categorical_index.get(name),
+                    ordinal_ranges.get(name), )
         for external_row in reader:
             internal_row = prototype_row.copy()
             for value, meta in zip(external_row, metas):
@@ -265,13 +270,13 @@ def load_data(schema, data_csv_in, encoding='utf-8'):
                 if not value:
                     continue
                 name, typename, pos, index, min_max = meta
-                if typename is CATEGORICAL:
+                if typename == CATEGORICAL:
                     try:
                         value = index[value]
                     except KeyError:
                         continue
                     internal_row[pos + value] = 1
-                elif typename is ORDINAL:
+                elif typename == ORDINAL:
                     try:
                         value = int(value)
                     except ValueError:
@@ -291,6 +296,103 @@ def load_data(schema, data_csv_in, encoding='utf-8'):
         if column_counts[name] == 0:
             print('WARNING: No values found for feature {}'.format(name))
     return np.stack(rows)
+
+
+def import_rows(schema, rows):
+    """Import multiple rows of json data to internal format.
+
+    Args:
+      schema: A schema dict as returned by load_schema().
+      rows: A N-long list of sparse dicts mapping feature names to values,
+        where N is the number of rows. Extra keys and invalid values will be
+        silently ignored.
+
+    Returns:
+      An [N, R]-shaped numpy array of ragged data, where N is the number of
+      rows and R = schema['ragged_index'][-1].
+    """
+    logger.debug('Importing {:d} rows', len(rows))
+    assert isinstance(rows, list)
+    assert all(isinstance(r, dict) for r in rows)
+    feature_index = schema['feature_index']
+    feature_types = schema['feature_types']
+    categorical_index = schema['categorical_index']
+    ordinal_ranges = schema['ordinal_ranges']
+    ragged_index = schema['ragged_index']
+
+    N = len(rows)
+    R = ragged_index[-1]
+    data = np.zeros([N, R], dtype=np.int8)
+    for external_row, internal_row in zip(rows, data):
+        for name, value in external_row.items():
+            try:
+                pos = ragged_index[feature_index[name]]
+            except KeyError:
+                continue
+            typename = feature_types[name]
+            if typename == CATEGORICAL:
+                index = categorical_index[name]
+                try:
+                    value = index[value]
+                except KeyError:
+                    continue
+                internal_row[pos + value] = 1
+            elif typename == ORDINAL:
+                min_max = ordinal_ranges[name]
+                try:
+                    value = int(value)
+                except ValueError:
+                    continue
+                if value < min_max[0] or min_max[1] < value:
+                    continue
+                internal_row[pos + 0] = value - min_max[0]
+                internal_row[pos + 1] = min_max[1] - value
+            else:
+                raise ValueError(typename)
+    return data
+
+
+def export_rows(schema, data):
+    """Export multiple rows of internal data to json format.
+
+    Args:
+      schema: A schema dict as returned by load_schema().
+      data: An [N, R]-shaped numpy array of ragged data, where N is the number
+        of rows and R = schema['ragged_index'][-1].
+
+    Returns:
+      A N-long list of sparse dicts mapping feature names to json values,
+      where N is the number of rows.
+    """
+    logger.debug('Exporting {:d} rows', data.shape[0])
+    assert data.dtype == np.int8
+    assert len(data.shape) == 2
+    ragged_index = schema['ragged_index']
+    assert data.shape[1] == ragged_index[-1]
+    feature_names = schema['feature_names']
+    feature_types = schema['feature_types']
+    categorical_values = schema['categorical_values']
+    ordinal_ranges = schema['ordinal_ranges']
+
+    rows = [{} for _ in range(data.shape[0])]
+    for external_row, internal_row in zip(rows, data):
+        for v, name in enumerate(feature_names):
+            beg, end = ragged_index[v:v + 2]
+            internal_cell = internal_row[beg:end]
+            if np.all(internal_cell == 0):
+                continue
+            typename = feature_types[name]
+            if typename == CATEGORICAL:
+                assert internal_cell.sum() == 1, internal_cell
+                value = categorical_values[name][internal_cell.argmax()]
+            elif typename == ORDINAL:
+                min_max = ordinal_ranges[name]
+                assert internal_cell.sum() == min_max[1] - min_max[0]
+                value = internal_cell[0] + min_max[0]
+            else:
+                raise ValueError(typename)
+            external_row[name] = value
+    return rows
 
 
 @parsable

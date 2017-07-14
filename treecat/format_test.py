@@ -4,7 +4,11 @@ from __future__ import print_function
 
 import os
 
+import numpy as np
+
+from treecat.format import export_rows
 from treecat.format import guess_schema
+from treecat.format import import_rows
 from treecat.format import load_data
 from treecat.format import load_schema
 from treecat.testutil import TESTDATA
@@ -35,3 +39,15 @@ def test_load_schema():
 def test_load_data():
     schema = load_schema(TYPES_CSV, VALUES_CSV)
     load_data(schema, DATA_CSV)
+
+
+def test_export_import_rows():
+    schema = load_schema(TYPES_CSV, VALUES_CSV)
+    data = load_data(schema, DATA_CSV)
+    print(schema['feature_index'])
+    print(data)
+    rows = export_rows(schema, data)
+    assert len(rows) == data.shape[0]
+    actual_data = import_rows(schema, rows)
+    print(actual_data)
+    assert np.all(actual_data == data)

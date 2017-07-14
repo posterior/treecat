@@ -8,6 +8,8 @@ import numpy as np
 from scipy.misc import logsumexp
 from scipy.stats import entropy
 
+from treecat.format import export_rows
+from treecat.format import import_rows
 from treecat.structure import TreeStructure
 from treecat.structure import estimate_tree
 from treecat.structure import make_propagation_program
@@ -406,9 +408,9 @@ class TreeCatServer(ServerBase):
                     trans = edge_probs[e, :, :]
                     if v > v2:
                         trans = trans.T
-                    messages[v, :, :] = np.dot(
-                        trans / vert_probs[v2, np.newaxis, :],
-                        messages[v2, :, :])
+                    messages[v, :, :] = np.dot(trans /
+                                               vert_probs[v2, np.newaxis, :],
+                                               messages[v2, :, :])
             for v in range(V):
                 result[root, v] = correlation(messages[v, :, :])
         return result
@@ -476,7 +478,7 @@ class EnsembleServer(ServerBase):
 
 
 class DataServer(object):
-    """A schema-aware server interface."""
+    """A schema-aware server interface for TreeCat and ensembles."""
 
     def __init__(self, dataset, ensemble):
         self._schema = dataset['schema']
@@ -507,20 +509,12 @@ class DataServer(object):
     def latent_correlation(self):
         return self._server.latent_correlation()
 
-    def _import_rows(self, rows):
-        """Convert to ragged multinomial format."""
-        raise NotImplementedError('TODO')
-
-    def _export_rows(self, rows):
-        """Convert from ragged multinomial format."""
-        raise NotImplementedError('TODO')
-
     def logprob(self, rows, evidence=None):
-        data = self._import_rows(rows)
+        data = import_rows(self._schema, rows)
         if evidence is None:
             return self._server.logprob(data)
         else:
-            ragged_evidence = self._import_rows([evidence])
+            ragged_evidence = import_rows(self._schema, [evidence])
             return (self._server.logprob(data + ragged_evidence) -
                     self._server.logprob(data + evidence))
 
@@ -528,16 +522,16 @@ class DataServer(object):
         if evidence is None:
             data = None
         else:
-            data = self._import_rows([evidence])[0]
+            data = import_rows(self._schema, [evidence])[0]
         ragged_samples = self._server.sample(N, self._counts, data)
-        return self._export_rows(ragged_samples)
+        return export_rows(self._schema, ragged_samples)
 
     def median(self, evidence):
-        ragged_evidence = self._import_rows(evidence)
+        ragged_evidence = import_rows(self._schema, evidence)
         data = self._server.median(self, self._counts, ragged_evidence)
-        return self._export_rows(data)
+        return export_rows(self._schema, data)
 
     def mode(self, evidence):
-        ragged_evidence = self._import_rows(evidence)
+        ragged_evidence = import_rows(self._schema, evidence)
         data = self._server.mode(self, self._counts, ragged_evidence)
-        return self._export_rows(data)
+        return export_rows(self._schema, data)
