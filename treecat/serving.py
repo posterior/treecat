@@ -10,6 +10,7 @@ from scipy.stats import entropy
 
 from treecat.format import export_rows
 from treecat.format import import_rows
+from treecat.format import pickle_load
 from treecat.structure import TreeStructure
 from treecat.structure import estimate_tree
 from treecat.structure import make_propagation_program
@@ -483,7 +484,7 @@ class DataServer(object):
     def __init__(self, dataset, ensemble):
         self._schema = dataset['schema']
         self._data = dataset['data']
-        self._counts = guess_counts(self._data)
+        self._counts = guess_counts(self._schema['ragged_index'], self._data)
         if len(ensemble) == 1:
             self._server = TreeCatServer(ensemble[0])
         else:
@@ -528,10 +529,31 @@ class DataServer(object):
 
     def median(self, evidence):
         ragged_evidence = import_rows(self._schema, evidence)
-        data = self._server.median(self, self._counts, ragged_evidence)
+        data = self._server.median(self._counts, ragged_evidence)
         return export_rows(self._schema, data)
 
     def mode(self, evidence):
         ragged_evidence = import_rows(self._schema, evidence)
         data = self._server.mode(self, self._counts, ragged_evidence)
         return export_rows(self._schema, data)
+
+
+def serve_model(dataset, model):
+    """Create a server object from the given dataset and model.
+
+    Args:
+      dataset: Either a filename pointing to a dataset loadable by load_dataset
+        or an already loaded dataset.
+      model: Either the path to a TreeCat model or ensemble, or an already
+        loaded model or ensemble.
+
+    Returns:
+      A DataServer object.
+    """
+    if isinstance(dataset, str):
+        dataset = pickle_load(dataset)
+    if isinstance(model, str):
+        model = pickle_load(model)
+    if isinstance(model, dict):
+        model = [model]
+    return DataServer(dataset, model)

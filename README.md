@@ -94,22 +94,23 @@ $ pip install pytreecat
     This typically takes ~15minutes for a 1M cell dataset.
 
     ```sh
-    $ treecat train dataset.pkz ensemble.pkz
+    $ treecat train dataset.pkz model.pkz
     ```
 
 5.  Load your trained model into a server
 
     ```python
-    from treecat.serving import EnsembleServer
-    server = EnsembleServer('ensemble.pkz')
+    from treecat.serving import serve_model
+    server = serve_model('dataset.pkz', 'model.pkz')
     ```
 
 6.  Run queries against the server.
-    For example we can compute marginals
+    For example we can compute expecations
     ```python
-    server.sample(100, np.ones(V)).mean(axis=0)
+    samples = server.sample(100, evidence={'genre': 'drama'})
+    print(np.mean([s['rating'] for s in samples]))
     ```
-    or compute a latent correlation matrix
+    or explore feature structure through the latent correlation matrix
     ```python
     print(server.latent_correlation())
     ```
@@ -171,8 +172,7 @@ cond = server.logprob(A + B) - server.logprob(B)
 
 TreeCat's generative model is closest to Zhang and Poon's Latent Tree Analysis [1],
 with the notable difference that TreeCat fixes exactly one latent node per observed node.
-TreeCat is historically a successor to Mansinghka et al.'s CrossCat, where latent nodes
-("views" or "kinds") are completely independent.
+TreeCat is historically a descendent of Mansinghka et al.'s CrossCat, a model in which latent nodes ("views" or "kinds") are completely independent.
 TreeCat addresses the same kind of high-dimensional categorical distribution
 that Dunson and Xing's mixture-of-product-multinomial models [3] addresses.
 
