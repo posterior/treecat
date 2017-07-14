@@ -84,24 +84,24 @@ $ pip install pytreecat
     TreeCat ignores any feature with an empty type field.
 
 3.  Import your csv files into treecat's internal format.
-    We'll call our dataset `dataset.pkz` (a gzipped pickle file).
+    We'll call our dataset `dataset.jz` (a gzipped json file).
 
     ```sh
-    $ treecat import-data data.csv types.csv values.csv dataset.pkz
+    $ treecat import-data data.csv types.csv values.csv dataset.jz
     ```
 
 4.  Train an ensemble model on your dataset.
     This typically takes ~15minutes for a 1M cell dataset.
 
     ```sh
-    $ treecat train dataset.pkz model.pkz
+    $ treecat train dataset.jz model.jz
     ```
 
 5.  Load your trained model into a server
 
     ```python
     from treecat.serving import serve_model
-    server = serve_model('dataset.pkz', 'model.pkz')
+    server = serve_model('dataset.jz', 'model.jz')
     ```
 
 6.  Run queries against the server.
@@ -133,14 +133,14 @@ Contents of [`tuning.csv`](treecat/testdata/tuning.csv):
 |                ... |             ... |
 
 ```sh
-# This reads parameters from tuning.csv and dumps results to tuning.pkz
-$ treecat.validate tune-csv dataset.pkz tuning.csv tuning.pkz
+# This reads parameters from tuning.csv and dumps results to tuning.jz
+$ treecat.validate tune-csv dataset.jz tuning.csv tuning.jz
 ```
 
 The `tune-csv` command prints its results, but if you want to seem them later, you can
 
 ```sh
-$ treecat.format cat tuning.pkz
+$ treecat.format cat tuning.jz
 ```
 
 ## The Server Interface

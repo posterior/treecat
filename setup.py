@@ -27,7 +27,7 @@ setup(
     packages=['treecat'],
     package_data={'treecat': 'testdata/*.csv'},
     entry_points=parsable.find_entry_points('treecat'),
-    install_requires=['numpy', 'parsable', 'scipy', 'six'],
+    install_requires=['jsonpickle', 'numpy', 'parsable', 'scipy', 'six'],
     tests_require=['pytest', 'flake8', 'goftests'],
     license='Apache License 2.0',
     classifiers=[

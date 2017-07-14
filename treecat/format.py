@@ -12,36 +12,54 @@ from collections import Counter
 from collections import defaultdict
 from contextlib import contextmanager
 
+import jsonpickle
+import jsonpickle.ext.numpy
 import numpy as np
 from parsable import parsable
 
 from six.moves import cPickle as pickle
-from six.moves import intern
 from six.moves import zip
 
 logger = logging.getLogger(__name__)
 parsable = parsable.Parsable()
+jsonpickle.ext.numpy.register_handlers()
 
-CATEGORICAL = intern('categorical')
-ORDINAL = intern('ordinal')
+CATEGORICAL = u'categorical'
+ORDINAL = u'ordinal'
 VALID_TYPES = (CATEGORICAL, ORDINAL)
 MAX_CATEGORIES = 20
 NA_STRINGS = {
-    intern('null'): intern(''),
-    intern('none'): intern(''),
+    u'null': u'',
+    u'none': u'',
 }
 
 
+def json_dumps(value):
+    return jsonpickle.encode(value)
+
+
+def json_loads(string):
+    return jsonpickle.decode(string)
+
+
 def pickle_dump(data, filename):
-    """Pickle data to file using gzip compression."""
-    with gzip.GzipFile(filename, 'wb') as f:
-        pickle.dump(data, f)
+    """Serialize data to file using gzip compression."""
+    if filename.endswith('.pkz'):
+        with gzip.open(filename, 'wb') as f:
+            pickle.dump(data, f)
+    else:
+        with gzip.open(filename, 'wt') as f:
+            f.write(json_dumps(data))
 
 
 def pickle_load(filename):
-    """Unpickle data from file using gzip compression."""
-    with gzip.GzipFile(filename, 'rb') as f:
-        return pickle.load(f)
+    """Deserialize data from file using gzip compression."""
+    if filename.endswith('.pkz'):
+        with gzip.open(filename, 'rb') as f:
+            return pickle.load(f)
+    else:
+        with gzip.open(filename, 'rt') as f:
+            return json_loads(f.read())
 
 
 @contextmanager
@@ -104,7 +122,7 @@ def guess_schema(data_csv_in, types_csv_out, values_csv_out, encoding='utf-8'):
     totals = Counter()
     values = defaultdict(Counter)
     with csv_reader(data_csv_in, encoding) as reader:
-        feature_names = [intern(n) for n in next(reader)]
+        feature_names = list(next(reader))
         for row in reader:
             for name, value in zip(feature_names, row):
                 value = normalize_string(value)
@@ -165,8 +183,8 @@ def load_schema(types_csv_in, values_csv_in, encoding='utf-8'):
         for row in reader:
             if len(row) < 2:
                 continue
-            name = intern(row[0])
-            typename = intern(row[1])
+            name = row[0]
+            typename = row[1]
             if not typename:
                 continue
             if typename not in VALID_TYPES:
@@ -185,10 +203,10 @@ def load_schema(types_csv_in, values_csv_in, encoding='utf-8'):
         for row in reader:
             if len(row) < 2:
                 continue
-            name = intern(row[0])
+            name = row[0]
             if name not in feature_types:
                 continue
-            value = intern(row[1])
+            value = row[1]
             typename = feature_types[name]
             if typename == CATEGORICAL:
                 categorical_values[name].append(value)
@@ -251,11 +269,11 @@ def load_data(schema, data_csv_in, encoding='utf-8'):
     cells = 0
     column_counts = Counter()
     with csv_reader(data_csv_in, encoding) as reader:
-        header = list(map(intern, next(reader)))
+        header = list(next(reader))
         metas = [None] * len(header)
         for i, name in enumerate(header):
             if name in feature_types:
-                metas[i] = (
+                metas[i] = (  #
                     name,
                     feature_types[name],
                     ragged_index[feature_index[name]],
@@ -414,9 +432,9 @@ def import_data(data_csv_in,
 
 @parsable
 def cat(*paths):
-    """Print .pkz files in human readable form."""
+    """Print .jz files in human readable form."""
     for path in paths:
-        assert path.endswith('.pkz')
+        assert path.endswith('.jz')
         print(pickle_load(path))
 
 

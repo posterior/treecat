@@ -12,7 +12,7 @@ from treecat.testutil import tempdir
 def test_train():
     dataset_path = generate_dataset_file(10, 10)
     with tempdir() as dirname:
-        ensemble_path = os.path.join(dirname, 'ensemble.pkz')
+        ensemble_path = os.path.join(dirname, 'ensemble.jz')
         train(
             dataset_path,
             ensemble_path,

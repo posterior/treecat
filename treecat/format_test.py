@@ -5,18 +5,40 @@ from __future__ import print_function
 import os
 
 import numpy as np
+import pytest
 
 from treecat.format import export_rows
 from treecat.format import guess_schema
 from treecat.format import import_rows
 from treecat.format import load_data
 from treecat.format import load_schema
+from treecat.format import pickle_dump
+from treecat.format import pickle_load
 from treecat.testutil import TESTDATA
+from treecat.testutil import assert_equal
 from treecat.testutil import tempdir
 
 DATA_CSV = os.path.join(TESTDATA, 'tiny_data.csv')
 TYPES_CSV = os.path.join(TESTDATA, 'tiny_types.csv')
 VALUES_CSV = os.path.join(TESTDATA, 'tiny_values.csv')
+
+
+@pytest.mark.parametrize(
+    'data', [
+        u'foo',
+        [1, 2, 3],
+        {
+            u'foo': 0
+        },
+        np.array(
+            [[0, 1], [2, 3]], dtype=np.int8),
+    ])
+def test_pickle(data):
+    with tempdir() as dirname:
+        filename = os.path.join(dirname, 'test.jz')
+        pickle_dump(data, filename)
+        actual = pickle_load(filename)
+        assert_equal(actual, data)
 
 
 def test_guess_schema():
