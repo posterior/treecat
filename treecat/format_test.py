@@ -29,8 +29,7 @@ EXAMPLE_DATA = [
     {
         u'foo': 0
     },
-    np.array(
-        [[0, 1], [2, 3]], dtype=np.int8),
+    np.array([[0, 1], [2, 3]], dtype=np.int8),
 ]
 
 

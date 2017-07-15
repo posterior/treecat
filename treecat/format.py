@@ -19,6 +19,7 @@ import numpy as np
 from parsable import parsable
 
 from six.moves import cPickle as pickle
+from six.moves import range
 from six.moves import zip
 
 logger = logging.getLogger(__name__)
@@ -52,8 +53,8 @@ def pickle_dump(data, filename):
         with gzip.open(filename, 'wt') as f:
             f.write(json_dumps(data))
     else:
-        raise ValueError('Cannot determine format: {}'.format(
-            os.path.basename(filename)))
+        raise ValueError(
+            'Cannot determine format: {}'.format(os.path.basename(filename)))
 
 
 def pickle_load(filename):
@@ -65,8 +66,8 @@ def pickle_load(filename):
         with gzip.open(filename, 'rt') as f:
             return json_loads(f.read())
     else:
-        raise ValueError('Cannot determine format: {}'.format(
-            os.path.basename(filename)))
+        raise ValueError(
+            'Cannot determine format: {}'.format(os.path.basename(filename)))
 
 
 @contextmanager
@@ -281,11 +282,9 @@ def load_data(schema, data_csv_in, encoding='utf-8'):
         for i, name in enumerate(header):
             if name in feature_types:
                 metas[i] = (  #
-                    name,
-                    feature_types[name],
+                    name, feature_types[name],
                     ragged_index[feature_index[name]],
-                    categorical_index.get(name),
-                    ordinal_ranges.get(name), )
+                    categorical_index.get(name), ordinal_ranges.get(name), )
         for external_row in reader:
             internal_row = prototype_row.copy()
             for value, meta in zip(external_row, metas):

@@ -8,6 +8,8 @@ import numpy as np
 from scipy.misc import logsumexp
 from scipy.stats import entropy
 
+from six.moves import range
+from six.moves import zip
 from treecat.format import export_rows
 from treecat.format import import_rows
 from treecat.format import pickle_load

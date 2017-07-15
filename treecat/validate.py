@@ -7,6 +7,8 @@ from collections import namedtuple
 import numpy as np
 from parsable import parsable
 
+from six.moves import range
+from six.moves import zip
 from treecat.config import make_config
 from treecat.format import csv_reader
 from treecat.format import pickle_dump
@@ -90,10 +92,9 @@ def tune_csv(dataset_path, param_csv_path, result_path, **options):
         for row in reader:
             if len(row) != len(header) or row[0].startswith('#'):
                 continue
-            row = tuple(map(int, row))
             for key, value in zip(header, row):
                 options[key] = int(value)
-            configs[row] = make_config(**options)
+            configs[tuple(row)] = make_config(**options)
 
     # Run grid search.
     dataset = pickle_load(dataset_path)
