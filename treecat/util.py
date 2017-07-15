@@ -26,6 +26,8 @@ LOG_FORMAT = '%(levelname).1s %(name)s %(message)s'
 logging.basicConfig(format=LOG_FORMAT, level=LOG_LEVEL, filename=LOG_FILENAME)
 logger = logging.getLogger(__name__)
 
+SQRT_TINY = np.float32(np.finfo(np.float32).tiny ** 0.5)
+
 
 def no_jit(*args, **kwargs):
     if not kwargs and len(args) == 1 and callable(args[0]):

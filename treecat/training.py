@@ -17,6 +17,7 @@ from treecat.structure import TreeStructure
 from treecat.structure import estimate_tree
 from treecat.structure import make_propagation_program
 from treecat.structure import sample_tree
+from treecat.util import SQRT_TINY
 from treecat.util import jit
 from treecat.util import jit_sample_from_probs
 from treecat.util import parallel_map
@@ -68,7 +69,7 @@ def get_annealing_schedule(num_rows, epochs):
     epochs = float(epochs)
     add_rate = epochs
     remove_rate = epochs - 1.0
-    state = 0.0
+    state = 2.0 * epochs
 
     # Sample the tree after each batch.
     num_fresh = 0
@@ -118,8 +119,8 @@ def jit_add_row(
                 for _ in range(count):
                     message *= feat_block[c, :]
                     message /= meas_block
-                    feat_block[c, :] += 1.0
-                    meas_block += 1.0
+                    feat_block[c, :] += np.float32(1)
+                    meas_block += np.float32(1)
         elif op == OP_IN:
             # Propagate latent state inward from children to v.
             trans = edge_probs[e, :, :]
@@ -127,7 +128,9 @@ def jit_add_row(
                 trans = trans.T
             message *= np.dot(trans, messages[v2, :] / vert_probs[v2, :])
             message /= vert_probs[v, :]
-            message /= message.sum()  # For numerical stability only.
+            # Scale message for numerical stability.
+            message /= message.max()
+            message += SQRT_TINY
         elif op == OP_ROOT:
             # Process root node.
             assignments[v] = jit_sample_from_probs(message)
