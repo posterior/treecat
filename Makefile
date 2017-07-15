@@ -5,7 +5,7 @@ PY_FILES := *.py $(shell find treecat doc -name '*.py')
 all: lint
 
 format: FORCE
-	yapf -i $(PY_FILES)
+	yapf -i -p $(PY_FILES)
 	isort -i $(PY_FILES)
 
 lint: FORCE
