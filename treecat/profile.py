@@ -84,7 +84,7 @@ def train(rows=100, cols=10, epochs=5, ensemble=1, tool='timers'):
     config['model_ensemble_size'] = ensemble
     dataset_path = generate_dataset_file(rows, cols)
     with tempdir() as dirname:
-        config_path = os.path.join(dirname, 'config.jz')
+        config_path = os.path.join(dirname, 'config.pkz')
         pickle_dump(config, config_path)
         cmd = [FILE, 'train_files', dataset_path, config_path]
         run_with_tool(cmd, tool, dirname)
@@ -99,7 +99,7 @@ def serve(rows=100, cols=10, cats=4, tool='timers'):
     config = make_config()
     model_path = generate_model_file(rows, cols, cats)
     with tempdir() as dirname:
-        config_path = os.path.join(dirname, 'config.jz')
+        config_path = os.path.join(dirname, 'config.pkz')
         pickle_dump(config, config_path)
         cmd = [FILE, 'serve_files', model_path, config_path]
         run_with_tool(cmd, tool, dirname)

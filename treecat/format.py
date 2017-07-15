@@ -6,6 +6,7 @@ import csv
 import gzip
 import io
 import logging
+import os
 import re
 import sys
 from collections import Counter
@@ -24,13 +25,13 @@ logger = logging.getLogger(__name__)
 parsable = parsable.Parsable()
 jsonpickle.ext.numpy.register_handlers()
 
-CATEGORICAL = u'categorical'
-ORDINAL = u'ordinal'
+CATEGORICAL = 'categorical'
+ORDINAL = 'ordinal'
 VALID_TYPES = (CATEGORICAL, ORDINAL)
 MAX_CATEGORIES = 20
 NA_STRINGS = {
-    u'null': u'',
-    u'none': u'',
+    'null': '',
+    'none': '',
 }
 
 
@@ -46,10 +47,13 @@ def pickle_dump(data, filename):
     """Serialize data to file using gzip compression."""
     if filename.endswith('.pkz'):
         with gzip.open(filename, 'wb') as f:
-            pickle.dump(data, f)
-    else:
+            pickle.dump(data, f, protocol=2)  # Try to support python 2.
+    elif filename.endswith('.jz'):
         with gzip.open(filename, 'wt') as f:
             f.write(json_dumps(data))
+    else:
+        raise ValueError('Cannot determine format: {}'.format(
+            os.path.basename(filename)))
 
 
 def pickle_load(filename):
@@ -57,9 +61,12 @@ def pickle_load(filename):
     if filename.endswith('.pkz'):
         with gzip.open(filename, 'rb') as f:
             return pickle.load(f)
-    else:
+    elif filename.endswith('.jz'):
         with gzip.open(filename, 'rt') as f:
             return json_loads(f.read())
+    else:
+        raise ValueError('Cannot determine format: {}'.format(
+            os.path.basename(filename)))
 
 
 @contextmanager
@@ -432,9 +439,9 @@ def import_data(data_csv_in,
 
 @parsable
 def cat(*paths):
-    """Print .jz files in human readable form."""
+    """Print .pkz files in human readable form."""
     for path in paths:
-        assert path.endswith('.jz')
+        assert path.endswith('.pkz')
         print(pickle_load(path))
 
 

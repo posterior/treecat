@@ -2,6 +2,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import itertools
 import os
 
 import numpy as np
@@ -22,20 +23,22 @@ DATA_CSV = os.path.join(TESTDATA, 'tiny_data.csv')
 TYPES_CSV = os.path.join(TESTDATA, 'tiny_types.csv')
 VALUES_CSV = os.path.join(TESTDATA, 'tiny_values.csv')
 
+EXAMPLE_DATA = [
+    u'foo',
+    [1, 2, 3],
+    {
+        u'foo': 0
+    },
+    np.array(
+        [[0, 1], [2, 3]], dtype=np.int8),
+]
 
-@pytest.mark.parametrize(
-    'data', [
-        u'foo',
-        [1, 2, 3],
-        {
-            u'foo': 0
-        },
-        np.array(
-            [[0, 1], [2, 3]], dtype=np.int8),
-    ])
-def test_pickle(data):
+
+@pytest.mark.parametrize('data,ext',
+                         itertools.product(EXAMPLE_DATA, ['pkz', 'jz']))
+def test_pickle(data, ext):
     with tempdir() as dirname:
-        filename = os.path.join(dirname, 'test.jz')
+        filename = os.path.join(dirname, 'test.{}'.format(ext))
         pickle_dump(data, filename)
         actual = pickle_load(filename)
         assert_equal(actual, data)
