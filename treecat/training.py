@@ -49,9 +49,7 @@ def logprob_dc(counts, prior, axis=None):
     """
     # Not that this excludes the factorial(counts) term, since we explicitly
     # track permutations in assignments.
-    logprob = gammaln(np.add(counts, prior, dtype=np.float32))
-    logprob -= gammaln(prior)  # For numerical stability only.
-    return logprob.sum(axis)
+    return gammaln(np.add(counts, prior, dtype=np.float32)).sum(axis)
 
 
 def get_annealing_schedule(num_rows, epochs):
