@@ -102,22 +102,24 @@ def generate_clean_dataset(tree, num_rows, num_cats):
     config = make_config(model_num_clusters=M)
     ragged_index = np.arange(0, C * (V + 1), C, np.int32)
 
-    # Create perfectly correlated uniformly distributed sufficient statistics.
-    # Precision should be high enough that (vertex,vertex) correlation can be
+    # Create sufficient statistics that are ideal for structure learning:
+    # Correlation should be high enough that (vertex,vertex) correlation can be
     # detected, but low enough that multi-hop correlation can be distinguished
     # from single-hop correlation.
-    precision = 3
+    # Observations should have very low error rate.
+    edge_precision = 1
+    feat_precision = 100
     vert_ss = np.zeros((V, M), dtype=np.int32)
     edge_ss = np.zeros((E, M, M), dtype=np.int32)
     feat_ss = np.zeros((V * C, M), dtype=np.int32)
     meas_ss = np.zeros([V, M], np.int32)
-    vert_ss[...] = precision
-    meas_ss[...] = precision
+    vert_ss[...] = edge_precision
+    meas_ss[...] = feat_precision
     for e, v1, v2 in tree.tree_grid.T:
-        edge_ss[e, :, :] = precision * np.eye(M, dtype=np.int32)
+        edge_ss[e, :, :] = edge_precision * np.eye(M, dtype=np.int32)
     for v in range(V):
         beg, end = ragged_index[v:v + 2]
-        feat_ss[beg:end, :] = np.eye(M, dtype=np.int32)
+        feat_ss[beg:end, :] = feat_precision * np.eye(M, dtype=np.int32)
     model = {
         'config': config,
         'tree': tree,

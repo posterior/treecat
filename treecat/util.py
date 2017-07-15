@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import atexit
+import contextlib
 import functools
 import logging
 import multiprocessing
@@ -50,6 +51,15 @@ def set_random_seed(seed):
     """Set random seeds for both numpy and numba."""
     np.random.seed(seed)
     jit_random_seed(seed)
+
+
+@contextlib.contextmanager
+def np_printoptions(**kwargs):
+    """Context manager to temporarily set numpy print options."""
+    old = np.get_printoptions()
+    np.set_printoptions(**kwargs)
+    yield
+    np.set_printoptions(**old)
 
 
 def sizeof(array):

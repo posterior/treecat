@@ -19,6 +19,7 @@ from treecat.training import TreeCatTrainer
 from treecat.training import get_annealing_schedule
 from treecat.training import train_ensemble
 from treecat.training import train_model
+from treecat.util import np_printoptions
 from treecat.util import set_random_seed
 
 numpy_seterr()
@@ -221,38 +222,51 @@ def test_assignment_sampler_gof(N, V, C, M):
     (1, 2),
     (2, 2),
     (2, 3),
-    (2, 4),
     pytest.mark.xfail((3, 2)),
-    pytest.mark.xfail((3, 3)),
-    pytest.mark.xfail((3, 4)),
     pytest.mark.xfail((4, 2)),
-    pytest.mark.xfail((4, 3)),
-    pytest.mark.xfail((4, 4)),
     pytest.mark.xfail((5, 2)),
-    pytest.mark.xfail((5, 3)),
-    pytest.mark.xfail((5, 4)),
+    pytest.mark.xfail((6, 2)),
 ])
 def test_recover_structure(V, C):
     set_random_seed(V + C * 10)
     N = 100
-    config = make_config()
+    config = make_config(model_num_clusters=C)
     tree = generate_tree(num_cols=V)
     dataset = generate_clean_dataset(tree, num_rows=N, num_cats=C)
     ragged_index = dataset['schema']['ragged_index']
     data = dataset['data']
     model = train_model(ragged_index, data, config)
+
+    # Compute three types of edges.
     expected_edges = tree.get_edges()
     optimal_edges = estimate_tree(tree.complete_grid, model['edge_logits'])
     actual_edges = model['tree'].get_edges()
+
+    # Print debugging information.
     feature_names = [str(v) for v in range(V)]
     root = '0'
-    print('Expected:')
-    print(print_tree(expected_edges, feature_names, root))
-    print('Optimal:')
-    print(print_tree(optimal_edges, feature_names, root))
-    print('Actual:')
-    print(print_tree(actual_edges, feature_names, root))
-    print('Edge logits:')
-    print(triangular_to_square(tree.complete_grid, model['edge_logits']))
+    readable_data = np.zeros([N, V], np.int8)
+    for v in range(V):
+        beg, end = ragged_index[v:v + 2]
+        readable_data[:, v] = data[:, beg:end].argmax(axis=1)
+    with np_printoptions(precision=2, threshold=100, edgeitems=5):
+        print('Expected:')
+        print(print_tree(expected_edges, feature_names, root))
+        print('Optimal:')
+        print(print_tree(optimal_edges, feature_names, root))
+        print('Actual:')
+        print(print_tree(actual_edges, feature_names, root))
+        print('Correlation:')
+        print(np.corrcoef(readable_data.T))
+        print('Edge logits:')
+        print(triangular_to_square(tree.complete_grid, model['edge_logits']))
+        print('Data:')
+        print(readable_data)
+        print('Feature Sufficient Statistics:')
+        print(model['suffstats']['feat_ss'])
+        print('Edge Sufficient Statistics:')
+        print(model['suffstats']['edge_ss'])
+
+    # Check agreement.
     assert actual_edges == optimal_edges, 'Error in sample_tree'
     assert actual_edges == expected_edges, 'Error in likelihood'
