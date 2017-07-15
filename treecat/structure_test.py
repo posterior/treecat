@@ -3,12 +3,14 @@ from __future__ import division
 from __future__ import print_function
 
 import itertools
+from collections import Counter
 from collections import defaultdict
 
 import numpy as np
 import pytest
 from goftests import multinomial_goodness_of_fit
 
+from treecat.structure import OP_DOWN
 from treecat.structure import OP_IN
 from treecat.structure import OP_OUT
 from treecat.structure import OP_ROOT
@@ -122,23 +124,37 @@ def test_make_propagation_program(edges, root):
 
     # Generate a program.
     program = make_propagation_program(grid, root)
-    assert program.shape == (V + E + 1 + E, 4)
+    assert program.shape == (V + E + 1 + E + V, 4)
     assert program.dtype == np.int16
+    print(program)
 
-    # Check topology.
+    # Check that program edges are consistent with topology.
     if root is not None:
         assert program[V + E][0] == OP_ROOT
         assert program[V + E][1] == root
+    else:
+        root = program[V + E][1]
     assert set(row[1] for row in program) == set(range(V)), 'bad vertex set'
     for op, v, v2, e in program:
-        if op == OP_ROOT:
-            if root is not None:
-                assert v == root
-        elif op != OP_UP:
+        if op == OP_IN or op == OP_OUT:
             assert v != v2
             assert v2 in neighbors[v]
             assert grid[1, e] == min(v, v2)
             assert grid[2, e] == max(v, v2)
+
+    # Check that each instruction appears exactly once.
+    op_counts = defaultdict(Counter)
+    for op, v, v2, e in program:
+        op_counts[op][v] += 1
+    assert len(op_counts[OP_UP]) == V
+    assert len(op_counts[OP_ROOT]) == 1
+    assert len(op_counts[OP_OUT]) == E
+    assert len(op_counts[OP_DOWN]) == V
+    assert sum(op_counts[OP_UP].values()) == V
+    assert sum(op_counts[OP_IN].values()) == E
+    assert sum(op_counts[OP_ROOT].values()) == 1
+    assert sum(op_counts[OP_OUT].values()) == E
+    assert sum(op_counts[OP_DOWN].values()) == V
 
     # Check inward ordering.
     state = np.zeros(V, np.int8)
@@ -147,16 +163,20 @@ def test_make_propagation_program(edges, root):
             assert state[v] == 0
             state[v] = 1
         elif op == OP_IN:
-            assert state[v] == 1
-            assert state[v2] == 1
+            assert state[v] in (1, 2)
+            assert state[v2] in (1, 2)
+            state[v] = 2
         elif op == OP_ROOT:
-            assert state[v] == 1
-            state[v] = 2
+            assert state[v] in (1, 2)
+            state[v] = 3
         elif op == OP_OUT:
-            assert state[v] == 1
-            assert state[v2] == 2
-            state[v] = 2
-    assert np.all(state == 2)
+            assert state[v] in (1, 2, 3)
+            assert state[v2] == 4
+            state[v] = 3
+        elif op == OP_DOWN:
+            assert state[v] == 3
+            state[v] = 4
+    assert np.all(state == 4)
 
 
 @pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])

@@ -9,6 +9,10 @@ import numpy as np
 from scipy.special import gammaln
 
 from six.moves import xrange
+from treecat.structure import OP_IN
+from treecat.structure import OP_OUT
+from treecat.structure import OP_ROOT
+from treecat.structure import OP_UP
 from treecat.structure import TreeStructure
 from treecat.structure import estimate_tree
 from treecat.structure import make_propagation_program
@@ -104,7 +108,7 @@ def jit_add_row(
     for i in xrange(len(program)):
         op, v, v2, e = program[i]
         message = messages[v, :]
-        if op == 0:  # OP_UP
+        if op == OP_UP:
             # Propagate upward from observed to latent.
             beg, end = ragged_index[v:v + 2]
             feat_block = feat_probs[beg:end, :]
@@ -115,7 +119,7 @@ def jit_add_row(
                     message /= meas_block
                     feat_block[c, :] += 1.0
                     meas_block += 1.0
-        elif op == 1:  # OP_IN
+        elif op == OP_IN:
             # Propagate latent state inward from children to v.
             trans = edge_probs[e, :, :]
             if v > v2:
@@ -123,14 +127,16 @@ def jit_add_row(
             message *= np.dot(trans, messages[v2, :] / vert_probs[v2, :])
             message /= vert_probs[v, :]
             message /= message.sum()  # For numerical stability only.
-        else:  # OP_ROOT or OP_OUT
-            if op == 3:  # OP_OUT
-                # Propagate latent state outward from parent to v.
-                trans = edge_probs[e, :, :]
-                if v2 > v:
-                    trans = trans.T
-                message *= trans[assignments[v2], :]
-                message /= vert_probs[v, :]
+        elif op == OP_ROOT:
+            # Process root node.
+            assignments[v] = jit_sample_from_probs(message)
+        elif op == OP_OUT:
+            # Propagate latent state outward from parent to v.
+            trans = edge_probs[e, :, :]
+            if v2 > v:
+                trans = trans.T
+            message *= trans[assignments[v2], :]
+            message /= vert_probs[v, :]
             assignments[v] = jit_sample_from_probs(message)
 
     # Update sufficient statistics.

@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 
-import numpy as np
-
 import matplotlib
+import numpy as np
 
 matplotlib.use('Agg')  # Required for headless operation.
 from matplotlib import pyplot as plt  # noqa: E402 isort:skip

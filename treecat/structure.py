@@ -158,11 +158,12 @@ def find_center_of_tree(grid):
     return v
 
 
-# Op codes.
+# Op codes for propagation programs.
 OP_UP = 0
 OP_IN = 1
 OP_ROOT = 2
 OP_OUT = 3
+OP_DOWN = 4
 
 
 def make_propagation_program(grid, root=None):
@@ -174,7 +175,7 @@ def make_propagation_program(grid, root=None):
       [ op_code | vertex | relative_vertex | relative_edge ]
 
     where the relative_* operands are optional.
-    There are four types of instructions:
+    The five instructions are (in order of occurrence at each vertex):
 
       OP_UP: Propagate upwards from observed state to latent state.
         vertex: The current vertex.
@@ -187,23 +188,30 @@ def make_propagation_program(grid, root=None):
         relative_vertex: The source child vertex.
         relative_edge: The edge between parent and child.
 
-      OP_ROOT: Process the root node, assuming OP_UP has been called on all
-        vertices and OP_IN has been called on all edges.
+      OP_ROOT: Process the root node after OP_UP and OP_IN have been called.
         vertex: The root vertex.
         relative_vertex: Not set.
         relative_edge: Not set.
 
-      OP_OUT: Popagate outwards from the latent root towards latent leaves.
+      OP_OUT: Popagate outwards from the latent root towards latent leaves,
+        assuming OP_UP and OP_IN have been called as needed.
         vertex: The target child vertex.
         relative_vertex: The source parent vertex.
         relative_edge: The edge between parent and child.
+
+      OP_DOWN: Propagate downwards from latent state to observed state,
+        assuming OP_UP, OP_IN, and OP_OUT have been called as needed.
+        vertices and OP_IN has been called on all edges.
+        vertex: The current vertex.
+        relative_vertex: Not set.
+        relative_edge: Not set.
 
     Args:
       grid: A tree graph as returned by make_tree().
       root: Optional root vertex, defaults to find_center_of_tree(grid).
 
     Returns:
-      A [V + E + 1 + E, 4]-shaped numpy array whose rows are instructions.
+      A [V+E+1+E+V, 4]-shaped numpy array whose rows are instructions.
     """
     if root is None:
         root = find_center_of_tree(grid)
@@ -233,7 +241,7 @@ def make_propagation_program(grid, root=None):
                 children.append(v2)
 
     # Construct a flattened program.
-    program = np.zeros([V + E + 1 + E, 4], np.int16)
+    program = np.zeros([V + E + 1 + E + V, 4], np.int16)
     pos = 0
     for v, parent, children in reversed(nested_program):
         program[pos, :] = [OP_UP, v, 0, 0]
@@ -241,12 +249,15 @@ def make_propagation_program(grid, root=None):
         for child in children:
             program[pos, :] = [OP_IN, v, child, edge_dict[v, child]]
             pos += 1
-    program[pos, :] = [OP_ROOT, v, 0, 0]
+    program[pos, :] = [OP_ROOT, root, 0, 0]
     pos += 1
-    for v, parent, children in nested_program[1:]:
-        program[pos, :] = [OP_OUT, v, parent, edge_dict[v, parent]]
+    for v, parent, children in nested_program:
+        if parent is not None:
+            program[pos, :] = [OP_OUT, v, parent, edge_dict[v, parent]]
+            pos += 1
+        program[pos, :] = [OP_DOWN, v, 0, 0]
         pos += 1
-    assert pos == V + E + 1 + E
+    assert pos == program.shape[0]
 
     return program
 

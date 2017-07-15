@@ -11,6 +11,11 @@ from scipy.stats import entropy
 from treecat.format import export_rows
 from treecat.format import import_rows
 from treecat.format import pickle_load
+from treecat.structure import OP_DOWN
+from treecat.structure import OP_IN
+from treecat.structure import OP_OUT
+from treecat.structure import OP_ROOT
+from treecat.structure import OP_UP
 from treecat.structure import TreeStructure
 from treecat.structure import estimate_tree
 from treecat.structure import make_propagation_program
@@ -215,15 +220,16 @@ class TreeCatServer(ServerBase):
         range_N = np.arange(N, dtype=np.int32)
 
         for op, v, v2, e in self._program:
-            if op == 0:  # OP_UP
+            if op == OP_UP:
                 # Propagate upward from observed to latent.
                 message = messages_in[v, :]
                 beg, end = self._ragged_index[v:v + 2]
                 for r in range(beg, end):
                     # This uses a with-replacement approximation that is exact
                     # for categorical data but approximate for multinomial.
-                    message *= feat_cond[r, :]**data[r]
-            elif op == 1:  # OP_IN
+                    if data[r]:
+                        message *= feat_cond[r, :]**data[r]
+            elif op == OP_IN:
                 # Propagate latent state inward from children to v.
                 message = messages_in[v, :]
                 trans = edge_trans[e, :, :]
@@ -231,18 +237,22 @@ class TreeCatServer(ServerBase):
                     trans = trans.T
                 message *= np.dot(trans, messages_in[v2, :])
                 message /= message.sum()
-            else:  # OP_ROOT or OP_OUT
+            elif op == OP_ROOT:
+                # Process root node.
+                messages_out[v, :, :] = messages_in[v, np.newaxis, :]
+            elif op == OP_OUT:
+                # Propagate latent state outward from parent to v.
                 message = messages_out[v, :, :]
                 message[...] = messages_in[v, np.newaxis, :]
-                # Propagate latent state outward from parent to v.
-                if op == 3:  # OP_OUT
-                    trans = edge_trans[e, :, :]
-                    if v2 > v:
-                        trans = trans.T
-                    message *= trans[vert_samples[v2, :], :]
+                trans = edge_trans[e, :, :]
+                if v2 > v:
+                    trans = trans.T
+                message *= trans[vert_samples[v2, :], :]
                 message /= message.sum(axis=1, keepdims=True)
+            elif op == OP_DOWN:
+                # Sample latent and observed assignment.
+                message = messages_out[v, :, :]
                 vert_samples[v, :] = sample_from_probs2(message)
-                # Propagate downward from latent to observed.
                 beg, end = self._ragged_index[v:v + 2]
                 feat_block = feat_cond[beg:end, :].T
                 probs = feat_block[vert_samples[v, :], :]
@@ -282,7 +292,7 @@ class TreeCatServer(ServerBase):
 
         for op, v, v2, e in self._program:
             message = messages[v, :, :]
-            if op == 0:  # OP_UP
+            if op == OP_UP:
                 # Propagate upward from observed to latent.
                 beg, end = self._ragged_index[v:v + 2]
                 for r in range(beg, end):
@@ -290,7 +300,7 @@ class TreeCatServer(ServerBase):
                     # for categorical data but approximate for multinomial.
                     power = data[np.newaxis, :, r]
                     message *= feat_cond[r, :, np.newaxis]**power
-            elif op == 1:  # OP_IN
+            elif op == OP_IN:
                 # Propagate latent state inward from children to v.
                 trans = edge_trans[e, :, :]
                 if v > v2:
@@ -299,8 +309,8 @@ class TreeCatServer(ServerBase):
                 message_sum = message.sum(axis=0, keepdims=True)
                 message /= message_sum
                 logprob += np.log(message_sum[0, :])
-            elif op == 2:  # OP_ROOT
-                # Aggregate the total logprob.
+            elif op == OP_ROOT:
+                # Aggregate total log probability at the root node.
                 logprob += np.log(message.sum(axis=0))
                 return logprob
 
@@ -330,9 +340,9 @@ class TreeCatServer(ServerBase):
         result = np.zeros([N, R], np.float32)
 
         for op, v, v2, e in self._program:
-            if op == 0:  # OP_UP
+            message = messages_in[v, :, :]
+            if op == OP_UP:
                 # Propagate upward from observed to latent.
-                message = messages_in[v, :, :]
                 beg, end = self._ragged_index[v:v + 2]
                 for r in range(beg, end):
                     # This uses a with-replacement approximation that is exact
@@ -340,24 +350,22 @@ class TreeCatServer(ServerBase):
                     power = data[np.newaxis, :, r]
                     message *= feat_cond[r, :, np.newaxis]**power
                 messages_out[v, :, :] = message
-            elif op == 1:  # OP_IN
+            elif op == OP_IN:
                 # Propagate latent state inward from children to v.
-                message = messages_in[v, :, :]
                 trans = edge_trans[e, :, :]
                 if v > v2:
                     trans = trans.T
                 message *= np.dot(trans, messages_in[v2, :, :])
                 message /= message.sum(axis=0, keepdims=True)
-            else:  # OP_ROOT or OP_OUT
-                message = messages_in[v, :, :]
+            elif op == OP_OUT:
                 # Propagate latent state outward from parent to v.
-                if op == 3:  # OP_OUT
-                    trans = edge_trans[e, :, :]
-                    if v > v2:
-                        trans = trans.T
-                    from_parent = np.dot(trans, messages_out[v2, :, :])
-                    messages_out[v, :, :] *= from_parent
-                    message *= from_parent
+                trans = edge_trans[e, :, :]
+                if v > v2:
+                    trans = trans.T
+                from_parent = np.dot(trans, messages_out[v2, :, :])
+                messages_out[v, :, :] *= from_parent
+                message *= from_parent
+            elif op == OP_DOWN:
                 # Propagate downward from latent state to observations.
                 beg, end = self._ragged_index[v:v + 2]
                 marginal = result[:, beg:end]
@@ -403,9 +411,11 @@ class TreeCatServer(ServerBase):
             messages = np.empty([V, M, M])
             program = make_propagation_program(self._tree.tree_grid, root)
             for op, v, v2, e in program:
-                if op == 2:  # OP_ROOT
+                if op == OP_ROOT:
+                    # Initialize correlation at this node.
                     messages[v, :, :] = np.diagflat(vert_probs[v, :])
-                elif op == 3:  # OP_OUT
+                elif op == OP_OUT:
+                    # Propagate correlation outward from parent to v.
                     trans = edge_probs[e, :, :]
                     if v > v2:
                         trans = trans.T
