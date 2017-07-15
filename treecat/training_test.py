@@ -222,19 +222,23 @@ def test_assignment_sampler_gof(N, V, C, M):
     (1, 2),
     (2, 2),
     (2, 3),
-    pytest.mark.xfail((3, 2)),
-    pytest.mark.xfail((4, 2)),
-    pytest.mark.xfail((5, 2)),
-    pytest.mark.xfail((6, 2)),
+    (3, 2),
+    (3, 3),
+    (4, 2),
+    (4, 3),
+    (5, 2),
+    (5, 3),
+    (6, 3),
 ])
 def test_recover_structure(V, C):
     set_random_seed(V + C * 10)
-    N = 100
-    config = make_config(model_num_clusters=C)
+    N = 200
+    M = 2 * C
     tree = generate_tree(num_cols=V)
     dataset = generate_clean_dataset(tree, num_rows=N, num_cats=C)
     ragged_index = dataset['schema']['ragged_index']
     data = dataset['data']
+    config = make_config(model_num_clusters=M)
     model = train_model(ragged_index, data, config)
 
     # Compute three types of edges.

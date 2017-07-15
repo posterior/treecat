@@ -298,10 +298,15 @@ class TreeCatTrainer(object):
         This is used for sampling and estimating the latent tree.
         """
         V, E, K, M = self._VEKM
+        if len(self._assigned_rows) == V:
+            assignments = self._assignments
+        else:
+            assignments = self._assignments[sorted(self._assigned_rows), :]
         vert_logits = logprob_dc(self._vert_ss, self._vert_prior, axis=1)
         edge_logits = np.zeros([K], np.float32)
         for k, v1, v2 in self._tree.complete_grid.T:
-            edge_logits[k] = (logprob_dc(self._edge_ss, self._edge_prior) -
+            counts = count_pairs(assignments, v1, v2, M)
+            edge_logits[k] = (logprob_dc(counts, self._edge_prior) -
                               vert_logits[v1] - vert_logits[v2])
         return edge_logits
 
