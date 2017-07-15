@@ -121,7 +121,8 @@ def make_ragged_index(columns):
     """Make an index to hold data in a ragged array.
 
     Args:
-      columns: A list of numpy arrays of varying size.
+      columns: A list of [N, _]-shaped numpy arrays of varying size, where
+        N is the number of rows.
 
     Returns:
       A [len(columns) + 1]-shaped array of begin,end positions of each column.

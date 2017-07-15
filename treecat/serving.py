@@ -268,8 +268,8 @@ class TreeCatServer(ServerBase):
 
         To compute conditional probabilty, use the identity:
 
-          log P(data|cond_data) = server.logprob(data + cond_data)
-                                - server.logprob(cond_data)
+          log P(data|evidence) = server.logprob(data + evidence)
+                               - server.logprob(evidence)
 
         Args:
           data: A [N, R]-shaped ragged nummpy array of multinomial count data,

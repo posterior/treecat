@@ -7,7 +7,9 @@ import pytest
 from goftests import multinomial_goodness_of_fit
 
 from treecat.config import make_config
+from treecat.generate import generate_clean_dataset
 from treecat.generate import generate_dataset
+from treecat.generate import generate_tree
 from treecat.structure import TreeStructure
 from treecat.testutil import TINY_CONFIG
 from treecat.testutil import numpy_seterr
@@ -211,3 +213,32 @@ def test_assignment_sampler_gof(N, V, C, M):
         print('{:}\t{:0.1f}\t{}'.format(count, prob * num_samples, key))
     gof = multinomial_goodness_of_fit(probs, counts, num_samples, plot=True)
     assert 1e-2 < gof
+
+
+@pytest.mark.parametrize('V,C', [
+    (1, 2),
+    (2, 2),
+    (2, 3),
+    (2, 4),
+    (3, 2),
+    pytest.mark.xfail((3, 3)),
+    pytest.mark.xfail((3, 4)),
+    pytest.mark.xfail((4, 2)),
+    pytest.mark.xfail((4, 3)),
+    pytest.mark.xfail((4, 4)),
+    pytest.mark.xfail((5, 2)),
+    pytest.mark.xfail((5, 3)),
+    pytest.mark.xfail((5, 4)),
+])
+def test_recover_structure(V, C):
+    set_random_seed(V + C * 10)
+    N = 100
+    config = make_config()
+    tree = generate_tree(num_cols=V)
+    dataset = generate_clean_dataset(tree, num_rows=N, num_cats=C)
+    ragged_index = dataset['schema']['ragged_index']
+    data = dataset['data']
+    model = train_model(ragged_index, data, config)
+    expected_edges = tree.get_edges()
+    actual_edges = model['tree'].get_edges()
+    assert actual_edges == expected_edges
