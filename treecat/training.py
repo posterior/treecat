@@ -8,7 +8,7 @@ import logging
 import numpy as np
 from scipy.special import gammaln
 
-from six.moves import xrange
+from six.moves import range
 from treecat.structure import OP_IN
 from treecat.structure import OP_OUT
 from treecat.structure import OP_ROOT
@@ -42,15 +42,19 @@ def count_pairs(assignments, v1, v2, M):
     return np.bincount(pairs, minlength=M * M).reshape((M, M))
 
 
-def logprob_dc(counts_plus_prior, axis=None):
+def logprob_dc(counts, prior, axis=None):
     """Non-normalized log probability of a Dirichlet-Categorical distribution.
 
     See https://en.wikipedia.org/wiki/Dirichlet-multinomial_distribution
     """
-    return gammaln(counts_plus_prior).sum(axis)
+    # Not that this excludes the factorial(counts) term, since we explicitly
+    # track permutations in assignments.
+    logprob = gammaln(np.add(counts, prior, dtype=np.float32))
+    logprob -= gammaln(prior)  # For numerical stability only.
+    return logprob.sum(axis)
 
 
-def get_annealing_schedule(num_rows, config):
+def get_annealing_schedule(num_rows, epochs):
     """Iterator for subsample annealing yielding (action, arg) pairs.
 
     Actions are one of: 'add_row', 'remove_row', or 'sample_tree'.
@@ -63,13 +67,12 @@ def get_annealing_schedule(num_rows, config):
     row_to_remove = itertools.cycle(row_ids)
 
     # Use a linear annealing schedule.
-    epochs = float(config['learning_epochs'])
+    epochs = float(epochs)
     add_rate = epochs
     remove_rate = epochs - 1.0
-    state = epochs * config['learning_init_rows']
+    state = 0.0
 
     # Sample the tree after each batch.
-    sampling_tree = (config['learning_sample_tree_steps'] > 0)
     num_fresh = 0
     num_stale = 0
     while num_fresh + num_stale != num_rows:
@@ -81,7 +84,7 @@ def get_annealing_schedule(num_rows, config):
             yield 'remove_row', next(row_to_remove)
             state += add_rate
             num_stale -= 1
-        if sampling_tree and num_stale == 0 and num_fresh > 0:
+        if num_stale == 0 and num_fresh > 0:
             yield 'sample_tree', None
             num_stale = num_fresh
             num_fresh = 0
@@ -105,7 +108,7 @@ def jit_add_row(
         meas_probs, ):
     # Sample latent assignments using dynamic programming.
     messages = vert_probs.copy()
-    for i in xrange(len(program)):
+    for i in range(len(program)):
         op, v, v2, e = program[i]
         message = messages[v, :]
         if op == OP_UP:
@@ -114,7 +117,7 @@ def jit_add_row(
             feat_block = feat_probs[beg:end, :]
             meas_block = meas_probs[v, :]
             for c, count in enumerate(data_row[beg:end]):
-                for _ in xrange(count):
+                for _ in range(count):
                     message *= feat_block[c, :]
                     message /= meas_block
                     feat_block[c, :] += 1.0
@@ -142,7 +145,7 @@ def jit_add_row(
     # Update sufficient statistics.
     for v, m in enumerate(assignments):
         vert_ss[v, m] += 1
-    for e in xrange(tree_grid.shape[1]):
+    for e in range(tree_grid.shape[1]):
         m1 = assignments[tree_grid[1, e]]
         m2 = assignments[tree_grid[2, e]]
         edge_ss[e, m1, m2] += 1
@@ -166,7 +169,7 @@ def jit_remove_row(
     # Update sufficient statistics.
     for v, m in enumerate(assignments):
         vert_ss[v, m] -= 1
-    for e in xrange(tree_grid.shape[1]):
+    for e in range(tree_grid.shape[1]):
         m1 = assignments[tree_grid[1, e]]
         m2 = assignments[tree_grid[2, e]]
         edge_ss[e, m1, m2] -= 1
@@ -295,47 +298,50 @@ class TreeCatTrainer(object):
         This is used for sampling and estimating the latent tree.
         """
         V, E, K, M = self._VEKM
-        if len(self._assigned_rows) == V:
-            assignments = self._assignments
-        else:
-            assignments = self._assignments[sorted(self._assigned_rows), :]
-        vertex_logits = logprob_dc(self._vert_ss + self._vert_prior, axis=1)
+        vert_logits = logprob_dc(self._vert_ss, self._vert_prior, axis=1)
         edge_logits = np.zeros([K], np.float32)
-        for k, v1, v2 in self._tree.tree_grid.T:
-            counts = count_pairs(assignments, v1, v2, M)
-            # This is the most expensive part of tree sampling:
-            edge_logits[k] = (logprob_dc(counts + self._edge_prior) -
-                              vertex_logits[v1] - vertex_logits[v2])
+        for k, v1, v2 in self._tree.complete_grid.T:
+            edge_logits[k] = (logprob_dc(self._edge_ss, self._edge_prior) -
+                              vert_logits[v1] - vert_logits[v2])
         return edge_logits
 
     @profile
     def sample_tree(self):
         """Samples a random tree.
 
-        Returns: A list of (vertex, vertex) pairs.
+        Returns:
+          A pair (edges, edge_logits), where:
+            edges: A list of (vertex, vertex) pairs.
+            edge_logits: A [K]-shaped numpy array of edge logits.
         """
         logger.info('TreeCatTrainer.sample_tree given %d rows',
                     len(self._assigned_rows))
         complete_grid = self._tree.complete_grid
         edge_logits = self.get_edge_logits()
         assert edge_logits.shape[0] == complete_grid.shape[1]
+        assert edge_logits.dtype == np.float32
         edges = self.get_edges()
-        return sample_tree(
+        edges = sample_tree(
             complete_grid,
             edge_logits,
             edges,
             steps=self._config['learning_sample_tree_steps'])
+        return edges, edge_logits
 
     def estimate_tree(self):
         """Compute a maximum likelihood tree.
 
-        Returns: A list of (vertex, vertex) pairs.
+        Returns:
+          A pair (edges, edge_logits), where:
+            edges: A list of (vertex, vertex) pairs.
+            edge_logits: A [K]-shaped numpy array of edge logits.
         """
         logger.info('TreeCatTrainer.estimate_tree given %d rows',
                     len(self._assigned_rows))
         complete_grid = self._tree.complete_grid
         edge_logits = self.get_edge_logits()
-        return estimate_tree(complete_grid, edge_logits)
+        edges = estimate_tree(complete_grid, edge_logits)
+        return edges, edge_logits
 
     def logprob(self):
         """Compute non-normalized log probability of data and assignments.
@@ -344,53 +350,61 @@ class TreeCatTrainer(object):
         """
         assert len(self._assigned_rows) == self._assignments.shape[0]
         V, E, K, M = self._VEKM
-        vertex_logits = logprob_dc(self._vert_ss + self._vert_prior, axis=1)
+        vertex_logits = logprob_dc(self._vert_ss, self._vert_prior, axis=1)
         logprob = vertex_logits.sum()
         for e, v1, v2 in self._tree.tree_grid.T:
-            logprob += (logprob_dc(self._edge_ss[e, :, :] + self._edge_prior) -
+            logprob += (logprob_dc(self._edge_ss[e, :, :], self._edge_prior) -
                         vertex_logits[v1] - vertex_logits[v2])
         for v in range(V):
             beg, end = self._ragged_index[v:v + 2]
-            feat_probs = self._feat_ss[beg:end, :] + self._feat_prior
-            logprob += logprob_dc(feat_probs) - logprob_dc(feat_probs.sum(0))
+            logprob += logprob_dc(self._feat_ss[beg:end, :], self._feat_prior)
+            logprob -= logprob_dc(self._meas_ss[v, :], self._meas_prior[v])
         return logprob
 
     def train(self):
         """Train a TreeCat model using subsample-annealed MCMC.
 
-        Let N be the number of data rows and V be the number of features.
 
         Returns:
           A trained model as a dictionary with keys:
             tree: A TreeStructure instance with the learned latent structure.
             suffstats: Sufficient statistics of features, vertices, and
               edges and a ragged_index for the features array.
-            assignments: An [N, V] numpy array of latent cluster ids for each
-              cell in the dataset.
+            assignments: An [N, V]-shaped numpy array of latent cluster ids for
+              each cell in the dataset, where N be the number of data rows and
+              V is the number of features.
         """
         logger.info('TreeCatTrainer.train')
         set_random_seed(self._config['seed'])
+        init_epochs = self._config['learning_init_epochs']
+        full_epochs = self._config['learning_full_epochs']
 
-        # Run subsample annealing.
+        # Initialize using subsample annealing.
         num_rows = self._assignments.shape[0]
-        for action, row_id in get_annealing_schedule(num_rows, self._config):
+        for action, row_id in get_annealing_schedule(num_rows, init_epochs):
             if action == 'add_row':
                 self.add_row(row_id)
             elif action == 'remove_row':
                 self.remove_row(row_id)
-            else:
-                edges = self.sample_tree()
+            elif action == 'sample_tree':
+                edges, edge_logits = self.sample_tree()
                 self.set_edges(edges)
+            else:
+                raise ValueError(action)
 
-        # Compute a maximum likelihood tree and update all assignments.
-        for step in range(self._config['learning_estimate_tree_steps']):
-            edges = self.estimate_tree()
+        # Run full gibbs scans.
+        for step in range(full_epochs):
+            edges, edge_logits = self.sample_tree()
             self.set_edges(edges)
             for row_id in range(num_rows):
                 self.remove_row(row_id)
                 self.add_row(row_id)
 
-        edge_logits = self.get_edge_logits()
+        # Compute optimal tree.
+        edges, edge_logits = self.estimate_tree()
+        if self._config['learning_estimate_tree']:
+            self.set_edges(edges)
+
         self._tree.gc()
         return {
             'config': self._config,

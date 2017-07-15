@@ -267,7 +267,7 @@ def test_estimate_tree(num_edges):
     V = 1 + E
     grid = make_complete_graph(V)
     K = grid.shape[1]
-    edge_logits = np.random.random([K])
+    edge_logits = np.random.random([K]) - 0.5
     edges = estimate_tree(grid, edge_logits)
 
     # Check size.

@@ -13,15 +13,16 @@ from treecat.config import make_config
 
 TESTDATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'testdata')
 
-TINY_CONFIG = make_config()
-TINY_CONFIG['learning_epochs'] = 2
-TINY_CONFIG['model_num_clusters'] = 7
-TINY_CONFIG['model_ensemble_size'] = 3
+TINY_CONFIG = make_config(
+    learning_init_epochs=2,  #
+    model_num_clusters=7,  #
+    model_ensemble_size=3)
 
 TINY_RAGGED_INDEX = np.array([0, 2, 4, 7, 10, 13], dtype=np.int32)
 TINY_DATA = np.array(
     [
-        #    |     |        |        |
+        # f1 | f2  |   f3   |   f4   |   f5   |
+        # ---+-----+--------+--------+--------+
         [1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1],
         [0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0],
         [0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1],

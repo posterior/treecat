@@ -11,7 +11,9 @@ from treecat.generate import generate_clean_dataset
 from treecat.generate import generate_dataset
 from treecat.generate import generate_tree
 from treecat.structure import TreeStructure
-from treecat.testutil import TINY_CONFIG
+from treecat.structure import estimate_tree
+from treecat.structure import print_tree
+from treecat.structure import triangular_to_square
 from treecat.testutil import numpy_seterr
 from treecat.training import TreeCatTrainer
 from treecat.training import get_annealing_schedule
@@ -25,7 +27,8 @@ numpy_seterr()
 def test_get_annealing_schedule():
     set_random_seed(0)
     num_rows = 10
-    schedule = get_annealing_schedule(num_rows, TINY_CONFIG)
+    init_epochs = 10
+    schedule = get_annealing_schedule(num_rows, init_epochs)
     for step, (action, row_id) in enumerate(schedule):
         assert step < 1000
         assert action in ['add_row', 'remove_row', 'sample_tree']
@@ -172,7 +175,6 @@ def hash_assignments(assignments):
 ])
 def test_assignment_sampler_gof(N, V, C, M):
     config = make_config()
-    config['learning_sample_tree_steps'] = 0  # Disable tree kernel.
     config['model_num_clusters'] = M
     dataset = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
     ragged_index = dataset['schema']['ragged_index']
@@ -240,5 +242,17 @@ def test_recover_structure(V, C):
     data = dataset['data']
     model = train_model(ragged_index, data, config)
     expected_edges = tree.get_edges()
+    optimal_edges = estimate_tree(tree.complete_grid, model['edge_logits'])
     actual_edges = model['tree'].get_edges()
-    assert actual_edges == expected_edges
+    feature_names = [str(v) for v in range(V)]
+    root = '0'
+    print('Expected:')
+    print(print_tree(expected_edges, feature_names, root))
+    print('Optimal:')
+    print(print_tree(optimal_edges, feature_names, root))
+    print('Actual:')
+    print(print_tree(actual_edges, feature_names, root))
+    print('Edge logits:')
+    print(triangular_to_square(tree.complete_grid, model['edge_logits']))
+    assert actual_edges == optimal_edges, 'Error in sample_tree'
+    assert actual_edges == expected_edges, 'Error in likelihood'

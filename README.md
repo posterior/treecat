@@ -118,19 +118,19 @@ $ pip install pytreecat
 ## Tuning Hyperparameters
 
 TreeCat requires tuning of two parameters:
-`learning_epochs` (like the number of iterations) and
+`learning_init_epochs` (like the number of iterations) and
 `model_num_clusters` (the number of latent classes above each feature).
 The easiest way to tune these is to do grid search using the `treecat.validate` module
 with a csv file of example parameters.
 
 Contents of [`tuning.csv`](treecat/testdata/tuning.csv):
 
-| model_num_clusters | learning_epochs |
-| ------------------ | --------------- |
-|                  2 |               2 |
-|                  2 |               3 |
-|                  4 |               2 |
-|                ... |             ... |
+| model_num_clusters | learning_init_epochs |
+| ------------------ | -------------------- |
+|                  2 |                    2 |
+|                  2 |                    3 |
+|                  4 |                    2 |
+|                ... |                  ... |
 
 ```sh
 # This reads parameters from tuning.csv and dumps results to tuning.pkz

@@ -79,9 +79,8 @@ def train(rows=100, cols=10, epochs=5, ensemble=1, tool='timers'):
     Available tools: timers, time, snakeviz, line_profiler, pdb
     """
     from treecat.generate import generate_dataset_file
-    config = make_config()
-    config['learning_epochs'] = epochs
-    config['model_ensemble_size'] = ensemble
+    config = make_config(
+        learning_init_epochs=epochs, model_ensemble_size=ensemble)
     dataset_path = generate_dataset_file(rows, cols)
     with tempdir() as dirname:
         config_path = os.path.join(dirname, 'config.pkz')

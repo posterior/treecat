@@ -17,5 +17,5 @@ def test_train():
             dataset_path,
             ensemble_path,
             model_ensemble_size='3',
-            learning_epochs='3')
+            learning_init_epochs='3')
         assert os.path.exists(ensemble_path)

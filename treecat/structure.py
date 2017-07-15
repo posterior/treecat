@@ -398,7 +398,8 @@ def triangular_to_square(grid, triangle):
     Returns:
       A square symmetric V x V array with zero on the diagonal.
     """
-    K = grid.shape[1]
+    K = len(triangle)
+    assert grid.shape == (3, K)
     V = int(round(0.5 + (0.25 + 2 * K)**0.5))
     assert K == V * (V - 1) // 2
     square = np.zeros([V, V], dtype=triangle.dtype)
@@ -418,9 +419,12 @@ def estimate_tree(grid, edge_logits):
     Returns:
       A list of (vertex, vertex) pairs.
     """
+    K = len(edge_logits)
+    assert grid.shape == (3, K)
     weights = triangular_to_square(grid, edge_logits)
     weights *= -1
-    weights += 1 - weights.min()
+    weights -= weights.min()
+    weights += 1.0
     csr = minimum_spanning_tree(weights, overwrite=True)
     coo = csr.tocoo()
     edges = zip(coo.row, coo.col)

@@ -6,10 +6,10 @@ DEFAULT_CONFIG = {
     'seed': 0,
     'model_num_clusters': 32,
     'model_ensemble_size': 8,
-    'learning_init_rows': 2,
-    'learning_epochs': 100.0,
+    'learning_init_epochs': 100,
+    'learning_full_epochs': 1,
+    'learning_estimate_tree': True,
     'learning_sample_tree_steps': 10,
-    'learning_estimate_tree_steps': 1,
     'serving_samples': 1024,
 }
 

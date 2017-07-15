@@ -222,7 +222,7 @@ def generate_model_file(num_rows, num_cols, num_cats=4, rate=1.0):
     dataset_path = generate_dataset_file(num_rows, num_cols, num_cats, rate)
     dataset = pickle_load(dataset_path)
     schema = dataset['schema']
-    config = make_config(learning_epochs=5)
+    config = make_config(learning_init_epochs=5)
     model = train_model(schema['ragged_index'], dataset['data'], config)
     pickle_dump(model, path)
     return path
