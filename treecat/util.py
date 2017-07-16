@@ -26,7 +26,8 @@ LOG_FORMAT = '%(levelname).1s %(name)s %(message)s'
 logging.basicConfig(format=LOG_FORMAT, level=LOG_LEVEL, filename=LOG_FILENAME)
 logger = logging.getLogger(__name__)
 
-SQRT_TINY = np.float32(np.finfo(np.float32).tiny ** 0.5)
+TINY = np.finfo(np.float32).tiny
+SQRT_TINY = np.float32(np.finfo(np.float32).tiny**0.5)
 
 
 def no_jit(*args, **kwargs):
@@ -122,7 +123,8 @@ def quantize_from_probs2(probs, resolution):
     """
     assert len(probs.shape) == 2
     N, M = probs.shape
-    probs = probs / probs.sum(axis=1, keepdims=True)
+    probs = probs + TINY
+    probs /= probs.sum(axis=1, keepdims=True)
     result = np.zeros(probs.shape, np.int8)
     range_N = np.arange(N, dtype=np.int32)
     for _ in range(resolution):

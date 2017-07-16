@@ -22,6 +22,7 @@ from treecat.structure import TreeStructure
 from treecat.structure import estimate_tree
 from treecat.structure import make_propagation_program
 from treecat.util import SQRT_TINY
+from treecat.util import TINY
 from treecat.util import guess_counts
 from treecat.util import profile
 from treecat.util import quantize_from_probs2
@@ -379,7 +380,7 @@ class TreeCatServer(ServerBase):
                 beg, end = self._ragged_index[v:v + 2]
                 marginal = result[:, beg:end]
                 marginal[...] = np.dot(feat_cond[beg:end, :], message).T
-                marginal += np.finfo(np.float32).tiny
+                marginal += TINY
                 marginal /= marginal.sum(axis=1, keepdims=True)
 
         return result
