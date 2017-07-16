@@ -343,3 +343,27 @@ def test_latent_correlation(N, V, C, M):
     for v in range(V):
         assert correlation[v, :].argmax() == v
         assert correlation[:, v].argmax() == v
+
+
+@pytest.mark.parametrize('N,V,C,M', [
+    (10, 1, 2, 2),
+    (10, 2, 2, 3),
+    (10, 3, 2, 4),
+    (10, 4, 2, 5),
+    (10, 5, 2, 6),
+    (10, 6, 2, 7),
+    (10, 7, 2, 8),
+])
+def test_ensemble_latent_correlation(N, V, C, M):
+    set_random_seed(0)
+    ensemble = generate_fake_ensemble(N, V, C, M)
+    server = EnsembleServer(ensemble)
+
+    correlation = server.latent_correlation()
+    print(correlation)
+    assert np.all(0 <= correlation)
+    assert np.all(correlation <= 1)
+    assert np.allclose(correlation, correlation.T)
+    for v in range(V):
+        assert correlation[v, :].argmax() == v
+        assert correlation[:, v].argmax() == v

@@ -12,7 +12,7 @@ lint: FORCE
 	flake8 $(PY_FILES)
 
 test: lint FORCE
-	cd treecat ; py.test -v
+	cd treecat ; py.test -vrw
 
 clean:
 	treecat.generate clean

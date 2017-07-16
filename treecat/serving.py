@@ -114,9 +114,6 @@ class ServerBase(object):
         """
         raise NotImplementedError
 
-    def latent_correlation(self):
-        raise NotImplementedError
-
 
 class TreeCatServer(ServerBase):
     """Class for serving queries against a trained TreeCat model."""
@@ -411,7 +408,7 @@ class TreeCatServer(ServerBase):
           rho(X,Y) = sqrt(1 - exp(-2 I(X;Y)))
 
         Returns:
-          An [V, V] numpy array of feature-feature correlations.
+          A [V, V]-shaped numpy array of feature-feature correlations.
         """
         logger.debug('computing latent correlation')
         V, E, M, R = self._VEMR
@@ -497,6 +494,23 @@ class EnsembleServer(ServerBase):
         result = np.stack(
             [server.latent_perplexity() for server in self._ensemble])
         return result.mean(axis=0)
+
+    def latent_correlation(self):
+        """Compute correlation matrix among latent features.
+
+        This computes the generalization of Pearson's correlation to discrete
+        data. Let I(X;Y) be the mutual information. Then define correlation as
+
+          rho(X,Y) = sqrt(1 - exp(-2 I(X;Y)))
+
+        Returns:
+          A [V, V]-shaped numpy array of feature-feature correlations.
+        """
+        result = self._ensemble[0].latent_correlation()
+        for server in self._ensemble[1:]:
+            result += server.latent_correlation()
+        result /= len(self._ensemble)
+        return result
 
 
 class DataServer(object):

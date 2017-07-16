@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import os
+from warnings import warn
 
 import pytest
 
@@ -37,7 +38,7 @@ def test_e2e(model_type):
         dataset = {'schema': schema, 'data': data}
 
         print('Train model')
-        if model_type == 'single':
+        if model_type == 'TreeCatServer':
             model = train_model(ragged_index, data, config)
         else:
             model = train_ensemble(ragged_index, data, config)
@@ -56,11 +57,9 @@ def test_e2e(model_type):
             median = server.median([evidence])
             server.logprob(median)
         except NotImplementedError:
+            warn('{} median not implemented'.format(model_type))
             pass
 
         print('Examine latent structure')
         server.latent_perplexity()
-        try:
-            server.latent_correlation()
-        except NotImplementedError:
-            pass
+        server.latent_correlation()
