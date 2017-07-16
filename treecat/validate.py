@@ -62,7 +62,7 @@ def _crossvalidate(task):
     print('training {}'.format(key))
     model = train_model(ragged_index, part, config)
     server = TreeCatServer(model)
-    with np.errstate(divide='print'):
+    with np.errstate(invalid='print'):
         print('evaluating {}'.format(key))
         logprob = np.mean(server.logprob(data) - server.logprob(part))
         median = server.median(counts, part)
