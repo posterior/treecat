@@ -382,6 +382,24 @@ class TreeCatServer(ServerBase):
 
         return result
 
+    def observed_perplexity(self):
+        """Compute perplexity = exp(entropy) of observed variables.
+
+        Perplexity is an information theoretic measure of the number of
+        clusters or latent classes. Perplexity is a real number in the range
+        [1, M], where M is model_num_clusters.
+
+        Returns:
+          A [V]-shaped numpy array of perplexity.
+        """
+        V, E, M, R = self._VEMR
+        observed_entropy = np.empty(V, dtype=np.float32)
+        for v in range(V):
+            beg, end = self._ragged_index[v:v + 2]
+            observed_entropy[v] = entropy(
+                np.dot(self._feat_cond[beg:end, :], self._vert_probs[v, :]))
+        return np.exp(observed_entropy)
+
     def latent_perplexity(self):
         """Compute perplexity = exp(entropy) of latent variables.
 
@@ -481,6 +499,22 @@ class EnsembleServer(ServerBase):
         assert logprobs.shape == (data.shape[0], )
         return logprobs
 
+    def observed_perplexity(self):
+        """Compute perplexity = exp(entropy) of observed variables.
+
+        Perplexity is an information theoretic measure of the number of
+        clusters or observed classes. Perplexity is a real number in the range
+        [1, M], where M is model_num_clusters.
+
+        Returns:
+          A [V]-shaped numpy array of perplexity.
+        """
+        result = self._ensemble[0].observed_perplexity()
+        for server in self._ensemble[1:]:
+            result += server.observed_perplexity()
+        result /= len(self._ensemble)
+        return result
+
     def latent_perplexity(self):
         """Compute perplexity = exp(entropy) of latent variables.
 
@@ -491,9 +525,11 @@ class EnsembleServer(ServerBase):
         Returns:
           A [V]-shaped numpy array of perplexity.
         """
-        result = np.stack(
-            [server.latent_perplexity() for server in self._ensemble])
-        return result.mean(axis=0)
+        result = self._ensemble[0].latent_perplexity()
+        for server in self._ensemble[1:]:
+            result += server.latent_perplexity()
+        result /= len(self._ensemble)
+        return result
 
     def latent_correlation(self):
         """Compute correlation matrix among latent features.
@@ -538,6 +574,19 @@ class DataServer(object):
     @property
     def edge_logits(self):
         return self._server.edge_logits
+
+    def feature_density(self):
+        """Returns a [V]-shaped array of feature densities in [0, 1]."""
+        ragged_index = self._schema['ragged_index']
+        V = len(ragged_index) - 1
+        density = np.empty([V], np.float32)
+        for v in range(V):
+            beg, end = ragged_index[v:v + 2]
+            density[v] = (self._data[:, beg:end].max(1) != 0).mean()
+        return density
+
+    def observed_perplexity(self):
+        return self._server.observed_perplexity()
 
     def latent_perplexity(self):
         return self._server.latent_perplexity()

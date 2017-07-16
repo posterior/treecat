@@ -61,5 +61,7 @@ def test_e2e(model_type):
             pass
 
         print('Examine latent structure')
+        server.feature_density()
+        server.observed_perplexity()
         server.latent_perplexity()
         server.latent_correlation()
