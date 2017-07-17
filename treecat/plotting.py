@@ -4,16 +4,64 @@ from __future__ import print_function
 
 import numpy as np
 
+from treecat.structure import find_center_of_tree
+from treecat.structure import make_tree
 from treecat.structure import print_tree
 
 
-def order_features(server):
+def order_features_v1(server):
+    """Sort features using print_tree."""
     edges = server.estimate_tree
     names = server.feature_names
     order = np.empty(len(names), np.int32)
     for v, name in enumerate(print_tree(edges, names).split()):
         order[names.index(name)] = v
     return order
+
+
+def order_features_v2(server):
+    """Sort features using greedy bin packing."""
+    edges = server.estimate_tree
+    grid = make_tree(edges)
+    root = find_center_of_tree(grid)
+
+    E = len(edges)
+    V = E + 1
+    neighbors = [set() for _ in range(V)]
+    for v1, v2 in edges:
+        neighbors[v1].add(v2)
+        neighbors[v2].add(v1)
+    orders = [None for v in range(V)]
+    seen = [False] * V
+    stack = [root]
+    seen[root] = True
+    while stack:
+        v = stack[-1]
+        done = True
+        for v2 in neighbors[v]:
+            if not seen[v2]:
+                stack.append(v2)
+                seen[v2] = True
+                done = False
+                break
+        if not done:
+            continue
+        lhs = []
+        rhs = []
+        parts = [orders[v2] for v2 in neighbors[v] if orders[v2] is not None]
+        parts.sort(key=len)
+        for part in parts:
+            if len(lhs) < len(rhs):
+                lhs += part
+            else:
+                rhs += part
+        orders[v] = lhs + [v] + rhs
+        stack.pop()
+
+    result = [None] * V
+    for v1, v2 in enumerate(orders[root]):
+        result[v2] = v1
+    return result
 
 
 def plot_circular(server, color='#4488aa'):
@@ -31,7 +79,7 @@ def plot_circular(server, color='#4488aa'):
     from matplotlib.patches import PathPatch
 
     # Extract ordered parameters to draw.
-    order = order_features(server)
+    order = order_features_v2(server)
     feature_names = np.array(server.feature_names)[order]
     feature_density = server.feature_density()[order]
     observed_perplexity = server.observed_perplexity()[order]
@@ -96,9 +144,9 @@ def plot_circular(server, color='#4488aa'):
     codes = [Path.MOVETO, Path.CURVE4, Path.CURVE4, Path.CURVE4]
     for v1, v2 in edges:
         xy = np.array([[X[v1], Y[v1]], [0, 0], [0, 0], [X[v2], Y[v2]]])
-        dist = ((xy[-1][0] - xy[0][0])**2 + (xy[-1][1] - xy[0][1])**2)**0.5
-        xy[1] = xy[0] * (1 - (dist / 3)**0.8)
-        xy[2] = xy[3] * (1 - (dist / 3)**0.8)
+        dist = 0.5 * ((X[v1] - X[v2])**2 + (Y[v1] - Y[v2])**2)**0.5
+        xy[1] = xy[0] * (1 - 4 / 3 * dist + 2 / 3 * dist**2)
+        xy[2] = xy[3] * (1 - 4 / 3 * dist + 2 / 3 * dist**2)
         path = Path(xy, codes)
         patch = PathPatch(path, facecolor='none', edgecolor=color, lw=1)
         pyplot.gca().add_patch(patch)
