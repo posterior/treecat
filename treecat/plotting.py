@@ -3,10 +3,59 @@ from __future__ import division
 from __future__ import print_function
 
 import numpy as np
+import scipy.linalg
 
 from treecat.structure import find_center_of_tree
 from treecat.structure import make_tree
 from treecat.structure import print_tree
+
+
+def layout_tree(correlation):
+    """Layout tree for visualization with e.g. matplotlib.
+
+    Args:
+      correlation: A [V, V]-shaped numpy array of latent correlations.
+
+    Returns:
+      A [V, 3]-shaped numpy array of spectral positions of vertices.
+    """
+    assert len(correlation.shape) == 2
+    assert correlation.shape[0] == correlation.shape[1]
+    assert correlation.dtype == np.float32
+
+    laplacian = -correlation
+    np.fill_diagonal(laplacian, 0)
+    np.fill_diagonal(laplacian, -laplacian.sum(axis=0))
+    evals, evects = scipy.linalg.eigh(laplacian, eigvals=[1, 2, 3])
+    assert np.all(evals > 0)
+    assert evects.shape[1] == 3
+    return evects
+
+
+def nx_plot_tree(server, node_size=200, **options):
+    """Visualize the tree using the networkx package.
+
+    This plots to the current matplotlib figure.
+
+    Args:
+      server: A DataServer instance.
+      options: Options passed to networkx.draw().
+    """
+    import networkx as nx
+    edges = server.estimate_tree
+    perplexity = server.latent_perplexity()
+    feature_names = server.feature_names
+
+    V = 1 + len(edges)
+    G = nx.Graph()
+    G.add_nodes_from(range(V))
+    G.add_edges_from(edges)
+    H = nx.relabel_nodes(G, dict(enumerate(feature_names)))
+    node_size = node_size * perplexity / perplexity.max()
+
+    options.setdefault('alpha', 0.2)
+    options.setdefault('font_size', 8)
+    nx.draw(H, with_labels=True, node_size=node_size, **options)
 
 
 def order_features_v1(server):
