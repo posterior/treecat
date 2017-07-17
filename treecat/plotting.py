@@ -48,12 +48,17 @@ def order_features_v2(server):
             continue
         lhs = []
         rhs = []
-        parts = [orders[v2] for v2 in neighbors[v] if orders[v2] is not None]
-        parts.sort(key=len)
-        for part in parts:
+        parts = [(v2, orders[v2]) for v2 in neighbors[v]
+                 if orders[v2] is not None]
+        parts.sort(key=lambda x: len(x[1]))
+        for v2, part in parts:
             if len(lhs) < len(rhs):
+                if part.index(v2) < len(part) / 2:
+                    part.reverse()
                 lhs += part
             else:
+                if part.index(v2) > len(part) / 2:
+                    part.reverse()
                 rhs += part
         orders[v] = lhs + [v] + rhs
         stack.pop()
