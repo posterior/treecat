@@ -83,7 +83,7 @@ def plot_circular(server, color='#4488aa'):
     alphas = 0.25 + 0.75 * feature_density
 
     V = len(feature_names)
-    angle = np.array([2 * np.pi * (v / V - 0.25001) for v in range(V)])
+    angle = np.array([2 * np.pi * (v / V + 0.25001) for v in range(V)])
     X = np.cos(angle)
     Y = np.sin(angle)
     R_text = 1.06
