@@ -569,7 +569,7 @@ class DataServer(object):
     @property
     def estimate_tree(self):
         """Returns a tuple of edges. Each edge is a (vertex,vertex) pair."""
-        return self._server.estimated_tree
+        return self._server.estimate_tree
 
     @property
     def edge_logits(self):

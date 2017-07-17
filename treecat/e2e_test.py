@@ -65,3 +65,13 @@ def test_e2e(model_type):
         server.observed_perplexity()
         server.latent_perplexity()
         server.latent_correlation()
+
+        print('Plotting latent structure')
+        try:
+            import matplotlib
+            matplotlib.use('Agg')  # Required for headless operation.
+            from treecat.plotting import plot_circular
+            plot_circular(server)
+        except ImportError:
+            warn('matplotlib not available')
+            pass
