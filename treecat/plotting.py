@@ -72,23 +72,22 @@ def plot_circular(server, color='#4488aa'):
 
     # Extract ordered parameters to draw.
     edges = server.estimate_tree
-    order = order_vertices(edges)
-    feature_names = np.array(server.feature_names)[order]
-    feature_density = server.feature_density()[order]
-    observed_perplexity = server.observed_perplexity()[order]
-    latent_perplexity = server.latent_perplexity()[order]
-    # latent_correlation = server.latent_correlation()[order, :][:, order]
+    order, order_inv = order_vertices(edges)
     edges = np.array(
         [[order[v1], order[v2]] for v1, v2 in edges], dtype=np.int32)
+    feature_names = np.array(server.feature_names)[order_inv]
+    feature_density = server.feature_density()[order_inv]
+    observed_perplexity = server.observed_perplexity()[order_inv]
+    latent_perplexity = server.latent_perplexity()[order_inv]
     alphas = 0.25 + 0.75 * feature_density
 
     V = len(feature_names)
-    angle = np.array([2 * np.pi * (v / V + 0.25001) for v in range(V)])
-    X = np.cos(angle)
-    Y = np.sin(angle)
+    angle = np.array([2 * np.pi * ((v + 0.5) / V + 0.25) for v in range(V)])
+    XY = np.stack([np.cos(angle), np.sin(angle)])
+    X, Y = XY
     R_text = 1.06
     R_obs = 1.03
-    R_lat = 1.0
+    R_lat = 1.005
     adjust = np.pi / V
 
     # Plot labels.
@@ -126,8 +125,8 @@ def plot_circular(server, color='#4488aa'):
     s = 2 * latent_perplexity
     pyplot.scatter(R_lat * X, R_lat * Y, s, lw=0, color=color)
     pyplot.plot(
-        np.stack([R_obs * X, R_lat * X]),
-        np.stack([R_obs * Y, R_lat * Y]),
+        np.stack([R_obs * X, X]),
+        np.stack([R_obs * Y, Y]),
         color=color,
         lw=0.75)
 
@@ -135,10 +134,15 @@ def plot_circular(server, color='#4488aa'):
     # Adapted from https://matplotlib.org/users/path_tutorial.html
     codes = [Path.MOVETO, Path.CURVE4, Path.CURVE4, Path.CURVE4]
     for v1, v2 in edges:
-        xy = np.array([[X[v1], Y[v1]], [0, 0], [0, 0], [X[v2], Y[v2]]])
+        xy = np.array([
+            [X[v1], Y[v1]],
+            [X[v1], Y[v1]],
+            [X[v2], Y[v2]],
+            [X[v2], Y[v2]],
+        ])
         dist = 0.5 * ((X[v1] - X[v2])**2 + (Y[v1] - Y[v2])**2)**0.5
-        xy[1] = xy[0] * (1 - 4 / 3 * dist + 2 / 3 * dist**2)
-        xy[2] = xy[3] * (1 - 4 / 3 * dist + 2 / 3 * dist**2)
+        R_arc = 1 - 4 / 3 * dist + 2 / 3 * dist**2
+        xy[[1, 2], :] *= R_arc
         path = Path(xy, codes)
         patch = PathPatch(path, facecolor='none', edgecolor=color, lw=1)
         pyplot.gca().add_patch(patch)

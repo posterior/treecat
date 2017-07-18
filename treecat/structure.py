@@ -481,7 +481,7 @@ def order_vertices(edges):
       edges: A list of (vertex, vertex) pairs.
 
     Returns:
-      A permutation of vertices for which edges are short.
+      An (permutation, inverse) pair, each a list of vertices.
     """
     grid = make_tree(edges)
     root = find_center_of_tree(grid)
@@ -524,7 +524,8 @@ def order_vertices(edges):
         orders[v] = lhs + [v] + rhs
         stack.pop()
 
-    result = [None] * V
-    for v1, v2 in enumerate(orders[root]):
-        result[v2] = v1
-    return result
+    order_inv = orders[root]
+    order = [None] * V
+    for v1, v2 in enumerate(order_inv):
+        order[v2] = v1
+    return order, order_inv
