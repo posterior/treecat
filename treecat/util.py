@@ -22,7 +22,7 @@ DEBUG_LEVEL = int(os.environ.get('TREECAT_DEBUG_LEVEL', 0))
 LOG_LEVEL = int(os.environ.get('TREECAT_LOG_LEVEL', logging.CRITICAL))
 PROFILING = (LOG_LEVEL <= 15)
 LOG_FILENAME = os.environ.get('TREECAT_LOG_FILE')
-LOG_FORMAT = '%(levelname).1s %(name)s %(message)s'
+LOG_FORMAT = '%(levelname).1s %(process)d %(name)s %(message)s'
 logging.basicConfig(format=LOG_FORMAT, level=LOG_LEVEL, filename=LOG_FILENAME)
 logger = logging.getLogger(__name__)
 

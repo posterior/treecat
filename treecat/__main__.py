@@ -2,6 +2,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import multiprocessing
+
 from parsable import parsable
 
 from treecat.config import make_config
@@ -28,4 +30,6 @@ def train(dataset_in, ensemble_out, **options):
 
 
 if __name__ == '__main__':
+    # This attempts to avoid deadlock when using to the default 'fork' method.
+    multiprocessing.set_start_method('spawn')
     parsable()
