@@ -56,12 +56,26 @@ def nx_plot_tree(server, node_size=200, **options):
     nx.draw(H, with_labels=True, node_size=node_size, **options)
 
 
-def plot_circular(server, color='#4488aa'):
+def contract_positions(XY, edges, stepsize):
+    """Apply L1-minimizing attractive force to vertices."""
+    old = XY.T
+    new = old.copy()
+    heads = edges[:, 0]
+    tails = edges[:, 1]
+    diff = old[heads] - old[tails]
+    diff /= (diff ** 2).sum(axis=1, keepdims=True) ** 0.5
+    new[tails] += stepsize * diff
+    new[heads] -= stepsize * diff
+    return new.T
+
+
+def plot_circular(server, color='#4488aa', contract=0.002):
     """Plot a tree stucture with features arranged around a circle.
 
     Args:
       server: A DataServer instance.
       color: A matplotlib color spec.
+      contract: Contract vertices to visually hint their grouping.
 
     Requires:
       matplotlib.
@@ -84,6 +98,8 @@ def plot_circular(server, color='#4488aa'):
     V = len(feature_names)
     angle = np.array([2 * np.pi * ((v + 0.5) / V + 0.25) for v in range(V)])
     XY = np.stack([np.cos(angle), np.sin(angle)])
+    if contract:
+        XY = contract_positions(XY, edges, stepsize=contract)
     X, Y = XY
     R_text = 1.06
     R_obs = 1.03
