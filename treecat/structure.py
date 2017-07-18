@@ -513,12 +513,13 @@ def order_vertices(edges):
                  if orders[v2] is not None]
         parts.sort(key=lambda x: len(x[1]))
         for v2, part in parts:
+            midpoint = (len(part) - 1) / 2
             if len(lhs) < len(rhs):
-                if part.index(v2) < len(part) / 2:
+                if part.index(v2) < midpoint:
                     part.reverse()
                 lhs = part + lhs
             else:
-                if part.index(v2) > len(part) / 2:
+                if part.index(v2) > midpoint:
                     part.reverse()
                 rhs = rhs + part
         orders[v] = lhs + [v] + rhs
