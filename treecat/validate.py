@@ -13,11 +13,13 @@ from treecat.config import make_config
 from treecat.format import csv_reader
 from treecat.format import pickle_dump
 from treecat.format import pickle_load
+from treecat.format import pickle_memoize
 from treecat.serving import TreeCatServer
 from treecat.training import train_model
 from treecat.util import guess_counts
 from treecat.util import make_ragged_mask
 from treecat.util import parallel_map
+from treecat.util import set_random_seed
 
 parsable = parsable.Parsable()
 
@@ -55,12 +57,15 @@ def make_splits(ragged_index, num_rows, num_parts):
     return masks
 
 
+memoized_train_model = pickle_memoize(train_model)
+
+
 def _crossvalidate(task):
     (key, ragged_index, counts, data, mask, config) = task
     part = data.copy()
     part[mask] = 0
     print('training {}'.format(key))
-    model = train_model(ragged_index, part, config)
+    model = memoized_train_model(ragged_index, part, config)
     server = TreeCatServer(model)
     print('evaluating {}'.format(key))
     logprob = np.mean(server.logprob(data) - server.logprob(part))
@@ -70,6 +75,7 @@ def _crossvalidate(task):
 
 
 def plan_crossvalidation(key, ragged_index, data, config):
+    set_random_seed(config['seed'])
     counts = guess_counts(ragged_index, data)
     num_rows = data.shape[0]
     num_parts = config['model_ensemble_size']

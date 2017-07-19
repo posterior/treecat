@@ -3,11 +3,13 @@ from __future__ import division
 from __future__ import print_function
 
 import csv
+import functools
 import gzip
 import io
 import logging
 import os
 import re
+import shutil
 import sys
 from collections import Counter
 from collections import defaultdict
@@ -25,6 +27,9 @@ from six.moves import zip
 logger = logging.getLogger(__name__)
 parsable = parsable.Parsable()
 jsonpickle.ext.numpy.register_handlers()
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MEMO_STORE = os.path.join(REPO, 'data', 'memoize')
 
 CATEGORICAL = 'categorical'
 ORDINAL = 'ordinal'
@@ -68,6 +73,45 @@ def pickle_load(filename):
     else:
         raise ValueError(
             'Cannot determine format: {}'.format(os.path.basename(filename)))
+
+
+def sloppy_hash(obj):
+    try:
+        return hash(obj)
+    except TypeError:
+        if isinstance(obj, (tuple, list)):
+            return hash(tuple(map(sloppy_hash, obj)))
+        if isinstance(obj, dict):
+            return sloppy_hash(obj.items())
+        elif isinstance(obj, np.ndarray):
+            obj.flags.writeable = False
+            return hash(obj.data)
+        raise
+
+
+def pickle_memoize(fun):
+    if not os.path.exists(MEMO_STORE):
+        os.makedirs(MEMO_STORE)
+
+    @functools.wraps(fun)
+    def decorated(*args):
+        memo_path = os.path.join(MEMO_STORE, '{}.{}.{}.pkz'.format(
+            fun.__module__, fun.__name__, sloppy_hash(args)))
+        if os.path.exists(memo_path):
+            return pickle_load(memo_path)
+        else:
+            value = fun(*args)
+            pickle_dump(value, memo_path)
+            return value
+
+    return decorated
+
+
+@parsable
+def clean():
+    """Clean pickle_memoized cache."""
+    if os.path.exists(MEMO_STORE):
+        shutil.rmtree(MEMO_STORE)
 
 
 @contextmanager
