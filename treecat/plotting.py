@@ -57,25 +57,44 @@ def nx_plot_tree(server, node_size=200, **options):
 
 
 def contract_positions(XY, edges, stepsize):
-    """Apply L1-minimizing attractive force to vertices."""
-    old = XY.T
+    """Perturb vertex positions by an L1-minimizing attractive force.
+
+    This is used to slightly adjust vertex positions to provide a visual
+    hint to their grouping.
+
+    Args:
+      XY: A [V, 2]-shaped numpy array of the current positions.
+      edges: An [E, 2]-shaped numpy array of edges as (vertex,vertex) pairs.
+
+    """
+    E = edges.shape[0]
+    V = E + 1
+    assert edges.shape == (E, 2)
+    assert XY.shape == (V, 2)
+    old = XY
     new = old.copy()
     heads = edges[:, 0]
     tails = edges[:, 1]
     diff = old[heads] - old[tails]
-    diff /= (diff ** 2).sum(axis=1, keepdims=True) ** 0.5
+    distances = (diff ** 2).sum(axis=1) ** 0.5
+    spacing = distances.min()
+    assert spacing > 0
+    diff /= distances[:, np.newaxis]
+    diff *= spacing
     new[tails] += stepsize * diff
     new[heads] -= stepsize * diff
-    return new.T
+    return new
 
 
-def plot_circular(server, color='#4488aa', contract=0.002):
+def plot_circular(server, fontsize=8, color='#4488aa', contract=0.08):
     """Plot a tree stucture with features arranged around a circle.
 
     Args:
       server: A DataServer instance.
-      color: A matplotlib color spec.
-      contract: Contract vertices to visually hint their grouping.
+      fontsize: The font size for labels, in points.
+      color: A matplotlib color spec for edge colors.
+      contract: Contract vertex positions by this amount to visually hint
+        their grouping.
 
     Requires:
       matplotlib.
@@ -97,10 +116,11 @@ def plot_circular(server, color='#4488aa', contract=0.002):
 
     V = len(feature_names)
     angle = np.array([2 * np.pi * ((v + 0.5) / V + 0.25) for v in range(V)])
-    XY = np.stack([np.cos(angle), np.sin(angle)])
+    XY = np.stack([np.cos(angle), np.sin(angle)], axis=-1)
     if contract:
         XY = contract_positions(XY, edges, stepsize=contract)
-    X, Y = XY
+    X = XY[:, 0]
+    Y = XY[:, 1]
     R_text = 1.06
     R_obs = 1.03
     R_lat = 1.005
@@ -108,8 +128,7 @@ def plot_circular(server, color='#4488aa', contract=0.002):
 
     # Plot labels.
     for v, name in enumerate(feature_names):
-        x = X[v]
-        y = Y[v]
+        x, y = XY[v]
         rot = angle[v] * 360 / (2 * np.pi)
         props = {}
         # Work around matplotlib being too smart.
@@ -132,7 +151,7 @@ def plot_circular(server, color='#4488aa', contract=0.002):
             name,
             props,
             rotation=rot,
-            fontsize=8,
+            fontsize=fontsize,
             alpha=alphas[v])
 
     # Plot observed-latent edges.
@@ -150,12 +169,7 @@ def plot_circular(server, color='#4488aa', contract=0.002):
     # Adapted from https://matplotlib.org/users/path_tutorial.html
     codes = [Path.MOVETO, Path.CURVE4, Path.CURVE4, Path.CURVE4]
     for v1, v2 in edges:
-        xy = np.array([
-            [X[v1], Y[v1]],
-            [X[v1], Y[v1]],
-            [X[v2], Y[v2]],
-            [X[v2], Y[v2]],
-        ])
+        xy = np.array([XY[v1], XY[v1], XY[v2], XY[v2]])
         dist = 0.5 * ((X[v1] - X[v2])**2 + (Y[v1] - Y[v2])**2)**0.5
         R_arc = 1 - 4 / 3 * dist + 2 / 3 * dist**2
         xy[[1, 2], :] *= R_arc
