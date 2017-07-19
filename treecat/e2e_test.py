@@ -65,6 +65,7 @@ def test_e2e(model_type):
         server.observed_perplexity()
         server.latent_perplexity()
         server.latent_correlation()
+        server.sample_tree(10)
 
         print('Plotting latent structure')
         try:

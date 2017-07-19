@@ -21,6 +21,7 @@ from treecat.structure import OP_UP
 from treecat.structure import TreeStructure
 from treecat.structure import estimate_tree
 from treecat.structure import make_propagation_program
+from treecat.structure import sample_tree
 from treecat.util import SQRT_TINY
 from treecat.util import TINY
 from treecat.util import guess_counts
@@ -187,6 +188,16 @@ class TreeCatServer(ServerBase):
     @property
     def estimate_tree(self):
         return self._estimated_tree
+
+    def sample_tree(self, num_samples):
+        """Returns a num_samples-long list of trees, each a list of pairs."""
+        samples = []
+        edge_logits = self.edge_logits
+        edges = self.estimate_tree
+        for _ in range(num_samples):
+            edges = sample_tree(self._tree.complete_grid, edge_logits, edges)
+            samples.append(edges)
+        return samples
 
     @profile
     def sample(self, N, counts, data=None):
@@ -479,6 +490,17 @@ class EnsembleServer(ServerBase):
     def estimate_tree(self):
         return self._estimated_tree
 
+    def sample_tree(self, num_samples):
+        size = len(self._ensemble)
+        pvals = np.ones(size, dtype=np.float32) / size
+        sub_nums = np.random.multinomial(num_samples, pvals)
+        samples = []
+        for server, sub_num in zip(self._ensemble, sub_nums):
+            samples += server.sample_tree(sub_num)
+        np.random.shuffle(samples)
+        assert len(samples) == num_samples
+        return samples
+
     def sample(self, N, counts, data=None):
         size = len(self._ensemble)
         pvals = np.ones(size, dtype=np.float32) / size
@@ -570,6 +592,10 @@ class DataServer(object):
     def estimate_tree(self):
         """Returns a tuple of edges. Each edge is a (vertex,vertex) pair."""
         return self._server.estimate_tree
+
+    def sample_tree(self, num_samples):
+        """Returns a num_samples-long list of trees, each a list of pairs."""
+        return self._server.sample_tree(num_samples)
 
     @property
     def edge_logits(self):

@@ -31,8 +31,8 @@ class TreeStructure(object):
         self._vertices = np.arange(num_vertices, dtype=np.int32)
 
     def __eq__(self, other):
-        return (self._num_vertices == other._num_vertices
-                and (self._tree_grid == other._tree_grid).all())
+        return (self._num_vertices == other._num_vertices and
+                (self._tree_grid == other._tree_grid).all())
 
     def set_edges(self, edges):
         """Sets the edges of this tree.

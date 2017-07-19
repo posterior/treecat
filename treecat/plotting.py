@@ -2,6 +2,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from collections import Counter
+
 import numpy as np
 import scipy.linalg
 
@@ -76,7 +78,7 @@ def contract_positions(XY, edges, stepsize):
     heads = edges[:, 0]
     tails = edges[:, 1]
     diff = old[heads] - old[tails]
-    distances = (diff ** 2).sum(axis=1) ** 0.5
+    distances = (diff**2).sum(axis=1)**0.5
     spacing = distances.min()
     assert spacing > 0
     diff /= distances[:, np.newaxis]
@@ -86,11 +88,41 @@ def contract_positions(XY, edges, stepsize):
     return new
 
 
-def plot_circular(server, fontsize=8, color='#4488aa', contract=0.08):
+def plot_chord(begin, end, color, alpha=None):
+    """Plots a circular chord from begin to end.
+
+    This assumes that the outer circle is centered at (0,0).
+
+    Args:
+      begin: A [2]-shaped numpy array.
+      end: A [2]-shaped numpy array.
+      color: A matplotlib color spec.
+      apha: A float or None.
+    """
+    # Adapted from https://matplotlib.org/users/path_tutorial.html
+    from matplotlib import pyplot
+    from matplotlib.path import Path
+    from matplotlib.patches import PathPatch
+    codes = [Path.MOVETO, Path.CURVE4, Path.CURVE4, Path.CURVE4]
+    xy = np.array([begin, begin, end, end])
+    dist = ((begin - end)**2).sum()**0.5
+    xy[[1, 2], :] *= 1 - 2 / 3 * dist + 1 / 6 * dist**2
+    path = Path(xy, codes)
+    patch = PathPatch(
+        path, facecolor='none', edgecolor=color, lw=1, alpha=alpha)
+    pyplot.gca().add_patch(patch)
+
+
+def plot_circular(server,
+                  tree_samples=0,
+                  fontsize=8,
+                  color='#4488aa',
+                  contract=0.08):
     """Plot a tree stucture with features arranged around a circle.
 
     Args:
       server: A DataServer instance.
+      tree_samples: Number of trees to sample, in addition to the mode.
       fontsize: The font size for labels, in points.
       color: A matplotlib color spec for edge colors.
       contract: Contract vertex positions by this amount to visually hint
@@ -100,8 +132,6 @@ def plot_circular(server, fontsize=8, color='#4488aa', contract=0.08):
       matplotlib.
     """
     from matplotlib import pyplot
-    from matplotlib.path import Path
-    from matplotlib.patches import PathPatch
 
     # Extract ordered parameters to draw.
     edges = server.estimate_tree
@@ -126,7 +156,7 @@ def plot_circular(server, fontsize=8, color='#4488aa', contract=0.08):
     R_lat = 1.005
     adjust = np.pi / V
 
-    # Plot labels.
+    # Plot feature labels.
     for v, name in enumerate(feature_names):
         x, y = XY[v]
         rot = angle[v] * 360 / (2 * np.pi)
@@ -165,14 +195,15 @@ def plot_circular(server, fontsize=8, color='#4488aa', contract=0.08):
         color=color,
         lw=0.75)
 
-    # Plot arcs between features.
-    # Adapted from https://matplotlib.org/users/path_tutorial.html
-    codes = [Path.MOVETO, Path.CURVE4, Path.CURVE4, Path.CURVE4]
+    # Plot maximum a posteriori latent-latent edges.
     for v1, v2 in edges:
-        xy = np.array([XY[v1], XY[v1], XY[v2], XY[v2]])
-        dist = 0.5 * ((X[v1] - X[v2])**2 + (Y[v1] - Y[v2])**2)**0.5
-        R_arc = 1 - 4 / 3 * dist + 2 / 3 * dist**2
-        xy[[1, 2], :] *= R_arc
-        path = Path(xy, codes)
-        patch = PathPatch(path, facecolor='none', edgecolor=color, lw=1)
-        pyplot.gca().add_patch(patch)
+        plot_chord(XY[v1], XY[v2], color)
+
+    # Plot monte carlo sampled latent-latent edges.
+    edge_counts = Counter()
+    for sample in server.sample_tree(tree_samples):
+        edge_counts.update(sample)
+    for (v1, v2), count in edge_counts.items():
+        v1 = order[v1]
+        v2 = order[v2]
+        plot_chord(XY[v1], XY[v2], color, alpha=count / tree_samples)
