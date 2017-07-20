@@ -5,6 +5,7 @@ from __future__ import print_function
 import csv
 import functools
 import gzip
+import hashlib
 import io
 import logging
 import os
@@ -75,28 +76,25 @@ def pickle_load(filename):
             'Cannot determine format: {}'.format(os.path.basename(filename)))
 
 
-def sloppy_hash(obj):
+def fingerprint(obj):
+    serialized = json_dumps(obj)
+    hasher = hashlib.sha1()
     try:
-        return hash(obj)
+        hasher.update(serialized)
     except TypeError:
-        if isinstance(obj, (tuple, list)):
-            return hash(tuple(map(sloppy_hash, obj)))
-        if isinstance(obj, dict):
-            return sloppy_hash(obj.items())
-        elif isinstance(obj, np.ndarray):
-            obj.flags.writeable = False
-            return hash(obj.data)
-        raise
+        hasher.update(serialized.encode('utf-8'))
+    return hasher.hexdigest()
 
 
 def pickle_memoize(fun):
     if not os.path.exists(MEMO_STORE):
         os.makedirs(MEMO_STORE)
+    template = os.path.join(MEMO_STORE, '{}.{}.{{}}.pkz'.format(
+        fun.__module__, fun.__name__))
 
     @functools.wraps(fun)
     def decorated(*args):
-        memo_path = os.path.join(MEMO_STORE, '{}.{}.{}.pkz'.format(
-            fun.__module__, fun.__name__, sloppy_hash(args)))
+        memo_path = template.format(fingerprint(args))
         if os.path.exists(memo_path):
             return pickle_load(memo_path)
         else:
