@@ -44,7 +44,7 @@ else:
     jit = no_jit
 
 
-@jit
+@jit(nopython=True, cache=True)
 def jit_random_seed(seed):
     np.random.seed(seed)
 

@@ -6,6 +6,7 @@ import logging
 from collections import defaultdict
 from collections import deque
 
+import numba
 import numpy as np
 from scipy.sparse.csgraph import minimum_spanning_tree
 
@@ -13,6 +14,7 @@ from six.moves import range
 from six.moves import zip
 from treecat.util import COUNTERS
 from treecat.util import HISTOGRAMS
+from treecat.util import jit
 from treecat.util import jit_sample_from_probs
 from treecat.util import profile
 
@@ -80,6 +82,7 @@ class TreeStructure(object):
         self._complete_grid = None
 
 
+@jit(numba.int32(numba.int32, numba.int32), nopython=True, cache=True)
 def find_complete_edge(v1, v2):
     """Find the edge index k of an unsorted pair of vertices (v1, v2)."""
     if v2 < v1:
@@ -267,7 +270,7 @@ def make_propagation_program(grid, root=None):
 class MutableTree(object):
     """MCMC tree for random spanning trees."""
 
-    __slots__ = ['VEK', 'grid', 'e2k', 'k2e', 'neighbors', 'components']
+    __slots__ = ['VEK', 'grid', 'e2k', 'neighbors', 'components']
 
     def __init__(self, grid, edges):
         """Build a mutable spanning tree.
@@ -282,28 +285,23 @@ class MutableTree(object):
         assert grid.shape == (3, K)
         self.VEK = (V, E, K)
         self.grid = grid
-        self.k2e = {}
         self.e2k = {}
         self.neighbors = [set() for _ in range(V)]
         for e, (v1, v2) in enumerate(edges):
             k = find_complete_edge(v1, v2)
-            self.k2e[k] = e
             self.e2k[e] = k
             self.neighbors[v1].add(v2)
             self.neighbors[v2].add(v1)
         self.components = np.zeros([V], dtype=np.bool_)
         assert len(self.e2k) == self.VEK[1]
-        assert len(self.k2e) == self.VEK[1]
 
     @profile
     def remove_edge(self, e):
         """Remove edge at position e from tree and update data structures."""
         assert len(self.e2k) == self.VEK[1]
-        assert len(self.k2e) == self.VEK[1]
         neighbors = self.neighbors
         components = self.components
         k = self.e2k.pop(e)
-        self.k2e.pop(k)
         v1, v2 = self.grid[1:, k]
         neighbors[v1].remove(v2)
         neighbors[v2].remove(v1)
@@ -315,22 +313,18 @@ class MutableTree(object):
                 if not components[v2]:
                     stack.append(v2)
         assert len(self.e2k) == self.VEK[1] - 1
-        assert len(self.k2e) == self.VEK[1] - 1
         return k
 
     def add_edge(self, e, k):
         """Add edge k at location e and update data structures."""
         assert len(self.e2k) == self.VEK[1] - 1
-        assert len(self.k2e) == self.VEK[1] - 1
         v1, v2 = self.grid[1:, k]
         assert self.components[v1] != self.components[v2]
-        self.k2e[k] = e
         self.e2k[e] = k
         self.neighbors[v1].add(v2)
         self.neighbors[v2].add(v1)
         self.components[:] = False
         assert len(self.e2k) == self.VEK[1]
-        assert len(self.k2e) == self.VEK[1]
 
 
 @profile
@@ -386,6 +380,123 @@ def sample_tree(grid, edge_logits, edges, steps=1):
                 [len(valid_edges).bit_length()])
 
     edges = sorted((grid[1, k], grid[2, k]) for k in tree.e2k.values())
+    assert len(edges) == E
+    return edges
+
+
+@jit(nopython=True, cache=True)
+def jit_list_append(jit_list, item):
+    size = jit_list[0] + 1
+    jit_list[0] = size
+    jit_list[size] = item
+
+
+@jit(nopython=True, cache=True)
+def jit_list_pop(jit_list):
+    size = jit_list[0]
+    jit_list[0] = size - 1
+    return jit_list[size]
+
+
+@jit(nopython=True, cache=True)
+def jit_list_remove(jit_list, item):
+    pos = 1
+    while jit_list[pos] != item:
+        pos += 1
+    size = jit_list[0]
+    if pos != size:
+        jit_list[pos] = jit_list[size]
+    jit_list[0] = size - 1
+
+
+@jit(nopython=True, cache=True)
+def jit_remove_edge(grid, e2k, neighbors, components, e):
+    k = e2k[e]
+    v1, v2 = grid[1:3, k]
+    jit_list_remove(neighbors[v1], v2)
+    jit_list_remove(neighbors[v2], v1)
+    stack = np.zeros(neighbors.shape[0], np.int16)
+    jit_list_append(stack, v1)
+    while stack[0]:
+        v1 = jit_list_pop(stack)
+        components[v1] = True
+        for i in range(neighbors[v1, 0]):
+            v2 = neighbors[v1, i + 1]
+            if not components[v2]:
+                jit_list_append(stack, v2)
+    return k
+
+
+@jit(nopython=True, cache=True)
+def jit_add_edge(grid, e2k, neighbors, components, e, k):
+    e2k[e] = k
+    v1, v2 = grid[1:3, k]
+    jit_list_append(neighbors[v1], v2)
+    jit_list_append(neighbors[v2], v1)
+    components[:] = False
+
+
+@profile
+def jit_sample_tree(grid, edge_logits, edges, steps=1):
+    """Sample a random spanning tree of a dense weighted graph using MCMC.
+
+    This uses Gibbs sampling on edges. Consider E undirected edges that can
+    move around a graph of V=1+E vertices. The edges are constrained so that no
+    two edges can span the same pair of vertices and so that the edges must
+    form a spanning tree. To Gibbs sample, chose one of the E edges at random
+    and move it anywhere else in the graph. After we remove the edge, notice
+    that the graph is split into two connected components. The constraints
+    imply that the edge must be replaced so as to connect the two components.
+    Hence to Gibbs sample, we collect all such bridging (vertex,vertex) pairs
+    and sample from them in proportion to exp(edge_logits).
+
+    Args:
+      grid: A 3 x K array as returned by make_complete_graph().
+      edge_logits: A length-K array of nonnormalized log probabilities.
+      edges: A list of E initial edges in the form of (vertex,vertex) pairs.
+      steps: Number of MCMC steps to take.
+
+    Returns:
+      A list of (vertex, vertex) pairs.
+    """
+    logger.debug('jit_sample_tree sampling a random spanning tree')
+    COUNTERS.sample_tree_calls += 1
+    if len(edges) <= 1:
+        return edges
+    E = len(edges)
+    V = E + 1
+    e2k = np.zeros(E, np.int32)
+    neighbors = np.zeros((V, V), np.int16)
+    components = np.zeros(V, np.bool_)
+    for e in range(E):
+        v1, v2 = edges[e]
+        e2k[e] = find_complete_edge(v1, v2)
+        jit_list_append(neighbors[v1], v2)
+        jit_list_append(neighbors[v2], v1)
+
+    for step in range(steps):
+        for e in range(E):
+            e = np.random.randint(E)  # Sequential scanning doesn't work.
+            k1 = jit_remove_edge(grid, e2k, neighbors, components, e)
+            valid_edges = np.where(
+                components[grid[1, :]] != components[grid[2, :]])[0]
+            valid_probs = edge_logits[valid_edges]
+            valid_probs -= valid_probs.max()
+            valid_probs = np.exp(valid_probs)
+            total_prob = valid_probs.sum()
+            if total_prob > 0:
+                k2 = valid_edges[jit_sample_from_probs(valid_probs)]
+            else:
+                k2 = k1
+                COUNTERS.sample_tree_infeasible += 1
+            jit_add_edge(grid, e2k, neighbors, components, e, k2)
+
+            COUNTERS.sample_tree_propose += 1
+            COUNTERS.sample_tree_accept += (k1 != k2)
+            HISTOGRAMS.sample_tree_log2_choices.update(
+                [len(valid_edges).bit_length()])
+
+    edges = sorted((grid[1, k], grid[2, k]) for k in e2k)
     assert len(edges) == E
     return edges
 
