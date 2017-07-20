@@ -2,12 +2,17 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import io
+import os
+import re
 from collections import Counter
 
 import numpy as np
 import scipy.linalg
 
 from treecat.structure import order_vertices
+
+SVGPAN = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'svgpan.js')
 
 
 def layout_tree(correlation):
@@ -88,7 +93,7 @@ def contract_positions(XY, edges, stepsize):
     return new
 
 
-def plot_chord(begin, end, color, alpha=None):
+def plot_chord(begin, end, spacing, color, alpha=None):
     """Plots a circular chord from begin to end.
 
     This assumes that the outer circle is centered at (0,0).
@@ -96,6 +101,7 @@ def plot_chord(begin, end, color, alpha=None):
     Args:
       begin: A [2]-shaped numpy array.
       end: A [2]-shaped numpy array.
+      spacing: A float, extra spacing around the edge of the circle.
       color: A matplotlib color spec.
       apha: A float or None.
     """
@@ -106,7 +112,7 @@ def plot_chord(begin, end, color, alpha=None):
     codes = [Path.MOVETO, Path.CURVE4, Path.CURVE4, Path.CURVE4]
     xy = np.array([begin, begin, end, end])
     dist = ((begin - end)**2).sum()**0.5
-    xy[[1, 2], :] *= 1 - 2 / 3 * dist + 1 / 6 * dist**2
+    xy[[1, 2], :] *= 1 - 2 / 3 * dist + 1 / 6 * dist**2 - spacing
     path = Path(xy, codes)
     patch = PathPatch(
         path, facecolor='none', edgecolor=color, lw=1, alpha=alpha)
@@ -153,8 +159,9 @@ def plot_circular(server,
     Y = XY[:, 1]
     R_text = 1.06
     R_obs = 1.03
-    R_lat = 1.005
+    R_lat = 1.0
     adjust = np.pi / V
+    spacing = 1 / V
 
     # Plot feature labels.
     for v, name in enumerate(feature_names):
@@ -197,7 +204,7 @@ def plot_circular(server,
 
     # Plot maximum a posteriori latent-latent edges.
     for v1, v2 in edges:
-        plot_chord(XY[v1], XY[v2], color)
+        plot_chord(XY[v1], XY[v2], spacing, color)
 
     # Plot monte carlo sampled latent-latent edges.
     edge_counts = Counter()
@@ -206,4 +213,38 @@ def plot_circular(server,
     for (v1, v2), count in edge_counts.items():
         v1 = order[v1]
         v2 = order[v2]
-        plot_chord(XY[v1], XY[v2], color, alpha=count / tree_samples)
+        plot_chord(XY[v1], XY[v2], spacing, color, alpha=count / tree_samples)
+
+
+def add_panning_to_svg(source, destin=None):
+    """Add pan and zoom to an svg file by embedding SVGPan in the file.
+
+    Args:
+      source: Path to the input file.
+      destin: Path to the output file. Defaults to source.
+    """
+    if destin is None:
+        destin = source
+    with io.open(source) as f:
+        source_lines = list(f)
+    destin_lines = []
+    add = destin_lines.append
+    for line in source_lines:
+        if re.search('SVGPan library', line):
+            raise ValueError('{} already supports panning'.format(source))
+        if line.startswith('<svg '):
+            add('<svg height="100%" width="100%" version="1.1"'
+                ' xmlns="http://www.w3.org/2000/svg"'
+                ' xmlns:xlink="http://www.w3.org/1999/xlink">\n')
+            add('<script type="text/ecmascript"><![CDATA[\n')
+            add(open(SVGPAN).read())
+            add(']]></script>\n')
+            add('<g id="viewport" transform="scale(1,1) translate(0,0)">\n')
+        elif line.startswith('</svg>'):
+            add('</g>\n')
+            add(line)
+        else:
+            add(line)
+    with io.open(destin, 'w') as f:
+        for line in destin_lines:
+            f.write(line)
