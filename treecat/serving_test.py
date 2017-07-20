@@ -95,9 +95,16 @@ def one_hot(c, C):
     (10, 1, 2, 2),
     (10, 1, 2, 3),
     (10, 2, 2, 2),
-    pytest.mark.xfail((10, 2, 2, 3)),
-    pytest.mark.xfail((10, 3, 2, 2)),
-    pytest.mark.xfail((10, 4, 2, 2)),
+    (10, 2, 2, 3),
+    (10, 2, 3, 3),
+    (10, 3, 2, 2),
+    (10, 3, 3, 3),
+    (10, 4, 2, 2),
+    (10, 4, 3, 3),
+    (10, 5, 2, 2),
+    (10, 5, 3, 3),
+    (10, 6, 2, 2),
+    (10, 6, 3, 3),
 ])
 def test_server_logprob_normalized(N, V, C, M):
     model = generate_fake_model(N, V, C, M)
@@ -214,7 +221,6 @@ def test_server_conditional_gof(N, V, C, M):
     validate_gof(N, V, C, M, server, conditional=True)
 
 
-@pytest.mark.xfail
 @pytest.mark.parametrize('N,V,C,M', NVCM_EXAMPLES_FOR_GOF)
 def test_ensemble_unconditional_gof(N, V, C, M):
     ensemble = generate_fake_ensemble(N, V, C, M)
@@ -222,7 +228,6 @@ def test_ensemble_unconditional_gof(N, V, C, M):
     validate_gof(N, V, C, M, server, conditional=False)
 
 
-@pytest.mark.xfail
 @pytest.mark.parametrize('N,V,C,M', NVCM_EXAMPLES_FOR_GOF)
 def test_ensemble_conditional_gof(N, V, C, M):
     ensemble = generate_fake_ensemble(N, V, C, M)

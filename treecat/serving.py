@@ -151,9 +151,6 @@ class TreeCatServer(ServerBase):
         vert_prior = 0.5
         edge_prior = 0.5 / M
         feat_prior = 0.5 / M
-        meas_prior = feat_prior * np.array(
-            [(ragged_index[v + 1] - ragged_index[v]) for v in range(V)],
-            dtype=np.float32).reshape((V, 1))
 
         # These are posterior marginals for vertices and pairs of vertices.
         self._vert_probs = suffstats['vert_ss'].astype(np.float32) + vert_prior
@@ -165,15 +162,15 @@ class TreeCatServer(ServerBase):
         # information in the individual factors.
         self._edge_trans = self._edge_probs.copy()
         for e, v1, v2 in tree.tree_grid.T:
-            self._edge_trans[e, :, :] /= self._vert_probs[v1, np.newaxis, :]
-            self._edge_trans[e, :, :] /= self._vert_probs[v2, :, np.newaxis]
+            self._edge_trans[e, :, :] /= self._vert_probs[v1, :, np.newaxis]
+            self._edge_trans[e, :, :] /= self._vert_probs[v2, np.newaxis, :]
 
         # This is the conditional distribution of features given latent.
         self._feat_cond = suffstats['feat_ss'].astype(np.float32) + feat_prior
-        meas_probs = suffstats['meas_ss'].astype(np.float32) + meas_prior
         for v in range(V):
             beg, end = ragged_index[v:v + 2]
-            self._feat_cond[beg:end, :] /= meas_probs[v, np.newaxis, :]
+            feat_block = self._feat_cond[beg:end, :]
+            feat_block /= feat_block.sum(axis=0, keepdims=True)
 
         # These are used to inspect and visualize latent structure.
         self._edge_logits = model['edge_logits']
