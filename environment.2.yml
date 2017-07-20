@@ -1,8 +1,8 @@
-name: treecat3
+name: treecat2
 channels:
   - conda-forge
 dependencies:
-  - python=3.5
+  - python=2.7
   - flake8
   - goftests
   - isort
