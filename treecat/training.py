@@ -53,6 +53,42 @@ def logprob_dc(counts, prior, axis=None):
     return gammaln(np.add(counts, prior, dtype=np.float32)).sum(axis)
 
 
+@profile
+def compute_edge_logits(M, grid, assignments, edge_prior, vert_logits):
+    edge_logits = np.zeros(grid.shape[1], np.float32)
+    for k, v1, v2 in grid.T:
+        counts = count_pairs(assignments, v1, v2, M)
+        edge_logits[k] = (
+            logprob_dc(counts, edge_prior) - vert_logits[v1] - vert_logits[v2])
+    return edge_logits
+
+
+@jit
+def jit_gammaln(x):
+    # This uses Nemes' approximation, but appears to be too inacurate.
+    # https://math.stackexchange.com/questions/19236#1178780
+    return (0.5 * np.log(2 * np.pi) + (x - 0.5) * np.log(x) - x +
+            0.5 * x * np.log(x * np.sinh(1 / x) + 1 / 810 * x**-6))
+
+
+@profile
+@jit(nopython=True, cache=True)
+def jit_compute_edge_logits(M, grid, assignments, edge_prior, vert_logits):
+    K = grid.shape[1]
+    N, V = assignments.shape
+    edge_logits = np.zeros(K, np.float32)
+    for k in range(K):  # TODO Switch to prange.
+        v1, v2 = grid[1:3, k]
+        counts = np.zeros((M, M), np.int32)
+        for n in range(N):
+            counts[assignments[n, v1], assignments[n, v2]] += 1
+        probs = counts.astype(np.float32)
+        probs += edge_prior
+        edge_logits[k] = (
+            jit_gammaln(probs).sum() - vert_logits[v1] - vert_logits[v2])
+    return edge_logits
+
+
 def get_annealing_schedule(num_rows, epochs):
     """Iterator for subsample annealing yielding (action, arg) pairs.
 
@@ -304,12 +340,8 @@ class TreeCatTrainer(object):
         else:
             assignments = self._assignments[sorted(self._assigned_rows), :]
         vert_logits = logprob_dc(self._vert_ss, self._vert_prior, axis=1)
-        edge_logits = np.zeros([K], np.float32)
-        for k, v1, v2 in self._tree.complete_grid.T:
-            counts = count_pairs(assignments, v1, v2, M)
-            edge_logits[k] = (logprob_dc(counts, self._edge_prior) -
-                              vert_logits[v1] - vert_logits[v2])
-        return edge_logits
+        return compute_edge_logits(M, self._tree.complete_grid, assignments,
+                                   self._edge_prior, vert_logits)
 
     @profile
     def sample_tree(self):
