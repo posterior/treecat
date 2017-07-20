@@ -12,42 +12,17 @@ from treecat.generate import generate_dataset
 from treecat.generate import generate_tree
 from treecat.structure import TreeStructure
 from treecat.structure import estimate_tree
-from treecat.structure import make_complete_graph
 from treecat.structure import print_tree
 from treecat.structure import triangular_to_square
 from treecat.testutil import numpy_seterr
 from treecat.training import TreeCatTrainer
-from treecat.training import compute_edge_logits
 from treecat.training import get_annealing_schedule
-from treecat.training import jit_compute_edge_logits
 from treecat.training import train_ensemble
 from treecat.training import train_model
 from treecat.util import np_printoptions
 from treecat.util import set_random_seed
 
 numpy_seterr()
-
-
-@pytest.mark.parametrize('N,V,M', [
-    pytest.mark.xfail((1, 4, 2)),
-    pytest.mark.xfail((10, 4, 8)),
-    pytest.mark.xfail((100, 4, 8)),
-    (1000, 4, 8),
-    (10000, 4, 8),
-])
-def test_compute_edge_logits(N, V, M):
-    set_random_seed(N + M)
-    grid = make_complete_graph(V)
-    assignments = np.random.randint(M, size=(N, V)).astype(np.int32)
-    edge_prior = 0.5 / M
-    vert_logits = np.random.normal(size=V).astype(np.float32)
-    expected = compute_edge_logits(M, grid, assignments, edge_prior,
-                                   vert_logits)
-    actual = jit_compute_edge_logits(M, grid, assignments, edge_prior,
-                                     vert_logits)
-    assert actual.dtype == expected.dtype
-    assert actual.shape == expected.shape
-    assert np.allclose(actual, expected, atol=0.1)
 
 
 def test_get_annealing_schedule():
