@@ -74,13 +74,15 @@ def serve_files(model_path, config_path):
 
 
 @parsable
-def train(rows=100, cols=10, epochs=5, ensemble=1, tool='timers'):
+def train(rows=100, cols=10, epochs=5, clusters=32, tool='timers'):
     """Profile TreeCatTrainer on a random dataset.
     Available tools: timers, time, snakeviz, line_profiler, pdb
     """
     from treecat.generate import generate_dataset_file
     config = make_config(
-        learning_init_epochs=epochs, model_ensemble_size=ensemble)
+        learning_init_epochs=epochs,
+        model_num_clusters=clusters,
+        model_ensemble_size=1, )
     dataset_path = generate_dataset_file(rows, cols)
     with tempdir() as dirname:
         config_path = os.path.join(dirname, 'config.pkz')
