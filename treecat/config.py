@@ -9,7 +9,7 @@ DEFAULT_CONFIG = {
     'learning_init_epochs': 100,
     'learning_full_epochs': 1,
     'learning_estimate_tree': True,
-    'learning_sample_tree_steps': 10,
+    'learning_sample_tree_rate': 3,
     'serving_samples': 1024,
 }
 

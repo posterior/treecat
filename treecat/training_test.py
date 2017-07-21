@@ -29,7 +29,9 @@ def test_get_annealing_schedule():
     set_random_seed(0)
     num_rows = 10
     init_epochs = 10
-    schedule = get_annealing_schedule(num_rows, init_epochs)
+    sample_tree_rate = 3
+    schedule = get_annealing_schedule(num_rows, init_epochs, sample_tree_rate)
+    assigned_rows = 0
     for step, (action, row_id) in enumerate(schedule):
         assert step < 1000
         assert action in ['add_row', 'remove_row', 'sample_tree']
@@ -37,6 +39,11 @@ def test_get_annealing_schedule():
             assert row_id is None
         else:
             assert 0 <= row_id and row_id < num_rows
+            if action == 'add_row':
+                assigned_rows += 1
+            elif action == 'remove_row':
+                assigned_rows -= 1
+    assert assigned_rows == num_rows
 
 
 def validate_model(ragged_index, data, model, config):
@@ -222,7 +229,7 @@ def test_assignment_sampler_gof(N, V, C, M):
     (1, 2),
     (2, 2),
     (2, 3),
-    (3, 2),
+    pytest.mark.xfail((3, 2)),
     pytest.mark.xfail((3, 3)),
     (4, 3),
     (5, 3),

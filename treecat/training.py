@@ -72,12 +72,13 @@ def compute_edge_logits(M, grid, assignments, gammaln_table, vert_logits):
     return edge_logits
 
 
-def get_annealing_schedule(num_rows, epochs):
-    """Iterator for subsample annealing yielding (action, arg) pairs.
+def get_annealing_schedule(num_rows, epochs, sample_tree_rate):
+    """Iterator for subsample annealing, yielding (action, arg) pairs.
 
     Actions are one of: 'add_row', 'remove_row', or 'sample_tree'.
     The add and remove actions each provide a row_id arg.
     """
+    assert sample_tree_rate >= 1
     # Randomly shuffle rows.
     row_ids = list(range(num_rows))
     np.random.shuffle(row_ids)
@@ -90,22 +91,22 @@ def get_annealing_schedule(num_rows, epochs):
     remove_rate = epochs - 1.0
     state = 2.0 * epochs
 
-    # Sample the tree after each batch.
-    num_fresh = 0
-    num_stale = 0
-    while num_fresh + num_stale != num_rows:
+    # Sample the tree sample_tree_rate times per batch.
+    num_assigned = 0
+    next_batch = 0
+    while num_assigned < num_rows:
         if state >= 0.0:
             yield 'add_row', next(row_to_add)
             state -= remove_rate
-            num_fresh += 1
+            num_assigned += 1
+            next_batch -= sample_tree_rate
         else:
             yield 'remove_row', next(row_to_remove)
             state += add_rate
-            num_stale -= 1
-        if num_stale == 0 and num_fresh > 0:
+            num_assigned -= 1
+        if num_assigned > 0 and next_batch <= 0:
             yield 'sample_tree', None
-            num_stale = num_fresh
-            num_fresh = 0
+            next_batch = num_assigned
 
 
 @profile
@@ -338,18 +339,14 @@ class TreeCatTrainer(object):
             edges: A list of (vertex, vertex) pairs.
             edge_logits: A [K]-shaped numpy array of edge logits.
         """
-        logger.info('TreeCatTrainer.sample_tree given %d rows',
-                    len(self._assigned_rows))
+        logger.debug('TreeCatTrainer.sample_tree given %d rows',
+                     len(self._assigned_rows))
         complete_grid = self._tree.complete_grid
         edge_logits = self.get_edge_logits()
         assert edge_logits.shape[0] == complete_grid.shape[1]
         assert edge_logits.dtype == np.float32
         edges = self.get_edges()
-        edges = sample_tree(
-            complete_grid,
-            edge_logits,
-            edges,
-            steps=self._config['learning_sample_tree_steps'])
+        edges = sample_tree(complete_grid, edge_logits, edges)
         return edges, edge_logits
 
     def estimate_tree(self):
@@ -402,10 +399,14 @@ class TreeCatTrainer(object):
         set_random_seed(self._config['seed'])
         init_epochs = self._config['learning_init_epochs']
         full_epochs = self._config['learning_full_epochs']
+        sample_tree_rate = self._config['learning_sample_tree_rate']
+        num_rows = self._assignments.shape[0]
 
         # Initialize using subsample annealing.
-        num_rows = self._assignments.shape[0]
-        for action, row_id in get_annealing_schedule(num_rows, init_epochs):
+        assert len(self._assigned_rows) == 0
+        schedule = get_annealing_schedule(num_rows, init_epochs,
+                                          sample_tree_rate)
+        for action, row_id in schedule:
             if action == 'add_row':
                 self.add_row(row_id)
             elif action == 'remove_row':
@@ -417,6 +418,7 @@ class TreeCatTrainer(object):
                 raise ValueError(action)
 
         # Run full gibbs scans.
+        assert len(self._assigned_rows) == num_rows
         for step in range(full_epochs):
             edges, edge_logits = self.sample_tree()
             self.set_edges(edges)
@@ -425,6 +427,7 @@ class TreeCatTrainer(object):
                 self.add_row(row_id)
 
         # Compute optimal tree.
+        assert len(self._assigned_rows) == num_rows
         edges, edge_logits = self.estimate_tree()
         if self._config['learning_estimate_tree']:
             self.set_edges(edges)

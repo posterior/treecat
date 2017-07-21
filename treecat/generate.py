@@ -71,7 +71,8 @@ def generate_tree(num_cols):
     K = tree.complete_grid.shape[1]
     edge_logits = np.random.random([K])
     edges = [tuple(edge) for edge in tree.tree_grid[1:3, :].T]
-    edges = sample_tree(tree.complete_grid, edge_logits, edges, steps=10)
+    for _ in range(10):
+        edges = sample_tree(tree.complete_grid, edge_logits, edges)
     tree.set_edges(edges)
     return tree
 

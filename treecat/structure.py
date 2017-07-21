@@ -331,7 +331,7 @@ def find_valid_edges(grid, components, valid_edges):
 
 
 @profile
-def sample_tree(grid, edge_logits, edges, steps=1):
+def sample_tree(grid, edge_logits, edges):
     """Sample a random spanning tree of a dense weighted graph using MCMC.
 
     This uses Gibbs sampling on edges. Consider E undirected edges that can
@@ -348,7 +348,6 @@ def sample_tree(grid, edge_logits, edges, steps=1):
       grid: A 3 x K array as returned by make_complete_graph().
       edge_logits: A length-K array of nonnormalized log probabilities.
       edges: A list of E initial edges in the form of (vertex,vertex) pairs.
-      steps: Number of MCMC steps to take.
 
     Returns:
       A list of (vertex, vertex) pairs.
@@ -370,24 +369,23 @@ def sample_tree(grid, edge_logits, edges, steps=1):
         jit_list_append(neighbors[v2], v1)
     valid_edges = np.empty(K, np.int16)
 
-    for step in range(steps):
-        for e in range(E):
-            e = np.random.randint(E)  # Sequential scanning doesn't work.
-            k1 = jit_remove_edge(grid, e2k, neighbors, components, e)
-            num_valid_edges = find_valid_edges(grid, components, valid_edges)
-            valid_probs = edge_logits[valid_edges[:num_valid_edges]]
-            valid_probs -= valid_probs.max()
-            valid_probs = np.exp(valid_probs)
-            total_prob = valid_probs.sum()
-            if total_prob > 0:
-                k2 = valid_edges[jit_sample_from_probs(valid_probs)]
-            else:
-                k2 = k1
-                COUNTERS.sample_tree_infeasible += 1
-            jit_add_edge(grid, e2k, neighbors, components, e, k2)
+    for e in range(E):
+        e = np.random.randint(E)  # Sequential scanning doesn't work.
+        k1 = jit_remove_edge(grid, e2k, neighbors, components, e)
+        num_valid_edges = find_valid_edges(grid, components, valid_edges)
+        valid_probs = edge_logits[valid_edges[:num_valid_edges]]
+        valid_probs -= valid_probs.max()
+        valid_probs = np.exp(valid_probs)
+        total_prob = valid_probs.sum()
+        if total_prob > 0:
+            k2 = valid_edges[jit_sample_from_probs(valid_probs)]
+        else:
+            k2 = k1
+            COUNTERS.sample_tree_infeasible += 1
+        jit_add_edge(grid, e2k, neighbors, components, e, k2)
 
-            COUNTERS.sample_tree_propose += 1
-            COUNTERS.sample_tree_accept += (k1 != k2)
+        COUNTERS.sample_tree_propose += 1
+        COUNTERS.sample_tree_accept += (k1 != k2)
 
     edges = sorted((grid[1, k], grid[2, k]) for k in e2k)
     assert len(edges) == E
