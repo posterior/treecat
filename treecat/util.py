@@ -37,17 +37,11 @@ def no_jit(*args, **kwargs):
 
 
 jit = no_jit
-prange = range
 if TREECAT_JIT:
     try:
         from numba import jit
-        try:
-            from numba import prange
-        except ImportError:
-            warn('numba.prange not available')
     except ImportError:
         warn('numba.jit not available')
-assert prange  # Pacify flake8.
 
 
 @jit(nopython=True, cache=True)
@@ -86,7 +80,7 @@ def sizeof(array):
 
 
 @jit(nopython=True, cache=True)
-def jit_sample_from_probs(probs):
+def sample_from_progs(probs):
     """Sample from a vector of non-normalized probabilitites.
 
     Args:

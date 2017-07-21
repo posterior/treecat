@@ -19,9 +19,9 @@ from treecat.structure import make_propagation_program
 from treecat.structure import sample_tree
 from treecat.util import SQRT_TINY
 from treecat.util import jit
-from treecat.util import jit_sample_from_probs
 from treecat.util import parallel_map
 from treecat.util import profile
+from treecat.util import sample_from_progs
 from treecat.util import set_random_seed
 
 logger = logging.getLogger(__name__)
@@ -153,7 +153,7 @@ def jit_add_row(
             message += SQRT_TINY
         elif op == OP_ROOT:
             # Process root node.
-            assignments[v] = jit_sample_from_probs(message)
+            assignments[v] = sample_from_progs(message)
         elif op == OP_OUT:
             # Propagate latent state outward from parent to v.
             trans = edge_probs[e, :, :]
@@ -161,7 +161,7 @@ def jit_add_row(
                 trans = trans.T
             message *= trans[assignments[v2], :]
             message /= vert_probs[v, :]
-            assignments[v] = jit_sample_from_probs(message)
+            assignments[v] = sample_from_progs(message)
 
     # Update sufficient statistics.
     for v, m in enumerate(assignments):
@@ -339,8 +339,8 @@ class TreeCatTrainer(object):
             edges: A list of (vertex, vertex) pairs.
             edge_logits: A [K]-shaped numpy array of edge logits.
         """
-        logger.debug('TreeCatTrainer.sample_tree given %d rows',
-                     len(self._assigned_rows))
+        logger.info('TreeCatTrainer.sample_tree given %d rows',
+                    len(self._assigned_rows))
         complete_grid = self._tree.complete_grid
         edge_logits = self.get_edge_logits()
         assert edge_logits.shape[0] == complete_grid.shape[1]
