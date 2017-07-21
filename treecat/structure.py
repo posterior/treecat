@@ -13,7 +13,6 @@ from scipy.sparse.csgraph import minimum_spanning_tree
 from six.moves import range
 from six.moves import zip
 from treecat.util import COUNTERS
-from treecat.util import HISTOGRAMS
 from treecat.util import jit
 from treecat.util import jit_sample_from_probs
 from treecat.util import profile
@@ -320,6 +319,17 @@ def jit_add_edge(grid, e2k, neighbors, components, e, k):
     components[:] = False
 
 
+@jit(nopython=True, cache=True)
+def find_valid_edges(grid, components, valid_edges):
+    K = len(valid_edges)
+    pos = 0
+    for k in range(K):
+        if components[grid[1, k]] ^ components[grid[2, k]]:
+            valid_edges[pos] = k
+            pos += 1
+    return pos
+
+
 @profile
 def sample_tree(grid, edge_logits, edges, steps=1):
     """Sample a random spanning tree of a dense weighted graph using MCMC.
@@ -349,6 +359,7 @@ def sample_tree(grid, edge_logits, edges, steps=1):
         return edges
     E = len(edges)
     V = E + 1
+    K = V * (V - 1) // 2
     e2k = np.zeros(E, np.int32)
     neighbors = np.zeros((V, V), np.int16)
     components = np.zeros(V, np.bool_)
@@ -357,14 +368,14 @@ def sample_tree(grid, edge_logits, edges, steps=1):
         e2k[e] = find_complete_edge(v1, v2)
         jit_list_append(neighbors[v1], v2)
         jit_list_append(neighbors[v2], v1)
+    valid_edges = np.empty(K, np.int16)
 
     for step in range(steps):
         for e in range(E):
             e = np.random.randint(E)  # Sequential scanning doesn't work.
             k1 = jit_remove_edge(grid, e2k, neighbors, components, e)
-            valid_edges = np.where(
-                components[grid[1, :]] != components[grid[2, :]])[0]
-            valid_probs = edge_logits[valid_edges]
+            num_valid_edges = find_valid_edges(grid, components, valid_edges)
+            valid_probs = edge_logits[valid_edges[:num_valid_edges]]
             valid_probs -= valid_probs.max()
             valid_probs = np.exp(valid_probs)
             total_prob = valid_probs.sum()
@@ -377,8 +388,6 @@ def sample_tree(grid, edge_logits, edges, steps=1):
 
             COUNTERS.sample_tree_propose += 1
             COUNTERS.sample_tree_accept += (k1 != k2)
-            HISTOGRAMS.sample_tree_log2_choices.update(
-                [len(valid_edges).bit_length()])
 
     edges = sorted((grid[1, k], grid[2, k]) for k in e2k)
     assert len(edges) == E
