@@ -54,18 +54,8 @@ def logprob_dc(counts, prior, axis=None):
 
 
 @profile
-def compute_edge_logits(M, grid, assignments, edge_prior, vert_logits):
-    edge_logits = np.zeros(grid.shape[1], np.float32)
-    for k, v1, v2 in grid.T:
-        counts = count_pairs(assignments, v1, v2, M)
-        edge_logits[k] = (
-            logprob_dc(counts, edge_prior) - vert_logits[v1] - vert_logits[v2])
-    return edge_logits
-
-
-@profile
 @jit(nopython=True, cache=True)
-def jit_compute_edge_logits(M, grid, assignments, gammaln_table, vert_logits):
+def compute_edge_logits(M, grid, assignments, gammaln_table, vert_logits):
     K = grid.shape[1]
     N, V = assignments.shape
     edge_logits = np.zeros(K, np.float32)
@@ -336,9 +326,8 @@ class TreeCatTrainer(object):
         else:
             assignments = self._assignments[sorted(self._assigned_rows), :]
         vert_logits = logprob_dc(self._vert_ss, self._vert_prior, axis=1)
-        return jit_compute_edge_logits(M, self._tree.complete_grid,
-                                       assignments, self._gammaln_table,
-                                       vert_logits)
+        return compute_edge_logits(M, self._tree.complete_grid, assignments,
+                                   self._gammaln_table, vert_logits)
 
     @profile
     def sample_tree(self):
