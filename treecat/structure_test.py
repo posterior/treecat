@@ -18,7 +18,6 @@ from treecat.structure import OP_UP
 from treecat.structure import estimate_tree
 from treecat.structure import find_center_of_tree
 from treecat.structure import find_complete_edge
-from treecat.structure import jit_sample_tree
 from treecat.structure import make_complete_graph
 from treecat.structure import make_propagation_program
 from treecat.structure import make_tree
@@ -180,19 +179,8 @@ def test_make_propagation_program(edges, root):
     assert np.all(state == 4)
 
 
-@pytest.mark.parametrize('version,num_edges', [
-    ('jit', 1),
-    ('jit', 2),
-    ('jit', 3),
-    ('jit', 4),
-    ('jit', 5),
-    ('py', 1),
-    ('py', 2),
-    ('py', 3),
-    ('py', 4),
-    ('py', 5),
-])
-def test_sample_tree_gof(version, num_edges):
+@pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
+def test_sample_tree_gof(num_edges):
     set_random_seed(0)
     E = num_edges
     V = 1 + E
@@ -207,10 +195,7 @@ def test_sample_tree_gof(version, num_edges):
     counts = defaultdict(lambda: 0)
     edges = [(v, v + 1) for v in range(V - 1)]
     for _ in range(num_samples):
-        if version == 'jit':
-            edges = jit_sample_tree(grid, edge_logits, edges)
-        else:
-            edges = sample_tree(grid, edge_logits, edges)
+        edges = sample_tree(grid, edge_logits, edges)
         counts[tuple(edges)] += 1
     assert len(counts) == NUM_SPANNING_TREES[V]
 

@@ -15,8 +15,8 @@ from treecat.structure import OP_ROOT
 from treecat.structure import OP_UP
 from treecat.structure import TreeStructure
 from treecat.structure import estimate_tree
-from treecat.structure import jit_sample_tree
 from treecat.structure import make_propagation_program
+from treecat.structure import sample_tree
 from treecat.util import SQRT_TINY
 from treecat.util import jit
 from treecat.util import jit_sample_from_probs
@@ -356,7 +356,7 @@ class TreeCatTrainer(object):
         assert edge_logits.shape[0] == complete_grid.shape[1]
         assert edge_logits.dtype == np.float32
         edges = self.get_edges()
-        edges = jit_sample_tree(
+        edges = sample_tree(
             complete_grid,
             edge_logits,
             edges,

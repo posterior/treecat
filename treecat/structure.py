@@ -267,123 +267,6 @@ def make_propagation_program(grid, root=None):
     return program
 
 
-class MutableTree(object):
-    """MCMC tree for random spanning trees."""
-
-    __slots__ = ['VEK', 'grid', 'e2k', 'neighbors', 'components']
-
-    def __init__(self, grid, edges):
-        """Build a mutable spanning tree.
-
-        Args:
-          grid: A 3 x K array as returned by make_complete_graph().
-          edges: A list of E edges in the form of (vertex,vertex) pairs.
-        """
-        E = len(edges)
-        V = 1 + E
-        K = V * (V - 1) // 2
-        assert grid.shape == (3, K)
-        self.VEK = (V, E, K)
-        self.grid = grid
-        self.e2k = {}
-        self.neighbors = [set() for _ in range(V)]
-        for e, (v1, v2) in enumerate(edges):
-            k = find_complete_edge(v1, v2)
-            self.e2k[e] = k
-            self.neighbors[v1].add(v2)
-            self.neighbors[v2].add(v1)
-        self.components = np.zeros([V], dtype=np.bool_)
-        assert len(self.e2k) == self.VEK[1]
-
-    @profile
-    def remove_edge(self, e):
-        """Remove edge at position e from tree and update data structures."""
-        assert len(self.e2k) == self.VEK[1]
-        neighbors = self.neighbors
-        components = self.components
-        k = self.e2k.pop(e)
-        v1, v2 = self.grid[1:, k]
-        neighbors[v1].remove(v2)
-        neighbors[v2].remove(v1)
-        stack = [v1]
-        while stack:
-            v1 = stack.pop()
-            components[v1] = True
-            for v2 in neighbors[v1]:
-                if not components[v2]:
-                    stack.append(v2)
-        assert len(self.e2k) == self.VEK[1] - 1
-        return k
-
-    def add_edge(self, e, k):
-        """Add edge k at location e and update data structures."""
-        assert len(self.e2k) == self.VEK[1] - 1
-        v1, v2 = self.grid[1:, k]
-        assert self.components[v1] != self.components[v2]
-        self.e2k[e] = k
-        self.neighbors[v1].add(v2)
-        self.neighbors[v2].add(v1)
-        self.components[:] = False
-        assert len(self.e2k) == self.VEK[1]
-
-
-@profile
-def sample_tree(grid, edge_logits, edges, steps=1):
-    """Sample a random spanning tree of a dense weighted graph using MCMC.
-
-    This uses Gibbs sampling on edges. Consider E undirected edges that can
-    move around a graph of V=1+E vertices. The edges are constrained so that no
-    two edges can span the same pair of vertices and so that the edges must
-    form a spanning tree. To Gibbs sample, chose one of the E edges at random
-    and move it anywhere else in the graph. After we remove the edge, notice
-    that the graph is split into two connected components. The constraints
-    imply that the edge must be replaced so as to connect the two components.
-    Hence to Gibbs sample, we collect all such bridging (vertex,vertex) pairs
-    and sample from them in proportion to exp(edge_logits).
-
-    Args:
-      grid: A 3 x K array as returned by make_complete_graph().
-      edge_logits: A length-K array of nonnormalized log probabilities.
-      edges: A list of E initial edges in the form of (vertex,vertex) pairs.
-      steps: Number of MCMC steps to take.
-
-    Returns:
-      A list of (vertex, vertex) pairs.
-    """
-    logger.debug('sample_tree sampling a random spanning tree')
-    COUNTERS.sample_tree_calls += 1
-    if len(edges) <= 1:
-        return edges
-    tree = MutableTree(grid, edges)
-    V, E, K = tree.VEK
-
-    for step in range(steps):
-        for e in range(E):
-            e = np.random.randint(E)  # Sequential scanning doesn't work.
-            k1 = tree.remove_edge(e)
-            valid_edges = np.where(
-                tree.components[grid[1, :]] != tree.components[grid[2, :]])[0]
-            valid_probs = edge_logits[valid_edges]
-            valid_probs -= valid_probs.max()
-            np.exp(valid_probs, out=valid_probs)
-            total_prob = valid_probs.sum()
-            if total_prob > 0:
-                k2 = valid_edges[jit_sample_from_probs(valid_probs)]
-            else:
-                k2 = k1
-                COUNTERS.sample_tree_infeasible += 1
-            tree.add_edge(e, k2)
-
-            COUNTERS.sample_tree_propose += 1
-            COUNTERS.sample_tree_accept += (k1 != k2)
-            HISTOGRAMS.sample_tree_log2_choices.update(
-                [len(valid_edges).bit_length()])
-
-    edges = sorted((grid[1, k], grid[2, k]) for k in tree.e2k.values())
-    assert len(edges) == E
-    return edges
-
-
 @jit(nopython=True, cache=True)
 def jit_list_append(jit_list, item):
     size = jit_list[0] + 1
@@ -400,6 +283,7 @@ def jit_list_pop(jit_list):
 
 @jit(nopython=True, cache=True)
 def jit_list_remove(jit_list, item):
+    """Warning: this does not preserve order."""
     pos = 1
     while jit_list[pos] != item:
         pos += 1
@@ -437,7 +321,7 @@ def jit_add_edge(grid, e2k, neighbors, components, e, k):
 
 
 @profile
-def jit_sample_tree(grid, edge_logits, edges, steps=1):
+def sample_tree(grid, edge_logits, edges, steps=1):
     """Sample a random spanning tree of a dense weighted graph using MCMC.
 
     This uses Gibbs sampling on edges. Consider E undirected edges that can
@@ -459,7 +343,7 @@ def jit_sample_tree(grid, edge_logits, edges, steps=1):
     Returns:
       A list of (vertex, vertex) pairs.
     """
-    logger.debug('jit_sample_tree sampling a random spanning tree')
+    logger.debug('sample_tree sampling a random spanning tree')
     COUNTERS.sample_tree_calls += 1
     if len(edges) <= 1:
         return edges
