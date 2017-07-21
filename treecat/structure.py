@@ -367,7 +367,7 @@ def sample_tree(grid, edge_logits, edges):
         e2k[e] = find_complete_edge(v1, v2)
         jit_list_append(neighbors[v1], v2)
         jit_list_append(neighbors[v2], v1)
-    valid_edges = np.empty(K, np.int16)
+    valid_edges = np.empty(K, np.int32)
 
     for e in range(E):
         e = np.random.randint(E)  # Sequential scanning doesn't work.
