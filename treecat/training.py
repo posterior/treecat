@@ -170,6 +170,7 @@ def jit_add_row(
         m1 = assignments[tree_grid[1, e]]
         m2 = assignments[tree_grid[2, e]]
         edge_ss[e, m1, m2] += 1
+        edge_probs[e, m1, m2] += 1
     for v, m in enumerate(assignments):
         beg, end = ragged_index[v:v + 2]
         feat_ss[beg:end, m] += data_row[beg:end]
@@ -186,7 +187,8 @@ def jit_remove_row(
         vert_ss,
         edge_ss,
         feat_ss,
-        meas_ss, ):
+        meas_ss,
+        edge_probs, ):
     # Update sufficient statistics.
     for v, m in enumerate(assignments):
         vert_ss[v, m] -= 1
@@ -194,6 +196,7 @@ def jit_remove_row(
         m1 = assignments[tree_grid[1, e]]
         m2 = assignments[tree_grid[2, e]]
         edge_ss[e, m1, m2] -= 1
+        edge_probs[e, m1, m2] -= 1
     for v, m in enumerate(assignments):
         beg, end = ragged_index[v:v + 2]
         feat_ss[beg:end, m] -= data_row[beg:end]
@@ -262,15 +265,17 @@ class TreeCatTrainer(object):
         self._feat_probs = np.empty(self._feat_ss.shape, np.float32)
         self._meas_probs = np.empty(self._meas_ss.shape, np.float32)
 
+        # Maintain edge_probs.
+        np.add(self._edge_ss, self._edge_prior, out=self._edge_probs)
+
     @profile
     def add_row(self, row_id):
         logger.debug('TreeCatTrainer.add_row %d', row_id)
         assert row_id not in self._assigned_rows, row_id
         self._assigned_rows.add(row_id)
 
-        # This is a little silly: we copy the entire model.
+        # These are used for scratch work, so we create them each step.
         np.add(self._vert_ss, self._vert_prior, out=self._vert_probs)
-        np.add(self._edge_ss, self._edge_prior, out=self._edge_probs)
         np.add(self._feat_ss, self._feat_prior, out=self._feat_probs)
         np.add(self._meas_ss, self._meas_prior, out=self._meas_probs)
 
@@ -303,7 +308,8 @@ class TreeCatTrainer(object):
             self._vert_ss,
             self._edge_ss,
             self._feat_ss,
-            self._meas_ss, )
+            self._meas_ss,
+            self._edge_probs, )
 
     def get_edges(self):
         return [tuple(edge) for edge in self._tree.tree_grid[1:3, :].T]
@@ -314,6 +320,7 @@ class TreeCatTrainer(object):
         assignments = self._assignments[sorted(self._assigned_rows), :]
         for e, v1, v2 in self._tree.tree_grid.T:
             self._edge_ss[e, :, :] = count_pairs(assignments, v1, v2, M)
+        np.add(self._edge_ss, self._edge_prior, out=self._edge_probs)
         self._program = make_propagation_program(self._tree.tree_grid)
 
     def get_edge_logits(self):
