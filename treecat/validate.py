@@ -126,6 +126,7 @@ def train(dataset_path, param_csv_path, models_dir, **options):
     header, configs = read_param_csv(param_csv_path, **options)
     configs.sort(key=lambda c: c['learning_init_epochs'])
     tasks = [(dataset_path, c, models_dir) for c in configs]
+    print('Scheduling {} tasks'.format(len(tasks)))
     parallel_map(_train, tasks)
 
 
@@ -135,8 +136,11 @@ def _eval(task):
     # Load a server with the trained model.
     model_path = os.path.join(models_dir,
                               'model.{}.pkz'.format(serialize_config(config)))
+    try:
+        model = pickle_load(model_path)
+    except (OSError, EOFError):
+        return {'config': config}
     print('Eval {}'.format(os.path.basename(model_path)))
-    model = pickle_load(model_path)
     server = TreeCatServer(model)
 
     # Split data for crossvalidation.
@@ -164,8 +168,11 @@ def _eval(task):
     max_counts = obs_counts.max(axis=0)
     median = server.median(max_counts, training_data)
     observed = (obs_counts == max_counts[np.newaxis, :])
-    validation = mask & make_ragged_mask(ragged_index, observed.T).T
-    l1_loss = np.abs(median - data)[validation].mean()
+    observed = make_ragged_mask(ragged_index, observed.T).T
+    relevant = observed & mask
+    validation_data[~relevant] = 0
+    median[~relevant] = 0
+    l1_loss = 0.5 * np.abs(median - validation_data).sum() / relevant.sum()
 
     return {'config': config, 'logprob': logprob, 'l1_loss': l1_loss}
 
@@ -176,14 +183,14 @@ def eval(dataset_path, param_csv_path, models_dir, result_path, **options):
     options = {k: int(v) for k, v in options.items()}
     header, configs = read_param_csv(param_csv_path, **options)
     tasks = [(dataset_path, c, models_dir) for c in configs]
-    print('Tuning via {} tasks'.format(len(tasks)))
+    print('Scheduling {} tasks'.format(len(tasks)))
     result = parallel_map(_eval, tasks)
 
     print('\t'.join(header + ['pogprob', 'l1_loss']))
     lines = [
         [row['config'][param] for param in header] +  #
         [row['logprob'], row['l1_loss']]  #
-        for row in result
+        for row in result if 'logprob' in row and 'l1_loss' in row
     ]
     lines.sort()
     for line in lines:

@@ -70,6 +70,7 @@ def serve_files(model_path, config_path):
     counts = np.ones(model['tree'].num_vertices, np.int8)
     samples = server.sample(num_samples, counts)
     server.logprob(samples)
+    server.median(counts, samples)
     server.latent_correlation()
 
 
