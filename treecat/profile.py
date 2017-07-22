@@ -22,28 +22,34 @@ FILE = os.path.abspath(__file__)
 parsable = parsable.Parsable()
 
 
+def check_call_env(cmd, env):
+    print(' '.join(cmd))
+    ret = Popen(cmd, env=env).wait()
+    if ret:
+        raise CalledProcessError(returncode=ret, cmd=cmd)
+
+
 def run_with_tool(cmd, tool, dirname):
     profile_path = os.path.join(dirname, 'profile_train.prof')
+    env = os.environ.copy()
+    env['TREECAT_THREADS'] = '1'
     if tool == 'timers':
-        env = os.environ.copy()
         env.setdefault('TREECAT_LOG_LEVEL', '15')
-        cmd = [PYTHON, '-O'] + cmd
-        ret = Popen(cmd, env=env).wait()
-        if ret:
-            raise CalledProcessError(returncode=ret, cmd=cmd)
+        check_call_env([PYTHON, '-O'] + cmd, env)
     elif tool == 'time':
         if platform.platform().startswith('Darwin'):
             gnu_time = 'gtime'
         else:
             gnu_time = '/usr/bin/time'
-        check_call([gnu_time, '-v', PYTHON, '-O'] + cmd)
+        check_call_env([gnu_time, '-v', PYTHON, '-O'] + cmd, env)
     elif tool == 'snakeviz':
-        check_call([PYTHON, '-m', 'cProfile', '-o', profile_path] + cmd)
+        check_call_env([PYTHON, '-m', 'cProfile', '-o', profile_path] + cmd,
+                       env)
         check_call(['snakeviz', profile_path])
     elif tool == 'line_profiler':
-        check_call(['kernprof', '-l', '-v', '-o', profile_path] + cmd)
+        check_call_env(['kernprof', '-l', '-v', '-o', profile_path] + cmd, env)
     elif tool == 'pdb':
-        check_call([PYTHON, '-m', 'pdb'] + cmd)
+        check_call_env([PYTHON, '-m', 'pdb'] + cmd, env)
     else:
         raise ValueError('Unknown tool: {}'.format(tool))
 
@@ -58,7 +64,7 @@ def train_files(dataset_path, config_path):
 
 
 @parsable
-def serve_files(model_path, config_path):
+def serve_files(model_path, config_path, num_samples):
     """INTERNAL Serve from pickled model, config."""
     from treecat.serving import TreeCatServer
     import numpy as np
@@ -66,9 +72,8 @@ def serve_files(model_path, config_path):
     config = pickle_load(config_path)
     model['config'] = config
     server = TreeCatServer(model)
-    num_samples = config['serving_samples']
     counts = np.ones(model['tree'].num_vertices, np.int8)
-    samples = server.sample(num_samples, counts)
+    samples = server.sample(int(num_samples), counts)
     server.logprob(samples)
     server.median(counts, samples)
     server.latent_correlation()
@@ -103,7 +108,33 @@ def serve(rows=100, cols=10, cats=4, tool='timers'):
     with tempdir() as dirname:
         config_path = os.path.join(dirname, 'config.pkz')
         pickle_dump(config, config_path)
-        cmd = [FILE, 'serve_files', model_path, config_path]
+        cmd = [FILE, 'serve_files', model_path, config_path, str(rows)]
+        run_with_tool(cmd, tool, dirname)
+
+
+@parsable
+def eval(rows=100, cols=10, cats=4, tool='timers'):
+    """Profile treecat.validate.eval on a random dataset.
+    Available tools: timers, time, snakeviz, line_profiler, pdb
+    """
+    from treecat.generate import generate_dataset_file
+    from treecat.validate import train
+    dataset_path = generate_dataset_file(rows, cols)
+    validate_py = os.path.join(os.path.dirname(FILE), 'validate.py')
+    with tempdir() as dirname:
+        param_csv_path = os.path.join(dirname, 'param.csv')
+        with open(param_csv_path, 'w') as f:
+            f.write('learning_init_epochs\n2')
+        train(dataset_path, param_csv_path, dirname, learning_init_epochs=2)
+        cmd = [
+            validate_py,
+            'eval',
+            dataset_path,
+            param_csv_path,
+            dirname,
+            os.path.join(dirname, 'tuning.pkz'),
+            'learning_init_epochs=2',
+        ]
         run_with_tool(cmd, tool, dirname)
 
 

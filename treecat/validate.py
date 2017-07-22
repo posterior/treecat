@@ -18,6 +18,7 @@ from treecat.training import train_model
 from treecat.util import count_observations
 from treecat.util import make_ragged_mask
 from treecat.util import parallel_map
+from treecat.util import profile
 from treecat.util import set_random_seed
 
 parsable = parsable.Parsable()
@@ -92,7 +93,7 @@ def read_param_csv(param_csv_path, **options):
     return header, configs
 
 
-def _train(task):
+def process_train_task(task):
     (dataset_path, config, models_dir) = task
     model_path = os.path.join(models_dir,
                               'model.{}.pkz'.format(serialize_config(config)))
@@ -127,10 +128,11 @@ def train(dataset_path, param_csv_path, models_dir, **options):
     configs.sort(key=lambda c: c['learning_init_epochs'])
     tasks = [(dataset_path, c, models_dir) for c in configs]
     print('Scheduling {} tasks'.format(len(tasks)))
-    parallel_map(_train, tasks)
+    parallel_map(process_train_task, tasks)
 
 
-def _eval(task):
+@profile
+def process_eval_task(task):
     (dataset_path, config, models_dir) = task
 
     # Load a server with the trained model.
@@ -172,7 +174,8 @@ def _eval(task):
     relevant = observed & mask
     validation_data[~relevant] = 0
     median[~relevant] = 0
-    l1_loss = 0.5 * np.abs(median - validation_data).sum() / relevant.sum()
+    l1_loss = 0.5 * np.abs(median - validation_data).sum()
+    l1_loss /= relevant.sum() + 0.1
 
     return {'config': config, 'logprob': logprob, 'l1_loss': l1_loss}
 
@@ -184,7 +187,7 @@ def eval(dataset_path, param_csv_path, models_dir, result_path, **options):
     header, configs = read_param_csv(param_csv_path, **options)
     tasks = [(dataset_path, c, models_dir) for c in configs]
     print('Scheduling {} tasks'.format(len(tasks)))
-    result = parallel_map(_eval, tasks)
+    result = parallel_map(process_eval_task, tasks)
 
     print('\t'.join(header + ['pogprob', 'l1_loss']))
     lines = [
