@@ -22,8 +22,6 @@ from treecat.structure import TreeStructure
 from treecat.structure import estimate_tree
 from treecat.structure import make_propagation_program
 from treecat.structure import sample_tree
-from treecat.util import SQRT_TINY
-from treecat.util import TINY
 from treecat.util import guess_counts
 from treecat.util import profile
 from treecat.util import quantize_from_probs2
@@ -245,9 +243,7 @@ class TreeCatServer(ServerBase):
                 if v > v2:
                     trans = trans.T
                 message *= np.dot(trans, messages_in[v2, :])
-                # Scale message for numerical stability.
-                message /= message.max()
-                message += SQRT_TINY
+                message /= message.max()  # Scale for numerical stability.
             elif op == OP_ROOT:
                 # Process root node.
                 messages_out[v, :, :] = messages_in[v, np.newaxis, :]
@@ -259,9 +255,8 @@ class TreeCatServer(ServerBase):
                 if v2 > v:
                     trans = trans.T
                 message *= trans[vert_samples[v2, :], :]
-                # Scale message for numerical stability.
+                # Scale for numerical stability.
                 message /= message.max(axis=1, keepdims=True)
-                message += SQRT_TINY
             elif op == OP_DOWN:
                 # Sample latent and observed assignment.
                 message = messages_out[v, :, :]
@@ -369,9 +364,8 @@ class TreeCatServer(ServerBase):
                 if v > v2:
                     trans = trans.T
                 message *= np.dot(trans, messages_in[v2, :, :])
-                # Scale message for numerical stability.
+                # Scale for numerical stability.
                 message /= message.max(axis=0, keepdims=True)
-                message += SQRT_TINY
             elif op == OP_OUT:
                 # Propagate latent state outward from parent to v.
                 trans = edge_trans[e, :, :]
@@ -385,7 +379,6 @@ class TreeCatServer(ServerBase):
                 beg, end = self._ragged_index[v:v + 2]
                 marginal = result[:, beg:end]
                 marginal[...] = np.dot(feat_cond[beg:end, :], message).T
-                marginal += TINY
                 marginal /= marginal.sum(axis=1, keepdims=True)
 
         return result

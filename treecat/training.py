@@ -17,7 +17,6 @@ from treecat.structure import TreeStructure
 from treecat.structure import estimate_tree
 from treecat.structure import make_propagation_program
 from treecat.structure import sample_tree
-from treecat.util import SQRT_TINY
 from treecat.util import jit
 from treecat.util import parallel_map
 from treecat.util import profile
@@ -148,9 +147,7 @@ def jit_add_row(
                 trans = trans.T
             message *= np.dot(trans, messages[v2, :] / vert_probs[v2, :])
             message /= vert_probs[v, :]
-            # Scale message for numerical stability.
-            message /= message.max()
-            message += SQRT_TINY
+            message /= message.max()  # Scale for numerical stability.
         elif op == OP_ROOT:
             # Process root node.
             assignments[v] = sample_from_probs(message)
