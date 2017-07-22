@@ -15,7 +15,7 @@ from six.moves import zip
 from treecat.util import COUNTERS
 from treecat.util import jit
 from treecat.util import profile
-from treecat.util import sample_from_progs
+from treecat.util import sample_from_probs
 
 logger = logging.getLogger(__name__)
 
@@ -378,7 +378,7 @@ def sample_tree(grid, edge_logits, edges):
         valid_probs = np.exp(valid_probs)
         total_prob = valid_probs.sum()
         if total_prob > 0:
-            k2 = valid_edges[sample_from_progs(valid_probs)]
+            k2 = valid_edges[sample_from_probs(valid_probs)]
         else:
             k2 = k1
             COUNTERS.sample_tree_infeasible += 1

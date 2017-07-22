@@ -80,7 +80,7 @@ def sizeof(array):
 
 
 @jit(nopython=True, cache=True)
-def sample_from_progs(probs):
+def sample_from_probs(probs):
     """Sample from a vector of non-normalized probabilitites.
 
     Args:

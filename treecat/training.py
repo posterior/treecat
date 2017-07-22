@@ -21,7 +21,7 @@ from treecat.util import SQRT_TINY
 from treecat.util import jit
 from treecat.util import parallel_map
 from treecat.util import profile
-from treecat.util import sample_from_progs
+from treecat.util import sample_from_probs
 from treecat.util import set_random_seed
 
 logger = logging.getLogger(__name__)
@@ -153,7 +153,7 @@ def jit_add_row(
             message += SQRT_TINY
         elif op == OP_ROOT:
             # Process root node.
-            assignments[v] = sample_from_progs(message)
+            assignments[v] = sample_from_probs(message)
         elif op == OP_OUT:
             # Propagate latent state outward from parent to v.
             trans = edge_probs[e, :, :]
@@ -161,7 +161,7 @@ def jit_add_row(
                 trans = trans.T
             message *= trans[assignments[v2], :]
             message /= vert_probs[v, :]
-            assignments[v] = sample_from_progs(message)
+            assignments[v] = sample_from_probs(message)
 
     # Update sufficient statistics.
     for v, m in enumerate(assignments):
