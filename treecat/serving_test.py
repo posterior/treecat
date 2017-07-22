@@ -18,6 +18,7 @@ from treecat.testutil import TINY_DATA
 from treecat.testutil import TINY_RAGGED_INDEX
 from treecat.testutil import make_seed
 from treecat.testutil import numpy_seterr
+from treecat.testutil import xfail_param
 from treecat.training import train_ensemble
 from treecat.training import train_model
 from treecat.util import set_random_seed
@@ -187,7 +188,7 @@ NVCM_EXAMPLES_FOR_GOF = [
     (10, 1, 2, 3),
     (10, 2, 2, 2),
     (10, 3, 2, 2),
-    pytest.mark.xfail((10, 4, 2, 2), reason='flaky'),
+    xfail_param(10, 4, 2, 2, reason='flaky'),
     (20, 1, 2, 2),
     (20, 1, 2, 3),
     (20, 2, 2, 2),
@@ -197,7 +198,7 @@ NVCM_EXAMPLES_FOR_GOF = [
     (40, 1, 2, 3),
     (40, 2, 2, 2),
     (40, 3, 2, 2),
-    pytest.mark.xfail((40, 4, 2, 2), reason='flaky'),
+    xfail_param(40, 4, 2, 2, reason='flaky'),
 ]
 
 

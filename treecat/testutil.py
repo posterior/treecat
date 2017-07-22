@@ -8,6 +8,7 @@ import shutil
 import tempfile
 
 import numpy as np
+import pytest
 
 from treecat.config import make_config
 from treecat.format import fingerprint
@@ -30,6 +31,10 @@ TINY_DATA = np.array(
         [0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
     ],
     dtype=np.int8)
+
+
+def xfail_param(*args, **kwargs):
+    return pytest.param(*args, marks=pytest.mark.xfail(**kwargs))
 
 
 def numpy_seterr():

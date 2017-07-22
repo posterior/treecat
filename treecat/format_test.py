@@ -2,7 +2,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import itertools
 import os
 
 import numpy as np
@@ -33,8 +32,8 @@ EXAMPLE_DATA = [
 ]
 
 
-@pytest.mark.parametrize('data,ext',
-                         itertools.product(EXAMPLE_DATA, ['pkz', 'jz']))
+@pytest.mark.parametrize('data', EXAMPLE_DATA)
+@pytest.mark.parametrize('ext', ['pkz', 'jz'])
 def test_pickle(data, ext):
     with tempdir() as dirname:
         filename = os.path.join(dirname, 'test.{}'.format(ext))
