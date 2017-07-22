@@ -38,10 +38,12 @@ def test_e2e(model_type):
         dataset = {'schema': schema, 'data': data}
 
         print('Train model')
-        if model_type == 'TreeCatServer':
+        if model_type == 'single':
             model = train_model(ragged_index, data, config)
-        else:
+        elif model_type == 'ensemble':
             model = train_ensemble(ragged_index, data, config)
+        else:
+            raise ValueError(model_type)
 
         print('Serve model')
         server = serve_model(dataset, model)
@@ -59,12 +61,19 @@ def test_e2e(model_type):
         except NotImplementedError:
             warn('{} median not implemented'.format(model_type))
             pass
+        try:
+            mode = server.mode([evidence])
+            server.logprob(mode)
+        except NotImplementedError:
+            warn('{} mode not implemented'.format(model_type))
+            pass
 
         print('Examine latent structure')
         server.feature_density()
         server.observed_perplexity()
         server.latent_perplexity()
         server.latent_correlation()
+        server.estimate_tree()
         server.sample_tree(10)
 
         print('Plotting latent structure')

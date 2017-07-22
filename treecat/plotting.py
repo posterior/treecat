@@ -47,7 +47,7 @@ def nx_plot_tree(server, node_size=200, **options):
       options: Options passed to networkx.draw().
     """
     import networkx as nx
-    edges = server.estimate_tree
+    edges = server.estimate_tree()
     perplexity = server.latent_perplexity()
     feature_names = server.feature_names
 
@@ -140,7 +140,7 @@ def plot_circular(server,
     from matplotlib import pyplot
 
     # Extract ordered parameters to draw.
-    edges = server.estimate_tree
+    edges = server.estimate_tree()
     order, order_inv = order_vertices(edges)
     edges = np.array(
         [[order[v1], order[v2]] for v1, v2 in edges], dtype=np.int32)

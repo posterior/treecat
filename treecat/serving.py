@@ -180,7 +180,6 @@ class TreeCatServer(ServerBase):
     def edge_logits(self):
         return self._edge_logits
 
-    @property
     def estimate_tree(self):
         return self._estimated_tree
 
@@ -188,7 +187,7 @@ class TreeCatServer(ServerBase):
         """Returns a num_samples-long list of trees, each a list of pairs."""
         samples = []
         edge_logits = self.edge_logits
-        edges = self.estimate_tree
+        edges = self.estimate_tree()
         for _ in range(num_samples):
             edges = sample_tree(self._tree.complete_grid, edge_logits, edges)
             samples.append(edges)
@@ -476,7 +475,6 @@ class EnsembleServer(ServerBase):
     def edge_logits(self):
         return self._edge_logits
 
-    @property
     def estimate_tree(self):
         return self._estimated_tree
 
@@ -578,10 +576,9 @@ class DataServer(object):
     def feature_names(self):
         return self._feature_names
 
-    @property
     def estimate_tree(self):
         """Returns a tuple of edges. Each edge is a (vertex,vertex) pair."""
-        return self._server.estimate_tree
+        return self._server.estimate_tree()
 
     def sample_tree(self, num_samples):
         """Returns a num_samples-long list of trees, each a list of pairs."""
@@ -634,7 +631,7 @@ class DataServer(object):
 
     def mode(self, evidence):
         ragged_evidence = import_rows(self._schema, evidence)
-        data = self._server.mode(self, self._counts, ragged_evidence)
+        data = self._server.mode(self._counts, ragged_evidence)
         return export_rows(self._schema, data)
 
 
