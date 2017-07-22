@@ -60,9 +60,11 @@ def compute_edge_logits(M, grid, assignments, gammaln_table, vert_logits):
     edge_logits = np.zeros(K, np.float32)
     for k in range(K):
         v1, v2 = grid[1:3, k]
+        assign1 = assignments[:, v1]
+        assign2 = assignments[:, v2]
         counts = np.zeros((M, M), np.int32)
         for n in range(N):
-            counts[assignments[n, v1], assignments[n, v2]] += 1
+            counts[assign1[n], assign2[n]] += 1
         edge_logit = np.float32(0)
         for m1 in range(M):
             for m2 in range(M):
@@ -320,17 +322,19 @@ class TreeCatTrainer(object):
         np.add(self._edge_ss, self._edge_prior, out=self._edge_probs)
         self._program = make_propagation_program(self._tree.tree_grid)
 
+    @profile
     def get_edge_logits(self):
         """Compute non-normalized logprob of all V(V-1)/2 candidate edges.
 
         This is used for sampling and estimating the latent tree.
         """
         V, E, K, M = self._VEKM
+        vert_logits = logprob_dc(self._vert_ss, self._vert_prior, axis=1)
         if len(self._assigned_rows) == V:
             assignments = self._assignments
         else:
             assignments = self._assignments[sorted(self._assigned_rows), :]
-        vert_logits = logprob_dc(self._vert_ss, self._vert_prior, axis=1)
+        assignments = np.array(assignments, order='F')
         return compute_edge_logits(M, self._tree.complete_grid, assignments,
                                    self._gammaln_table, vert_logits)
 
@@ -386,6 +390,7 @@ class TreeCatTrainer(object):
             logprob -= logprob_dc(self._meas_ss[v, :], self._meas_prior[v])
         return logprob
 
+    @profile
     def train(self):
         """Train a TreeCat model using subsample-annealed MCMC.
 
