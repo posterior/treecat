@@ -2,75 +2,34 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import os
-import platform
-import sys
-from copy import deepcopy
-from subprocess import Popen
-from subprocess import check_call
+import multiprocessing
 
 from parsable import parsable
 
-from treecat.persist import pickle_dump
-from treecat.persist import pickle_load
-from treecat.testutil import tempdir
+from treecat.config import make_config
+from treecat.format import guess_schema
+from treecat.format import import_data
+from treecat.format import pickle_dump
+from treecat.format import pickle_load
 
-PYTHON = sys.executable
-
-
-@parsable
-def fit(model_in, model_out=None):
-    '''Fit a pickled model and optionally save it.'''
-    from treecat.training import Model
-    assert Model  # Pacify linter.
-    model = pickle_load(model_in)
-    print('Fitting model')
-    model.fit()
-    print('Done fitting model')
-    if model_out is not None:
-        pickle_dump(model, model_out)
+parsable = parsable.Parsable()
+parsable(guess_schema)
+parsable(import_data)
 
 
 @parsable
-def profile_fit(rows=100, cols=10, cats=4, epochs=5, tool='timers'):
-    '''Profile Model.fit() on a random dataset.
-    Available tools: timers, time, snakeviz, line_profiler
-    '''
-    from treecat.training import DEFAULT_CONFIG
-    from treecat.training import Model
-    from treecat.generate import generate_dataset
-    config = deepcopy(DEFAULT_CONFIG)
-    config['num_categories'] = cats
-    config['annealing']['epochs'] = epochs
-    data, mask = generate_dataset(rows, cols, config=config)
-    model = Model(data, mask, config)
-    with tempdir() as dirname:
-        model_path = os.path.join(dirname, 'profile_fit.model.pkl.gz')
-        profile_path = os.path.join(dirname, 'profile_fit.prof')
-        pickle_dump(model, model_path)
-        cmd = [os.path.abspath(__file__), 'fit', model_path]
-        if tool == 'time':
-            if platform.platform().startswith('Darwin'):
-                gnu_time = 'gtime'
-            else:
-                gnu_time = '/usr/bin/time'
-            check_call([gnu_time, '-v', PYTHON, '-O'] + cmd)
-        elif tool == 'snakeviz':
-            check_call([PYTHON, '-m', 'cProfile', '-o', profile_path] + cmd)
-            check_call(['snakeviz', profile_path])
-        elif tool == 'timers':
-            env = os.environ.copy()
-            env.setdefault('TREECAT_LOG_LEVEL', '15')
-            Popen([PYTHON, '-O'] + cmd, env=env).wait()
+def train(dataset_in, ensemble_out, **options):
+    """Train a TreeCat ensemble model on imported data."""
+    from treecat.training import train_ensemble
+    dataset = pickle_load(dataset_in)
+    ragged_index = dataset['schema']['ragged_index']
+    data = dataset['data']
+    config = make_config(**options)
+    ensemble = train_ensemble(ragged_index, data, config)
+    pickle_dump(ensemble, ensemble_out)
 
-        elif tool == 'line_profiler':
-            check_call(['kernprof', '-l', '-v', '-o', profile_path] + cmd)
-        else:
-            raise ValueError('Unknown tool: {}'.format(tool))
-
-
-# TODO Add a profile_fit_tf c
-# https://github.com/tensorflow/tensorflow/tree/master/tensorflow/tools/tfprof
 
 if __name__ == '__main__':
+    # This attempts to avoid deadlock when using to the default 'fork' method.
+    multiprocessing.set_start_method('spawn')
     parsable()

@@ -1,0 +1,5 @@
+name,type,total,unique,singletons
+title,,11,11,11
+genre,categorical,11,7,4
+decade,categorical,11,6,3
+rating,ordinal,10,5,2

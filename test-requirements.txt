@@ -1,0 +1,8 @@
+flake8
+goftests
+numba
+numpy
+parsable
+pytest
+scipy
+six

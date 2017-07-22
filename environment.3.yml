@@ -1,0 +1,21 @@
+name: treecat3
+channels:
+  - conda-forge
+dependencies:
+  - python=3.5
+  - flake8
+  - goftests
+  - isort
+  - line_profiler
+  - matplotlib
+  - numba
+  - numpy
+  - pypandoc
+  - pytest
+  - scipy
+  - six
+  - snakeviz
+  - yapf
+  - pip:
+    - jsonpickle
+    - parsable

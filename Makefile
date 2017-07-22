@@ -1,11 +1,11 @@
 .PHONY: all format lint test FORCE
 
-PY_FILES := *.py $(shell find treecat -name '*.py')
+PY_FILES := *.py $(shell find treecat doc -name '*.py')
 
 all: lint
 
 format: FORCE
-	yapf -i $(PY_FILES)
+	yapf -i -p $(PY_FILES)
 	isort -i $(PY_FILES)
 
 lint: FORCE
@@ -13,7 +13,10 @@ lint: FORCE
 	pylint $(PY_FILES)
 
 test: lint FORCE
-	cd treecat ; py.test -v
+	cd treecat ; py.test -vrw
+
+clean:
+	treecat.generate clean
 
 FORCE:
 
