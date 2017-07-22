@@ -320,14 +320,16 @@ def jit_add_edge(grid, e2k, neighbors, components, e, k):
 
 
 @jit(nopython=True, cache=True)
-def find_valid_edges(grid, components, valid_edges):
-    K = len(valid_edges)
-    pos = 0
-    for k in range(K):
-        if components[grid[1, k]] ^ components[grid[2, k]]:
-            valid_edges[pos] = k
-            pos += 1
-    return pos
+def find_valid_edges(components, valid_edges):
+    k = 0
+    end = 0
+    for v2, c2 in enumerate(components):
+        for v1 in range(v2):
+            if c2 ^ components[v1]:
+                valid_edges[end] = k
+                end += 1
+            k += 1
+    return end
 
 
 @profile
@@ -371,7 +373,7 @@ def sample_tree(grid, edge_logits, edges):
 
     for e in np.random.permutation(E):  # Sequential scanning doesn't work.
         k1 = jit_remove_edge(grid, e2k, neighbors, components, e)
-        num_valid_edges = find_valid_edges(grid, components, valid_edges)
+        num_valid_edges = find_valid_edges(components, valid_edges)
         valid_probs = edge_logits[valid_edges[:num_valid_edges]]
         valid_probs -= valid_probs.max()
         valid_probs = np.exp(valid_probs)
