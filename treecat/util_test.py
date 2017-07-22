@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 from goftests import multinomial_goodness_of_fit
 
+from treecat.testutil import make_seed
 from treecat.util import parallel_map
 from treecat.util import quantize_from_probs2
 from treecat.util import sample_from_probs
@@ -88,7 +89,7 @@ def test_sample_from_probs2_gof(size):
     (5, 3),
 ])
 def test_quantize_from_probs2(size, resolution):
-    set_random_seed(10 * size + resolution)
+    set_random_seed(make_seed(size, resolution))
     probs = np.exp(np.random.random(size)).astype(np.float32)
     probs2 = probs.reshape((1, size))
     quantized = quantize_from_probs2(probs2, resolution)

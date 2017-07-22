@@ -10,6 +10,7 @@ import tempfile
 import numpy as np
 
 from treecat.config import make_config
+from treecat.format import fingerprint
 
 TESTDATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'testdata')
 
@@ -42,6 +43,14 @@ def tempdir():
         yield dirname
     finally:
         shutil.rmtree(dirname)
+
+
+def make_seed(*args):
+    """Create a random seed by fingerprinting args."""
+    digest = fingerprint(args)
+    bigseed = int('0x{}'.format(digest), 0)
+    seed = bigseed % (2 ** 32)
+    return seed
 
 
 def assert_equal(x, y):

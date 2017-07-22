@@ -181,7 +181,7 @@ def test_make_propagation_program(edges, root):
 
 @pytest.mark.parametrize('num_edges', [1, 2, 3, 4, 5])
 def test_sample_tree_gof(num_edges):
-    set_random_seed(0)
+    set_random_seed(num_edges)
     E = num_edges
     V = 1 + E
     grid = make_complete_graph(V)

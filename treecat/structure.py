@@ -369,8 +369,7 @@ def sample_tree(grid, edge_logits, edges):
         jit_list_append(neighbors[v2], v1)
     valid_edges = np.empty(K, np.int32)
 
-    for e in range(E):
-        e = np.random.randint(E)  # Sequential scanning doesn't work.
+    for e in np.random.permutation(E):  # Sequential scanning doesn't work.
         k1 = jit_remove_edge(grid, e2k, neighbors, components, e)
         num_valid_edges = find_valid_edges(grid, components, valid_edges)
         valid_probs = edge_logits[valid_edges[:num_valid_edges]]
