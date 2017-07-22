@@ -36,12 +36,12 @@ you should be able to simply
 pip install pytreecat
 ```
 
-If you're new to Numba we recommend installing it using
+If you're new to Numba, we recommend installing it using
 [miniconda](https://conda.io/miniconda.html) or
-[Anaconda](https://www.continuum.io/downloads) make this easy.
+[Anaconda](https://www.continuum.io/downloads).
 
 If you want to install TreeCat for development,
-then clone and create a new conda env
+then clone the source code and create a new conda env
 ```sh
 git clone git@github.com:posterior/treecat
 cd treecat
