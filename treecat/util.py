@@ -19,6 +19,8 @@ from six.moves import map
 from six.moves import range
 
 TREECAT_JIT = int(os.environ.get('TREECAT_JIT', 1))
+TREECAT_THREADS = int(
+    os.environ.get('TREECAT_THREADS', multiprocessing.cpu_count()))
 LOG_LEVEL = int(os.environ.get('TREECAT_LOG_LEVEL', logging.CRITICAL))
 PROFILING = (LOG_LEVEL <= 15)
 LOG_FILENAME = os.environ.get('TREECAT_LOG_FILE')
@@ -172,6 +174,29 @@ def make_ragged_mask(ragged_index, mask):
     return ragged_mask
 
 
+def count_observations(ragged_index, data):
+    """Count the observations in each cell of a ragged data array.
+
+    Args:
+      ragged_index: A [V+1]-shaped numpy array as returned by
+        make_ragged_index.
+      data: A [N, R]-shaped ragged array of multinomial count data, where
+        N is the number of rows and R = ragged_index[-1].
+
+    Returns:
+      A [N, V]-shaped array whose entries are the number of observations
+      in each cell of data.
+    """
+    N, R = data.shape
+    assert R == ragged_index[-1]
+    V = len(ragged_index) - 1
+    counts = np.zeros([N, V], np.int8)
+    for v in range(V):
+        beg, end = ragged_index[v:v + 2]
+        counts[:, v] = data[:, beg:end].sum(axis=1)
+    return counts
+
+
 def guess_counts(ragged_index, data):
     """Guess the multinomial count of each feature.
 
@@ -186,12 +211,7 @@ def guess_counts(ragged_index, data):
     Returns:
       A [V]-shaped array of multinomial totals.
     """
-    V = len(ragged_index) - 1
-    counts = np.zeros(V, np.int8)
-    for v in range(V):
-        beg, end = ragged_index[v:v + 2]
-        counts[v] = data[:, beg:end].sum(axis=1).max()
-    return counts
+    return count_observations(ragged_index, data).max(axis=0)
 
 
 POOL = None
@@ -200,10 +220,10 @@ POOL = None
 def parallel_map(fun, args):
     global POOL
     args = list(args)
-    if len(args) < 2:
+    if len(args) < 2 or TREECAT_THREADS == 1:
         return list(map(fun, args))
     if POOL is None:
-        POOL = multiprocessing.Pool()
+        POOL = multiprocessing.Pool(TREECAT_THREADS)
     return POOL.map(fun, args)
 
 

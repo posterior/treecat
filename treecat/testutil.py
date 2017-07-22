@@ -49,7 +49,7 @@ def make_seed(*args):
     """Create a random seed by fingerprinting args."""
     digest = fingerprint(args)
     bigseed = int('0x{}'.format(digest), 0)
-    seed = bigseed % (2 ** 32)
+    seed = bigseed % (2**32)
     return seed
 
 
