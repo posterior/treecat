@@ -9,7 +9,10 @@ described below.
 
 ## Setting up a conda env
 
-To install TreeCat for development, clone and install as follows:
+To install TreeCat for development,
+clone and install in a fresh conda env using
+[miniconda](https://conda.io/miniconda.html) or
+[Anaconda](https://www.continuum.io/downloads):
 
 ```sh
 git clone git@github.com:posterior/treecat

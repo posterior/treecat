@@ -29,10 +29,25 @@ categorical and ordinal values, possibly with missing observations.
 
 ## Installing
 
-First install `numba` (conda makes this easy). Then
+If you already have [Numba](http://numba.pydata.org) installed,
+you should be able to simply
 
 ```sh
-$ pip install pytreecat
+pip install pytreecat
+```
+
+If you're new to Numba we recommend installing it using
+[miniconda](https://conda.io/miniconda.html) or
+[Anaconda](https://www.continuum.io/downloads) make this easy.
+
+If you want to install TreeCat for development,
+then clone and create a new conda env
+```sh
+git clone git@github.com:posterior/treecat
+cd treecat
+conda env create -f environment.3.yml
+source activate treecat3
+pip install -e .
 ```
 
 ## Quick Start
@@ -147,26 +162,35 @@ $ treecat.format cat tuning.pkz
 
 TreeCat's
 [server](https://github.com/posterior/treecat/blob/master/treecat/serving.py)
-interface currently supports a few basic Bayesian primitives:
+interface supports primitives for Bayesian inference and
+tools to inspect latent structure:
 
-- `server.sample(N, counts, data=None)`
-  draws N samples from the joint posterior distribution, optionally conditioned on `data`.
+- `server.sample(N, evidence=None)`
+  draws `N` samples from the joint posterior distribution over observable data,
+  optionally conditioned on `evidence`.
   
-- `server.logprob(data)` computes posterior log probability of `data`.
+- `server.logprob(rows, evidence=None)`
+  computes posterior log probability of `data`,
+  optionally conditioned on `evidence`.
 
-- `server.marginals(data)` computes marginal distributions of observations, conditioned on `data`.
+- `server.median(evidence)`
+  computes L1-loss-minimizing estimates, conditioned on `evidence`.
 
-- `server.median(counts, data)` computes L1-loss-minimizing estimates, conditioned on `data`.
+- `server.observed_perplexity()`
+  computes the [perplexity](https://en.wikipedia.org/wiki/Perplexity)
+  (a soft measure of cardinality) of each observed feature.
 
-- `server.latent_perplexity()` estimates the number of latent classes behind each observed feature.
+- `server.latent_perplexity()`
+  computes the perplexity of the latent class behind each observed feature.
 
-- `server.latent_correlation()` computes the latent-latent correlation between each pair of latent variables.
+- `server.latent_correlation()`
+  computes the latent-latent correlation between each pair of latent variables.
 
-TreeCat's internal data representation is multinomial, and thus supports missing and repeated measurements, and even data adding. For example to compute conditional probability of data `A` given data `B`, we can simply compute
+- `server.estimate_tree()`
+  computes a maximum a posteriori estimate of the latent tree structure.
 
-```py
-cond = server.logprob(A + B) - server.logprob(B)
-```
+- `server.sample_tree(N)`
+  draws `N` samples from posterior distribution over the latent tree structures.
 
 ## The Model
 
