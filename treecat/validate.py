@@ -16,6 +16,7 @@ from treecat.format import pickle_load
 from treecat.serving import TreeCatServer
 from treecat.training import train_model
 from treecat.util import count_observations
+from treecat.util import get_profiling_stats
 from treecat.util import make_ragged_mask
 from treecat.util import parallel_map
 from treecat.util import profile
@@ -115,6 +116,7 @@ def process_train_task(task):
 
     # Train a model.
     model = train_model(ragged_index, training_data, config)
+    model['profiling_stats'] = get_profiling_stats()
     pickle_dump(model, model_path)
 
 

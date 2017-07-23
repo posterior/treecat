@@ -232,7 +232,7 @@ def profile_timed(fun):
     """Decorator for time-based profiling of individual functions."""
     if not PROFILING:
         return fun
-    timer = TIMERS[fun]
+    timer = TIMERS['{}.{}'.format(fun.__module__, fun.__name__)]
 
     @functools.wraps(fun)
     def profiled_fun(*args, **kwargs):
@@ -245,14 +245,31 @@ def profile_timed(fun):
 # Allow line_profiler to override profile_timed by adding it to __builtins__.
 profile = __builtins__.get('profile', profile_timed)
 
-# Use these to access global profiling state.
+# Use these to write to global profiling stats.
 TIMERS = defaultdict(ProfileTimer)
 COUNTERS = ProfilingSet(lambda: 0)
 HISTOGRAMS = ProfilingSet(Counter)
 SERIES = ProfilingSet(list)
 
 
-def log_profilers():
+def get_profiling_stats():
+    return {
+        'timers': {
+            name: {
+                'elapsed': timer.elapsed,
+                'count': timer.count,
+            }
+            for name, timer in TIMERS.items()
+        },
+        'counters': dict(COUNTERS),
+        'histograms':
+        {name: dict(counter)
+         for name, counter in HISTOGRAMS.items()},
+        'series': dict(SERIES),
+    }
+
+
+def log_profiling_stats():
     logger.info('-----------------------------------------------------------')
     logger.info('Series:')
     for name, series in sorted(SERIES.items()):
@@ -276,10 +293,9 @@ def log_profilers():
     times = [(t.elapsed, t.count, f) for (f, t) in TIMERS.items()]
     times.sort(reverse=True, key=lambda x: x[0])
     logger.info('{: >10} {: >10} {}'.format('Seconds', 'Calls', 'Function'))
-    for time, count, fun in times:
-        logger.info('{: >10.3f} {: >10} {}.{}'.format(
-            time, count, fun.__module__, fun.__name__))
+    for time, count, name in times:
+        logger.info('{: >10.3f} {: >10} {}'.format(time, count, name))
 
 
 if PROFILING:
-    atexit.register(log_profilers)
+    atexit.register(log_profiling_stats)
