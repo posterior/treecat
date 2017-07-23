@@ -33,6 +33,8 @@ install:
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION --file=test-requirements.txt
   - source activate test-environment
   - python setup.py install
+  # Useful for reproducing the build environment.
+  - conda env export
 
 script:
   - make test
