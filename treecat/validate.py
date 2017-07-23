@@ -2,6 +2,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import multiprocessing
 import os
 
 import numpy as np
@@ -208,4 +209,6 @@ def eval(dataset_path, param_csv_path, models_dir, result_path, **options):
 
 
 if __name__ == '__main__':
+    # This attempts to avoid deadlock when using to the default 'fork' method.
+    multiprocessing.set_start_method('spawn')
     parsable()
