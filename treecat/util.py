@@ -63,21 +63,6 @@ def np_printoptions(**kwargs):
     np.set_printoptions(**old)
 
 
-def sizeof(array):
-    """Computes byte size of numpy.ndarray.
-    Args:
-      array: A numpy ndarray.
-
-    Returns:
-      Memory footprint in bytes.
-    """
-    dtype = array.dtype
-    size = dtype.size if hasattr(dtype, 'size') else dtype.itemsize
-    for dim in array.shape:
-        size *= int(dim)
-    return size
-
-
 @jit(nopython=True, cache=True)
 def sample_from_probs(probs):
     """Sample from a vector of non-normalized probabilitites.
