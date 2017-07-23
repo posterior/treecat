@@ -179,7 +179,10 @@ def process_eval_task(task):
     l1_loss = 0.5 * np.abs(median - validation_data).sum()
     l1_loss /= relevant.sum() + 0.1
 
-    return {'config': config, 'logprob': logprob, 'l1_loss': l1_loss}
+    result = {'config': config, 'logprob': logprob, 'l1_loss': l1_loss}
+    if 'profiling_stats' in model:
+        result['profiling_stats'] = model['profiling_stats']
+    return result
 
 
 @parsable
