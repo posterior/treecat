@@ -13,6 +13,8 @@ from scipy.sparse.csgraph import minimum_spanning_tree
 from six.moves import range
 from six.moves import zip
 from treecat.util import COUNTERS
+from treecat.util import HISTOGRAMS
+from treecat.util import SERIES
 from treecat.util import jit
 from treecat.util import profile
 from treecat.util import sample_from_probs
@@ -371,6 +373,8 @@ def sample_tree(grid, edge_logits, edges):
         jit_list_append(neighbors[v2], v1)
     valid_edges = np.empty(K, np.int32)
 
+    accepted = 0
+    log2_choices = []
     for e in np.random.permutation(E):  # Sequential scanning doesn't work.
         k1 = jit_remove_edge(grid, e2k, neighbors, components, e)
         num_valid_edges = find_valid_edges(components, valid_edges)
@@ -385,8 +389,12 @@ def sample_tree(grid, edge_logits, edges):
             COUNTERS.sample_tree_infeasible += 1
         jit_add_edge(grid, e2k, neighbors, components, e, k2)
 
-        COUNTERS.sample_tree_propose += 1
-        COUNTERS.sample_tree_accept += (k1 != k2)
+        accepted += (k1 != k2)
+        log2_choices.append(num_valid_edges.bit_length())
+    COUNTERS.sample_tree_accept += accepted
+    COUNTERS.sample_tree_propose += E
+    SERIES.sample_tree_accepted.append(accepted)
+    HISTOGRAMS.sample_tree_log2_choices.update(log2_choices)
 
     edges = sorted((grid[1, k], grid[2, k]) for k in e2k)
     assert len(edges) == E

@@ -249,25 +249,32 @@ profile = __builtins__.get('profile', profile_timed)
 TIMERS = defaultdict(ProfileTimer)
 COUNTERS = ProfilingSet(lambda: 0)
 HISTOGRAMS = ProfilingSet(Counter)
+SERIES = ProfilingSet(list)
 
 
-def log_profile_counters():
-    logger.info('-' * 64)
-    logger.info('Counters:')
+def log_profilers():
+    logger.info('-----------------------------------------------------------')
+    logger.info('Series:')
+    for name, series in sorted(SERIES.items()):
+        logger.info('  {}: {}'.format(name, ' '.join(map(str, series))))
+
+    logger.info('-----------------------------------------------------------')
+    logger.info('Histograms:')
     for name, histogram in sorted(HISTOGRAMS.items()):
         logger.info('{: >10s} {}'.format('Count', name))
         for value, count in sorted(histogram.items()):
             logger.info('{: >10d} {}'.format(count, value))
+
+    logger.info('-----------------------------------------------------------')
+    logger.info('Counters:')
     logger.info('{: >10s} {}'.format('Count', 'Counter'))
     for name, count in sorted(COUNTERS.items()):
         logger.info('{: >10d} {}'.format(count, name))
 
-
-def log_profile_timers():
+    logger.info('-----------------------------------------------------------')
+    logger.info('Timers:')
     times = [(t.elapsed, t.count, f) for (f, t) in TIMERS.items()]
     times.sort(reverse=True, key=lambda x: x[0])
-    logger.info('-' * 64)
-    logger.info('Timers:')
     logger.info('{: >10} {: >10} {}'.format('Seconds', 'Calls', 'Function'))
     for time, count, fun in times:
         logger.info('{: >10.3f} {: >10} {}.{}'.format(
@@ -275,5 +282,4 @@ def log_profile_timers():
 
 
 if PROFILING:
-    atexit.register(log_profile_timers)
-    atexit.register(log_profile_counters)
+    atexit.register(log_profilers)

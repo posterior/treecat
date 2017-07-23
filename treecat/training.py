@@ -17,6 +17,7 @@ from treecat.structure import TreeStructure
 from treecat.structure import estimate_tree
 from treecat.structure import make_propagation_program
 from treecat.structure import sample_tree
+from treecat.util import SERIES
 from treecat.util import jit
 from treecat.util import parallel_map
 from treecat.util import profile
@@ -349,6 +350,7 @@ class TreeCatTrainer(object):
         """
         logger.info('TreeCatTrainer.sample_tree given %d rows',
                     len(self._assigned_rows))
+        SERIES.sample_tree_num_rows.append(len(self._assigned_rows))
         complete_grid = self._tree.complete_grid
         edge_logits = self.get_edge_logits()
         assert edge_logits.shape[0] == complete_grid.shape[1]
