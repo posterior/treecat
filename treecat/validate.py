@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import multiprocessing
 import os
+import sys
 
 import numpy as np
 from parsable import parsable
@@ -14,6 +15,7 @@ from treecat.config import make_config
 from treecat.format import csv_reader
 from treecat.format import pickle_dump
 from treecat.format import pickle_load
+from treecat.profile import check_call_env
 from treecat.serving import TreeCatServer
 from treecat.training import train_model
 from treecat.util import count_observations
@@ -31,6 +33,17 @@ def serialize_config(config):
     keys = sorted(config.keys())
     assert keys == sorted(make_config().keys())
     return '-'.join(str(int(config[key])) for key in keys)
+
+
+def deserialize_config(config_str):
+    """Deserialize a config dict form a short string."""
+    config = make_config()
+    keys = sorted(config.keys())
+    values = config_str.split('-')
+    assert len(keys) == len(values)
+    for key, value_str in zip(keys, values):
+        config[key] = int(value_str)
+    return config
 
 
 def split_data(ragged_index, num_rows, num_parts, partid):
@@ -95,13 +108,11 @@ def read_param_csv(param_csv_path, **options):
     return header, configs
 
 
-def process_train_task(task):
-    (dataset_path, config, models_dir) = task
-    model_path = os.path.join(models_dir,
-                              'model.{}.pkz'.format(serialize_config(config)))
-    if os.path.exists(model_path):
-        return
+@parsable
+def train_task(dataset_path, model_path, config_str):
+    """INTERNAL Train a single model."""
     print('Train {}'.format(os.path.basename(model_path)))
+    config = deserialize_config(config_str)
 
     # Split data for crossvalidation.
     num_parts = config['model_ensemble_size']
@@ -121,6 +132,25 @@ def process_train_task(task):
     pickle_dump(model, model_path)
 
 
+def process_train_task(task):
+    (dataset_path, models_dir, config) = task
+    config_str = serialize_config(config)
+    model_path = os.path.join(models_dir, 'model.{}.pkz'.format(config_str))
+    env = os.environ.copy()
+    env['TREECAT_PROFILE'] = '1'
+    env['TREECAT_THREADS'] = '1'
+    check_call_env([
+        sys.executable,
+        '-O',
+        '-m',
+        'treecat.validate',
+        'train_task',
+        dataset_path,
+        model_path,
+        config_str,
+    ], env)
+
+
 @parsable
 def train(dataset_path, param_csv_path, models_dir, **options):
     """Tune parameters specified in a csv file."""
@@ -129,7 +159,7 @@ def train(dataset_path, param_csv_path, models_dir, **options):
         os.makedirs(models_dir)
     header, configs = read_param_csv(param_csv_path, **options)
     configs.sort(key=lambda c: c['learning_init_epochs'])
-    tasks = [(dataset_path, c, models_dir) for c in configs]
+    tasks = [(dataset_path, models_dir, c) for c in configs]
     print('Scheduling {} tasks'.format(len(tasks)))
     parallel_map(process_train_task, tasks)
 
@@ -180,10 +210,12 @@ def process_eval_task(task):
     l1_loss = 0.5 * np.abs(median - validation_data).sum()
     l1_loss /= relevant.sum() + 0.1
 
-    result = {'config': config, 'logprob': logprob, 'l1_loss': l1_loss}
-    if 'profiling_stats' in model:
-        result['profiling_stats'] = model['profiling_stats']
-    return result
+    return {
+        'config': config,
+        'logprob': logprob,
+        'l1_loss': l1_loss,
+        'profiling_stats': model.get('profiling_stats', {}),
+    }
 
 
 @parsable
@@ -210,5 +242,6 @@ def eval(dataset_path, param_csv_path, models_dir, result_path, **options):
 
 if __name__ == '__main__':
     # This attempts to avoid deadlock when using to the default 'fork' method.
-    multiprocessing.set_start_method('spawn')
+    if hasattr(multiprocessing, 'set_start_method'):
+        multiprocessing.set_start_method('spawn')
     parsable()

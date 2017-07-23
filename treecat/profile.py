@@ -23,7 +23,6 @@ parsable = parsable.Parsable()
 
 
 def check_call_env(cmd, env):
-    print(' '.join(cmd))
     ret = Popen(cmd, env=env).wait()
     if ret:
         raise CalledProcessError(returncode=ret, cmd=cmd)
@@ -34,7 +33,8 @@ def run_with_tool(cmd, tool, dirname):
     env = os.environ.copy()
     env['TREECAT_THREADS'] = '1'
     if tool == 'timers':
-        env.setdefault('TREECAT_LOG_LEVEL', '15')
+        env.setdefault('TREECAT_PROFILE', '1')
+        env.setdefault('TREECAT_LOG_LEVEL', '20')
         check_call_env([PYTHON, '-O'] + cmd, env)
     elif tool == 'time':
         if platform.platform().startswith('Darwin'):
