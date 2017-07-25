@@ -514,7 +514,8 @@ class EnsembleServer(ServerBase):
 
         Perplexity is an information theoretic measure of the number of
         clusters or observed classes. Perplexity is a real number in the range
-        [1, M], where M is model_num_clusters.
+        [1, dim[v]], where dim[v] is the number of categories in an observed
+        categorical variable or 2 for an ordinal variable.
 
         Returns:
           A [V]-shaped numpy array of perplexity.
@@ -574,6 +575,7 @@ class DataServer(object):
 
     @property
     def feature_names(self):
+        """Returns a tuple containing the names of all features."""
         return self._feature_names
 
     def estimate_tree(self):
@@ -586,6 +588,7 @@ class DataServer(object):
 
     @property
     def edge_logits(self):
+        """A [K]-shaped array of log odds of edges in the complete graph."""
         return self._server.edge_logits
 
     def feature_density(self):
@@ -599,15 +602,60 @@ class DataServer(object):
         return density
 
     def observed_perplexity(self):
+        """Compute perplexity = exp(entropy) of observed variables.
+
+        Perplexity is an information theoretic measure of the number of
+        clusters or observed classes. Perplexity is a real number in the range
+        [1, dim[v]], where dim[v] is the number of categories in an observed
+        categorical variable or 2 for an ordinal variable.
+
+        Returns:
+          A [V]-shaped numpy array of perplexity.
+        """
+        # TODO(fritzo) Fix ordinal variables by accounting for self._counts.
+        # See https://math.stackexchange.com/questions/244455
         return self._server.observed_perplexity()
 
     def latent_perplexity(self):
+        """Compute perplexity = exp(entropy) of latent variables.
+
+        Perplexity is an information theoretic measure of the number of
+        clusters or latent classes. Perplexity is a real number in the range
+        [1, M], where M is model_num_clusters.
+
+        Returns:
+          A [V]-shaped numpy array of perplexity.
+        """
         return self._server.latent_perplexity()
 
     def latent_correlation(self):
+        """Compute correlation matrix among latent features.
+
+        This computes the generalization of Pearson's correlation to discrete
+        data. Let I(X;Y) be the mutual information. Then define correlation as
+
+          rho(X,Y) = sqrt(1 - exp(-2 I(X;Y)))
+
+        Returns:
+          A [V, V]-shaped numpy array of feature-feature correlations.
+        """
         return self._server.latent_correlation()
 
     def logprob(self, rows, evidence=None):
+        """Compute non-normalized log probabilies of many rows of data.
+
+        If evidence is specified, compute conditional log probability;
+        otherwise compute unconditional log probability.
+
+        Args:
+          data: A list of rows of data, where each row is a sparse dict mapping
+            feature name to feature value.
+          evidence: An optional row of conditioning data, as a sparse dict
+            mapping feature name to feature value.
+
+        Returns:
+          An [len(rows)]-shaped numpy array of log probabilities.
+        """
         data = import_rows(self._schema, rows)
         if evidence is None:
             return self._server.logprob(data)
@@ -617,6 +665,16 @@ class DataServer(object):
                     self._server.logprob(data + evidence))
 
     def sample(self, N, evidence=None):
+        """Draw N samples from the posterior distribution.
+
+        Args:
+          N: The number of samples to draw.
+          evidence: An optional single row of conditioning data, as a sparse
+            dict mapping feature name to feature value.
+
+        Returns:
+          An [N, R]-shaped numpy array of sampled multinomial data.
+        """
         if evidence is None:
             data = None
         else:
@@ -625,11 +683,29 @@ class DataServer(object):
         return export_rows(self._schema, ragged_samples)
 
     def median(self, evidence):
+        """Compute an L1-loss-minimizing row of data conditioned on evidence.
+
+        Args:
+          evidence: A single row of conditioning data, as a sparse dict mapping
+            feature name to feature value.
+
+        Returns:
+          A row of data as a full dict mapping feature name to feature value.
+        """
         ragged_evidence = import_rows(self._schema, evidence)
         data = self._server.median(self._counts, ragged_evidence)
         return export_rows(self._schema, data)
 
     def mode(self, evidence):
+        """Compute a maximum a posteriori row of data conditioned on evidence.
+
+        Args:
+          evidence: A single row of conditioning data, as a sparse dict mapping
+            feature name to feature value.
+
+        Returns:
+          A row of data as a full dict mapping feature name to feature value.
+        """
         ragged_evidence = import_rows(self._schema, evidence)
         data = self._server.mode(self._counts, ragged_evidence)
         return export_rows(self._schema, data)
