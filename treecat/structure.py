@@ -268,61 +268,87 @@ def make_propagation_program(grid, root=None):
     return program
 
 
-@jit(nopython=True, cache=True)
-def jit_list_append(jit_list, item):
-    size = jit_list[0] + 1
-    jit_list[0] = size
-    jit_list[size] = item
-
+# A jit_set is an array representation of a set of 16-bit integers.
+# The memory layout is:
+# [ size | item[1] | item[2] | ... | item[size] | unused | ... | unused ]
 
 @jit(nopython=True, cache=True)
-def jit_list_pop(jit_list):
-    size = jit_list[0]
-    jit_list[0] = size - 1
-    return jit_list[size]
+def jit_set_add(jit_set, item):
+    """Add an item to a jit_set.
+
+    Warning: this assumes item is not already in the set.
+    """
+    size = jit_set[0] + 1
+    jit_set[0] = size
+    jit_set[size] = item
 
 
 @jit(nopython=True, cache=True)
-def jit_list_remove(jit_list, item):
-    """Warning: this does not preserve order."""
+def jit_set_pop(jit_set):
+    """Remove and return an arbitrary item from a jit_set."""
+    size = jit_set[0]
+    jit_set[0] = size - 1
+    return jit_set[size]
+
+
+@jit(nopython=True, cache=True)
+def jit_set_remove(jit_set, item):
+    """Remove the given item from a jit_set.
+
+    Warning: this does not preserve order.
+    """
     pos = 1
-    while jit_list[pos] != item:
+    while jit_set[pos] != item:
         pos += 1
-    size = jit_list[0]
+    size = jit_set[0]
     if pos != size:
-        jit_list[pos] = jit_list[size]
-    jit_list[0] = size - 1
+        jit_set[pos] = jit_set[size]
+    jit_set[0] = size - 1
 
 
 @jit(nopython=True, cache=True)
 def jit_remove_edge(grid, e2k, neighbors, components, e):
+    """Remove an edge from a spanning tree."""
     k = e2k[e]
     v1, v2 = grid[1:3, k]
-    jit_list_remove(neighbors[v1], v2)
-    jit_list_remove(neighbors[v2], v1)
+    jit_set_remove(neighbors[v1], v2)
+    jit_set_remove(neighbors[v2], v1)
     stack = np.zeros(neighbors.shape[0], np.int16)
-    jit_list_append(stack, v1)
+    jit_set_add(stack, v1)
     while stack[0]:
-        v1 = jit_list_pop(stack)
+        v1 = jit_set_pop(stack)
         components[v1] = True
         for i in range(neighbors[v1, 0]):
             v2 = neighbors[v1, i + 1]
             if not components[v2]:
-                jit_list_append(stack, v2)
+                jit_set_add(stack, v2)
     return k
 
 
 @jit(nopython=True, cache=True)
 def jit_add_edge(grid, e2k, neighbors, components, e, k):
+    """Add an edge connecting two components to create a spanning tree."""
     e2k[e] = k
     v1, v2 = grid[1:3, k]
-    jit_list_append(neighbors[v1], v2)
-    jit_list_append(neighbors[v2], v1)
+    jit_set_add(neighbors[v1], v2)
+    jit_set_add(neighbors[v2], v1)
     components[:] = False
 
 
 @jit(nopython=True, cache=True)
 def find_valid_edges(components, valid_edges):
+    """Find all edges between two components in a complete undirected graph.
+
+    Args:
+      components: A [V]-shaped array of boolean component ids. This assumes
+        there are exactly two nonemtpy components.
+      valid_edges: An uninitialized array where output is written. On return,
+        the subarray valid_edges[:end] will contain edge ids k for all valid
+        edges.
+
+    Returns:
+      The number of valid edges found.
+    """
     k = 0
     end = 0
     for v2, c2 in enumerate(components):
@@ -369,8 +395,8 @@ def sample_tree(grid, edge_logits, edges):
     for e in range(E):
         v1, v2 = edges[e]
         e2k[e] = find_complete_edge(v1, v2)
-        jit_list_append(neighbors[v1], v2)
-        jit_list_append(neighbors[v2], v1)
+        jit_set_add(neighbors[v1], v2)
+        jit_set_add(neighbors[v2], v1)
     valid_edges = np.empty(K, np.int32)
 
     accepted = 0
