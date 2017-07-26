@@ -80,13 +80,13 @@ def read_param_csv(param_csv_path, **options):
     """Reads configs from a csv file.
 
     Args:
-      param_csv_path: The path to a csv file with one line per config.
-      options: A dict of extra config parameters.
+        param_csv_path: The path to a csv file with one line per config.
+        options: A dict of extra config parameters.
 
     Returns:
-      A pair (header, configs), where:
-      header is a list of parameters, and
-      configs is list of config dicts.
+        A pair (header, configs), where:
+        header is a list of parameters, and
+        configs is list of config dicts.
     """
     # This is a hack: to configure crossvalidation from a config, we alias:
     #   num_parts = model_ensemble_size

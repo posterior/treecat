@@ -31,12 +31,12 @@ def count_pairs(assignments, v1, v2, M):
     """Construct sufficient statistics for (v1, v2) pairs.
 
     Args:
-      assignments: An _ x V assignment matrix with values in range(M).
-      v1, v2: Column ids of the assignments matrix.
-      M: The number of possible assignment bins.
+        assignments: An _ x V assignment matrix with values in range(M).
+        v1, v2: Column ids of the assignments matrix.
+        M: The number of possible assignment bins.
 
     Returns:
-      And M x M array of counts.
+        And M x M array of counts.
     """
     assert v1 != v2
     pairs = assignments[:, v1].astype(np.int32) * M + assignments[:, v2]
@@ -210,11 +210,11 @@ class TreeCatTrainer(object):
         """Initialize a model in an unassigned state.
 
         Args:
-          ragged_index: A [V+1]-shaped numpy array of indices into the ragged
-            data array.
-          data: An [N, _]-shaped numpy array of ragged data, where the vth
-            column is stored in data[:, ragged_index[v]:ragged_index[v+1]].
-          config: A global config dict.
+            ragged_index: A [V+1]-shaped numpy array of indices into the ragged
+                data array.
+            data: An [N, _]-shaped numpy array of ragged data, where the vth
+                column is stored in data[:, ragged_index[v]:ragged_index[v+1]].
+            config: A global config dict.
         """
         logger.info('TreeCatTrainer of %d x %d data', data[0].shape[0],
                     len(data))
@@ -344,9 +344,9 @@ class TreeCatTrainer(object):
         """Samples a random tree.
 
         Returns:
-          A pair (edges, edge_logits), where:
-            edges: A list of (vertex, vertex) pairs.
-            edge_logits: A [K]-shaped numpy array of edge logits.
+            A pair (edges, edge_logits), where:
+                edges: A list of (vertex, vertex) pairs.
+                edge_logits: A [K]-shaped numpy array of edge logits.
         """
         logger.info('TreeCatTrainer.sample_tree given %d rows',
                     len(self._assigned_rows))
@@ -363,9 +363,9 @@ class TreeCatTrainer(object):
         """Compute a maximum likelihood tree.
 
         Returns:
-          A pair (edges, edge_logits), where:
-            edges: A list of (vertex, vertex) pairs.
-            edge_logits: A [K]-shaped numpy array of edge logits.
+            A pair (edges, edge_logits), where:
+                edges: A list of (vertex, vertex) pairs.
+                edge_logits: A [K]-shaped numpy array of edge logits.
         """
         logger.info('TreeCatTrainer.estimate_tree given %d rows',
                     len(self._assigned_rows))
@@ -398,13 +398,14 @@ class TreeCatTrainer(object):
 
 
         Returns:
-          A trained model as a dictionary with keys:
-            tree: A TreeStructure instance with the learned latent structure.
-            suffstats: Sufficient statistics of features, vertices, and
-              edges and a ragged_index for the features array.
-            assignments: An [N, V]-shaped numpy array of latent cluster ids for
-              each cell in the dataset, where N be the number of data rows and
-              V is the number of features.
+            A trained model as a dictionary with keys:
+                tree: A TreeStructure instance with the learned latent
+                    structure.
+                suffstats: Sufficient statistics of features, vertices, and
+                    edges and a ragged_index for the features array.
+                assignments: An [N, V]-shaped numpy array of latent cluster
+                    ids for each cell in the dataset, where N be the number of
+                    data rows and V is the number of features.
         """
         logger.info('TreeCatTrainer.train')
         set_random_seed(self._config['seed'])
@@ -465,21 +466,21 @@ def train_model(ragged_index, data, config):
     Let N be the number of data rows and V be the number of features.
 
     Args:
-      ragged_index: A [V+1]-shaped numpy array of indices into the ragged
-        data array.
-      data: An [N, _]-shaped numpy array of ragged data, where the vth
-        column is stored in data[:, ragged_index[v]:ragged_index[v+1]].
-      data: A list of numpy arrays, where each array is an N x _ column of
-        counts of multinomial data.
-      config: A global config dict.
+        ragged_index: A [V+1]-shaped numpy array of indices into the ragged
+            data array.
+        data: An [N, _]-shaped numpy array of ragged data, where the vth
+            column is stored in data[:, ragged_index[v]:ragged_index[v+1]].
+        data: A list of numpy arrays, where each array is an N x _ column of
+            counts of multinomial data.
+        config: A global config dict.
 
     Returns:
-      A trained model as a dictionary with keys:
-        tree: A TreeStructure instance with the learned latent structure.
-        suffstats: Sufficient statistics of features, vertices, and
-          edges.
-        assignments: An [N, V] numpy array of latent cluster ids for each
-          cell in the dataset.
+        A trained model as a dictionary with keys:
+            tree: A TreeStructure instance with the learned latent structure.
+            suffstats: Sufficient statistics of features, vertices, and
+                edges.
+            assignments: An [N, V] numpy array of latent cluster ids for each
+                cell in the dataset.
     """
     return TreeCatTrainer(ragged_index, data, config).train()
 
@@ -496,21 +497,21 @@ def train_ensemble(ragged_index, data, config):
     Let N be the number of data rows and V be the number of features.
 
     Args:
-      ragged_index: A [V+1]-shaped numpy array of indices into the ragged
-        data array.
-      data: An [N, _]-shaped numpy array of ragged data, where the vth
-        column is stored in data[:, ragged_index[v]:ragged_index[v+1]].
-      data: A list of numpy arrays, where each array is an N x _ column of
-        counts of multinomial data.
-      config: A global config dict.
+        ragged_index: A [V+1]-shaped numpy array of indices into the ragged
+            data array.
+        data: An [N, _]-shaped numpy array of ragged data, where the vth
+            column is stored in data[:, ragged_index[v]:ragged_index[v+1]].
+        data: A list of numpy arrays, where each array is an N x _ column of
+            counts of multinomial data.
+        config: A global config dict.
 
     Returns:
-      A trained model as a dictionary with keys:
-        tree: A TreeStructure instance with the learned latent structure.
-        suffstats: Sufficient statistics of features, vertices, and
-          edges.
-        assignments: An [N, V] numpy array of latent cluster ids for each
-          cell in the dataset.
+        A trained model as a dictionary with keys:
+            tree: A TreeStructure instance with the learned latent structure.
+            suffstats: Sufficient statistics of features, vertices, and
+                edges.
+            assignments: An [N, V] numpy array of latent cluster ids for each
+                cell in the dataset.
     """
     tasks = []
     for sub_seed in range(config['model_ensemble_size']):

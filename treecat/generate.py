@@ -27,7 +27,7 @@ def generate_dataset(num_rows, num_cols, num_cats=4, rate=1.0):
     """Generate a random dataset.
 
     Returns:
-      A pair (ragged_index, data).
+        A pair (ragged_index, data).
     """
     set_random_seed(0)
     ragged_index = np.arange(0, num_cats * (num_cols + 1), num_cats, np.int32)
@@ -52,7 +52,7 @@ def generate_dataset_file(num_rows, num_cols, num_cats=4, rate=1.0):
     """Generate a random dataset.
 
     Returns:
-      The path to a gzipped pickled data table.
+        The path to a gzipped pickled data table.
     """
     path = os.path.join(DATA, '{}-{}-{}-{:0.1f}.dataset.pkz'.format(
         num_rows, num_cols, num_cats, rate))
@@ -85,14 +85,14 @@ def generate_clean_dataset(tree, num_rows, num_cats):
     recover a known structure.
 
     Args:
-      tree: A TreeStructure instance.
-      num_rows: The number of rows in the generated dataset.
-      num_cats: The number of categories in the geneated categorical dataset.
-        This will also be used for the number of latent classes.
+        tree: A TreeStructure instance.
+        num_rows: The number of rows in the generated dataset.
+        num_cats: The number of categories in the geneated categorical dataset.
+            This will also be used for the number of latent classes.
 
     Returns:
-      A dict with keys 'schema' and 'data'. The schema will only have a
-      'ragged' index field.
+        A dict with keys 'schema' and 'data'. The schema will only have a
+        'ragged' index field.
     """
     assert isinstance(tree, TreeStructure)
     V = tree.num_vertices
@@ -213,7 +213,7 @@ def generate_model_file(num_rows, num_cols, num_cats=4, rate=1.0):
     """Generate a random model.
 
     Returns:
-      The path to a gzipped pickled model.
+        The path to a gzipped pickled model.
     """
     path = os.path.join(DATA, '{}-{}-{}-{:0.1f}.model.pkz'.format(
         num_rows, num_cols, num_cats, rate))

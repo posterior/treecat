@@ -69,10 +69,10 @@ def sample_from_probs(probs):
     """Sample from a vector of non-normalized probabilitites.
 
     Args:
-      probs: An [M]-shaped numpy array of non-normalized probabilities.
+        probs: An [M]-shaped numpy array of non-normalized probabilities.
 
     Returns:
-      An integer in range(M).
+        An integer in range(M).
     """
     cdf = probs.cumsum()
     return (np.random.rand() * cdf[-1] < cdf).argmax()
@@ -82,11 +82,11 @@ def sample_from_probs2(probs, out=None):
     """Sample from multiple vectors of non-normalized probabilities.
 
     Args:
-      probs: An [N, M]-shaped numpy array of non-normalized probabilities.
-      out: An optional destination for the result.
+        probs: An [N, M]-shaped numpy array of non-normalized probabilities.
+        out: An optional destination for the result.
 
     Returns:
-      An [N]-shaped numpy array of integers in range(M).
+        An [N]-shaped numpy array of integers in range(M).
     """
     # Adapted from https://stackoverflow.com/questions/40474436
     assert len(probs.shape) == 2
@@ -99,11 +99,11 @@ def quantize_from_probs2(probs, resolution):
     """Quantize multiple non-normalized probs to given resolution.
 
     Args:
-      probs: An [N, M]-shaped numpy array of non-normalized probabilities.
+        probs: An [N, M]-shaped numpy array of non-normalized probabilities.
 
     Returns:
-      An [N, M]-shaped array of quantized probabilities such that
-      np.all(result.sum(axis=1) == resolution).
+        An [N, M]-shaped array of quantized probabilities such that
+        np.all(result.sum(axis=1) == resolution).
     """
     assert len(probs.shape) == 2
     N, M = probs.shape
@@ -121,11 +121,11 @@ def make_ragged_index(columns):
     """Make an index to hold data in a ragged array.
 
     Args:
-      columns: A list of [N, _]-shaped numpy arrays of varying size, where
-        N is the number of rows.
+        columns: A list of [N, _]-shaped numpy arrays of varying size, where
+            N is the number of rows.
 
     Returns:
-      A [len(columns) + 1]-shaped array of begin,end positions of each column.
+        A [len(columns)+1]-shaped array of begin,end positions of each column.
     """
     ragged_index = np.zeros([len(columns) + 1], dtype=np.int32)
     ragged_index[0] = 0
@@ -138,12 +138,12 @@ def make_ragged_mask(ragged_index, mask):
     """Convert a boolean mask from dense to ragged format.
 
     Args:
-      ragged_index: A [V+1]-shaped numpy array as returned by
-        make_ragged_index.
-      mask: A [V,...]-shaped numpy array of booleans.
+        ragged_index: A [V+1]-shaped numpy array as returned by
+            make_ragged_index.
+        mask: A [V,...]-shaped numpy array of booleans.
 
     Returns:
-      A [R,...]-shaped numpy array, where R = ragged_index[-1].
+        A [R,...]-shaped numpy array, where R = ragged_index[-1].
     """
     V = ragged_index.shape[0] - 1
     R = ragged_index[-1]
@@ -160,14 +160,14 @@ def count_observations(ragged_index, data):
     """Count the observations in each cell of a ragged data array.
 
     Args:
-      ragged_index: A [V+1]-shaped numpy array as returned by
-        make_ragged_index.
-      data: A [N, R]-shaped ragged array of multinomial count data, where
-        N is the number of rows and R = ragged_index[-1].
+        ragged_index: A [V+1]-shaped numpy array as returned by
+            make_ragged_index.
+        data: A [N, R]-shaped ragged array of multinomial count data, where
+            N is the number of rows and R = ragged_index[-1].
 
     Returns:
-      A [N, V]-shaped array whose entries are the number of observations
-      in each cell of data.
+        A [N, V]-shaped array whose entries are the number of observations
+        in each cell of data.
     """
     N, R = data.shape
     assert R == ragged_index[-1]
@@ -185,13 +185,13 @@ def guess_counts(ragged_index, data):
     This should guess 1 for categoricals and (max - min) for ordinals.
 
     Args:
-      ragged_index: A [V+1]-shaped numpy array as returned by
-        make_ragged_index.
-      data: A [N, R]-shaped ragged array of multinomial count data, where
-        N is the number of rows and R = ragged_index[-1].
+        ragged_index: A [V+1]-shaped numpy array as returned by
+            make_ragged_index.
+        data: A [N, R]-shaped ragged array of multinomial count data, where
+            N is the number of rows and R = ragged_index[-1].
 
     Returns:
-      A [V]-shaped array of multinomial totals.
+        A [V]-shaped array of multinomial totals.
     """
     return count_observations(ragged_index, data).max(axis=0)
 

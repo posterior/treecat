@@ -116,11 +116,11 @@ def guess_feature_type(count, values):
     """Guess the type of a feature, given statistics about the feature.
 
     Args:
-      count: Total number of observations of the feature.
-      values: A list of uniqe observed values of the feature.
+        count: Total number of observations of the feature.
+        values: A list of uniqe observed values of the feature.
 
     Returns:
-      One of: 'ordinal', 'categorical', or ''
+        One of: 'ordinal', 'categorical', or ''
     """
     if len(values) <= 1:
         return ''  # Feature is useless.
@@ -340,14 +340,14 @@ def import_rows(schema, rows):
     """Import multiple rows of json data to internal format.
 
     Args:
-      schema: A schema dict as returned by load_schema().
-      rows: A N-long list of sparse dicts mapping feature names to values,
-        where N is the number of rows. Extra keys and invalid values will be
-        silently ignored.
+        schema: A schema dict as returned by load_schema().
+        rows: A N-long list of sparse dicts mapping feature names to values,
+            where N is the number of rows. Extra keys and invalid values will
+            be silently ignored.
 
     Returns:
-      An [N, R]-shaped numpy array of ragged data, where N is the number of
-      rows and R = schema['ragged_index'][-1].
+        An [N, R]-shaped numpy array of ragged data, where N is the number of
+        rows and R = schema['ragged_index'][-1].
     """
     logger.debug('Importing {:d} rows', len(rows))
     assert isinstance(rows, list)
@@ -394,13 +394,13 @@ def export_rows(schema, data):
     """Export multiple rows of internal data to json format.
 
     Args:
-      schema: A schema dict as returned by load_schema().
-      data: An [N, R]-shaped numpy array of ragged data, where N is the number
-        of rows and R = schema['ragged_index'][-1].
+        schema: A schema dict as returned by load_schema().
+        data: An [N, R]-shaped numpy array of ragged data, where N is the
+            number of rows and R = schema['ragged_index'][-1].
 
     Returns:
-      A N-long list of sparse dicts mapping feature names to json values,
-      where N is the number of rows.
+        A N-long list of sparse dicts mapping feature names to json values,
+        where N is the number of rows.
     """
     logger.debug('Exporting {:d} rows', data.shape[0])
     assert data.dtype == np.int8

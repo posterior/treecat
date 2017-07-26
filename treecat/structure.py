@@ -41,7 +41,7 @@ class TreeStructure(object):
         """Sets the edges of this tree.
 
         Args:
-          edges: A list of (vertex, vertex) pairs.
+            edges: A list of (vertex, vertex) pairs.
         """
         assert len(edges) == self._num_edges
         self._tree_grid = make_tree(edges)
@@ -50,7 +50,7 @@ class TreeStructure(object):
         """Returns the edges of this tree.
 
         Returns:
-          A list of (vertex, vertex) pairs.
+            A list of (vertex, vertex) pairs.
         """
         return [(v1, v2) for e, v1, v2 in self._tree_grid.T]
 
@@ -97,12 +97,12 @@ def make_complete_graph(num_vertices):
     The pairing function is: k = v1 + v2 * (v2 - 1) // 2
 
     Args:
-      num_vertices: Number of vertices.
+        num_vertices: Number of vertices.
 
     Returns: A tuple with elements:
-      V: Number of vertices.
-      K: Number of edges.
-      grid: a 3 x K grid of (edge, vertex, vertex) triples.
+        V: Number of vertices.
+        K: Number of edges.
+        grid: a 3 x K grid of (edge, vertex, vertex) triples.
     """
     V = num_vertices
     K = V * (V - 1) // 2
@@ -119,12 +119,12 @@ def make_tree(edges):
     """Constructs a tree graph from a set of (vertex,vertex) pairs.
 
     Args:
-      edges: A list or set of unordered (vertex, vertex) pairs.
+        edges: A list or set of unordered (vertex, vertex) pairs.
 
     Returns: A tuple with elements:
-      V: Number of vertices.
-      E: Number of edges.
-      grid: a 3 x E grid of (edge, vertex, vertex) triples.
+        V: Number of vertices.
+        E: Number of edges.
+        grid: a 3 x E grid of (edge, vertex, vertex) triples.
     """
     assert all(isinstance(edge, tuple) for edge in edges)
     edges = [tuple(sorted(edge)) for edge in edges]
@@ -140,10 +140,10 @@ def find_center_of_tree(grid):
     """Finds a maximally central vertex in a tree graph.
 
     Args:
-      grid: A tree graph as returned by make_tree().
+        grid: A tree graph as returned by make_tree().
 
     Returns:
-      Vertex id of a maximally central vertex.
+        Vertex id of a maximally central vertex.
     """
     E = grid.shape[1]
     V = 1 + E
@@ -184,40 +184,40 @@ def make_propagation_program(grid, root=None):
     The five instructions are (in order of occurrence at each vertex):
 
       OP_UP: Propagate upwards from observed state to latent state.
-        vertex: The current vertex.
-        relative_vertex: Not set.
-        relative_edge: Not set.
+          vertex: The current vertex.
+          relative_vertex: Not set.
+          relative_edge: Not set.
 
       OP_IN: Propagate inwards from latent leaves towards latent root,
-        assuming OP_UP has already been called on this vertex.
-        vertex: The target parent vertex.
-        relative_vertex: The source child vertex.
-        relative_edge: The edge between parent and child.
+          assuming OP_UP has already been called on this vertex.
+          vertex: The target parent vertex.
+          relative_vertex: The source child vertex.
+          relative_edge: The edge between parent and child.
 
       OP_ROOT: Process the root node after OP_UP and OP_IN have been called.
-        vertex: The root vertex.
-        relative_vertex: Not set.
-        relative_edge: Not set.
+          vertex: The root vertex.
+          relative_vertex: Not set.
+          relative_edge: Not set.
 
       OP_OUT: Popagate outwards from the latent root towards latent leaves,
-        assuming OP_UP and OP_IN have been called as needed.
-        vertex: The target child vertex.
-        relative_vertex: The source parent vertex.
-        relative_edge: The edge between parent and child.
+          assuming OP_UP and OP_IN have been called as needed.
+          vertex: The target child vertex.
+          relative_vertex: The source parent vertex.
+          relative_edge: The edge between parent and child.
 
       OP_DOWN: Propagate downwards from latent state to observed state,
-        assuming OP_UP, OP_IN, and OP_OUT have been called as needed.
-        vertices and OP_IN has been called on all edges.
-        vertex: The current vertex.
-        relative_vertex: Not set.
-        relative_edge: Not set.
+          assuming OP_UP, OP_IN, and OP_OUT have been called as needed.
+          vertices and OP_IN has been called on all edges.
+          vertex: The current vertex.
+          relative_vertex: Not set.
+          relative_edge: Not set.
 
     Args:
-      grid: A tree graph as returned by make_tree().
-      root: Optional root vertex, defaults to find_center_of_tree(grid).
+        grid: A tree graph as returned by make_tree().
+        root: Optional root vertex, defaults to find_center_of_tree(grid).
 
     Returns:
-      A [V+E+1+E+V, 4]-shaped numpy array whose rows are instructions.
+        A [V+E+1+E+V, 4]-shaped numpy array whose rows are instructions.
     """
     if root is None:
         root = find_center_of_tree(grid)
@@ -340,14 +340,14 @@ def find_valid_edges(components, valid_edges):
     """Find all edges between two components in a complete undirected graph.
 
     Args:
-      components: A [V]-shaped array of boolean component ids. This assumes
-        there are exactly two nonemtpy components.
-      valid_edges: An uninitialized array where output is written. On return,
-        the subarray valid_edges[:end] will contain edge ids k for all valid
-        edges.
+        components: A [V]-shaped array of boolean component ids. This assumes
+            there are exactly two nonemtpy components.
+        valid_edges: An uninitialized array where output is written. On return,
+            the subarray valid_edges[:end] will contain edge ids k for all
+            valid edges.
 
     Returns:
-      The number of valid edges found.
+        The number of valid edges found.
     """
     k = 0
     end = 0
@@ -375,12 +375,12 @@ def sample_tree(grid, edge_logits, edges):
     and sample from them in proportion to exp(edge_logits).
 
     Args:
-      grid: A 3 x K array as returned by make_complete_graph().
-      edge_logits: A length-K array of nonnormalized log probabilities.
-      edges: A list of E initial edges in the form of (vertex,vertex) pairs.
+        grid: A 3 x K array as returned by make_complete_graph().
+        edge_logits: A length-K array of nonnormalized log probabilities.
+        edges: A list of E initial edges in the form of (vertex,vertex) pairs.
 
     Returns:
-      A list of (vertex, vertex) pairs.
+        A list of (vertex, vertex) pairs.
     """
     logger.debug('sample_tree sampling a random spanning tree')
     COUNTERS.sample_tree_calls += 1
@@ -431,11 +431,11 @@ def triangular_to_square(grid, triangle):
     """Convert a packed triangular matrix to a square matrix.
 
     Args:
-      grid: A 3 x K array as returned by make_complete_graph().
-      triangle: A length-K array.
+        grid: A 3 x K array as returned by make_complete_graph().
+        triangle: A length-K array.
 
     Returns:
-      A square symmetric V x V array with zero on the diagonal.
+        A square symmetric V x V array with zero on the diagonal.
     """
     K = len(triangle)
     assert grid.shape == (3, K)
@@ -452,11 +452,11 @@ def estimate_tree(grid, edge_logits):
     """Compute a maximum likelihood spanning tree of a dense weighted graph.
 
     Args:
-      grid: A 3 x K array as returned by make_complete_graph().
-      edge_logits: A length-K array of nonnormalized log probabilities.
+        grid: A 3 x K array as returned by make_complete_graph().
+        edge_logits: A length-K array of nonnormalized log probabilities.
 
     Returns:
-      A list of (vertex, vertex) pairs.
+        A list of (vertex, vertex) pairs.
     """
     K = len(edge_logits)
     assert grid.shape == (3, K)
@@ -476,12 +476,12 @@ def print_tree(edges, feature_names, root=None):
     """Returns a text representation of the feature tree.
 
     Args:
-      edges: A list of (vertex, vertex) pairs.
-      feature_names: A list of feature names.
-      root: The name of the root feature (optional).
+        edges: A list of (vertex, vertex) pairs.
+        feature_names: A list of feature names.
+        root: The name of the root feature (optional).
 
     Returns:
-      A text representation of the tree with one feature per line.
+        A text representation of the tree with one feature per line.
     """
     assert len(feature_names) == 1 + len(edges)
     if root is None:
@@ -515,10 +515,10 @@ def order_vertices(edges):
     This is mainly useful for plotting and printing.
 
     Args:
-      edges: A list of (vertex, vertex) pairs.
+        edges: A list of (vertex, vertex) pairs.
 
     Returns:
-      An (permutation, inverse) pair, each a list of vertices.
+        An (permutation, inverse) pair, each a list of vertices.
     """
     grid = make_tree(edges)
     root = find_center_of_tree(grid)

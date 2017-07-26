@@ -19,10 +19,10 @@ def layout_tree(correlation):
     """Layout tree for visualization with e.g. matplotlib.
 
     Args:
-      correlation: A [V, V]-shaped numpy array of latent correlations.
+        correlation: A [V, V]-shaped numpy array of latent correlations.
 
     Returns:
-      A [V, 3]-shaped numpy array of spectral positions of vertices.
+        A [V, 3]-shaped numpy array of spectral positions of vertices.
     """
     assert len(correlation.shape) == 2
     assert correlation.shape[0] == correlation.shape[1]
@@ -43,8 +43,8 @@ def nx_plot_tree(server, node_size=200, **options):
     This plots to the current matplotlib figure.
 
     Args:
-      server: A DataServer instance.
-      options: Options passed to networkx.draw().
+        server: A DataServer instance.
+        options: Options passed to networkx.draw().
     """
     import networkx as nx
     edges = server.estimate_tree()
@@ -70,8 +70,8 @@ def contract_positions(XY, edges, stepsize):
     hint to their grouping.
 
     Args:
-      XY: A [V, 2]-shaped numpy array of the current positions.
-      edges: An [E, 2]-shaped numpy array of edges as (vertex,vertex) pairs.
+        XY: A [V, 2]-shaped numpy array of the current positions.
+        edges: An [E, 2]-shaped numpy array of edges as (vertex,vertex) pairs.
 
     """
     E = edges.shape[0]
@@ -99,11 +99,11 @@ def plot_chord(begin, end, spacing, color, alpha=None):
     This assumes that the outer circle is centered at (0,0).
 
     Args:
-      begin: A [2]-shaped numpy array.
-      end: A [2]-shaped numpy array.
-      spacing: A float, extra spacing around the edge of the circle.
-      color: A matplotlib color spec.
-      apha: A float or None.
+        begin: A [2]-shaped numpy array.
+        end: A [2]-shaped numpy array.
+        spacing: A float, extra spacing around the edge of the circle.
+        color: A matplotlib color spec.
+        apha: A float or None.
     """
     # Adapted from https://matplotlib.org/users/path_tutorial.html
     from matplotlib import pyplot
@@ -127,15 +127,15 @@ def plot_circular(server,
     """Plot a tree stucture with features arranged around a circle.
 
     Args:
-      server: A DataServer instance.
-      tree_samples: Number of trees to sample, in addition to the mode.
-      fontsize: The font size for labels, in points.
-      color: A matplotlib color spec for edge colors.
-      contract: Contract vertex positions by this amount to visually hint
-        their grouping.
+        server: A DataServer instance.
+        tree_samples: Number of trees to sample, in addition to the mode.
+        fontsize: The font size for labels, in points.
+        color: A matplotlib color spec for edge colors.
+        contract: Contract vertex positions by this amount to visually hint
+            their grouping.
 
     Requires:
-      matplotlib.
+        matplotlib.
     """
     from matplotlib import pyplot
 
@@ -220,8 +220,8 @@ def add_panning_to_svg(source, destin=None):
     """Add pan and zoom to an svg file by embedding SVGPan in the file.
 
     Args:
-      source: Path to the input file.
-      destin: Path to the output file. Defaults to source.
+        source: Path to the input file.
+        destin: Path to the output file. Defaults to source.
     """
     if destin is None:
         destin = source

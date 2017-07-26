@@ -34,10 +34,10 @@ def correlation(probs):
     """Compute correlation rho(X,Y) = sqrt(1 - exp(-2 I(X;Y))).
 
     Args:
-      probs: An [M, M]-shaped numpy array representing a joint distribution.
+        probs: An [M, M]-shaped numpy array representing a joint distribution.
 
     Returns:
-      A number in [0,1) representing the information-theoretic correlation.
+        A number in [0,1) representing the information-theoretic correlation.
     """
     assert len(probs.shape) == 2
     assert probs.shape[0] == probs.shape[1]
@@ -72,13 +72,13 @@ class ServerBase(object):
         """Compute L1-loss-minimizing quantized marginals conditioned on data.
 
         Args:
-          counts: A [V]-shaped numpy array of quantization resolutions.
-          data: An [N, R]-shaped numpy array of row of conditioning data, as a
-            ragged nummpy array of multinomial counts,
-            where R = server.ragged_size.
+            counts: A [V]-shaped numpy array of quantization resolutions.
+            data: An [N, R]-shaped numpy array of row of conditioning data, as
+                a ragged nummpy array of multinomial counts,
+                where R = server.ragged_size.
 
         Returns:
-          An array of the same shape as data, but with specified counts.
+            An array of the same shape as data, but with specified counts.
         """
         logger.debug('computing median')
         R = self.ragged_size
@@ -103,13 +103,13 @@ class ServerBase(object):
         """Compute a maximum a posteriori data value conditioned on data.
 
         Args:
-          counts: A [V]-shaped numpy array of quantization resolutions.
-          data: An [N, R]-shaped numpy array of row of conditioning data, as a
-            ragged nummpy array of multinomial counts,
-            where R = server.ragged_size.
+            counts: A [V]-shaped numpy array of quantization resolutions.
+            data: An [N, R]-shaped numpy array of row of conditioning data, as
+                a ragged nummpy array of multinomial counts,
+                where R = server.ragged_size.
 
         Returns:
-          An array of the same shape as data, but with specified counts.
+            An array of the same shape as data, but with specified counts.
         """
         raise NotImplementedError
 
@@ -121,11 +121,12 @@ class TreeCatServer(ServerBase):
         """Create a TreeCat server.
 
         Args:
-          model: A dict with fields:
-            tree: A TreeStructure.
-            suffstats: A dict of sufficient statistics.
-            edge_logits: A K-sized array of nonnormalized edge probabilities.
-            config: A global config dict.
+            model: A dict with fields:
+                tree: A TreeStructure.
+                suffstats: A dict of sufficient statistics.
+                edge_logits: A K-sized array of nonnormalized edge
+                    probabilities.
+                config: A global config dict.
         """
         tree = model['tree']
         suffstats = model['suffstats']
@@ -198,15 +199,15 @@ class TreeCatServer(ServerBase):
         """Draw N samples from the posterior distribution.
 
         Args:
-          size: The number of samples to draw.
-          counts: A [V]-shaped numpy array of requested counts of multinomials
-            to sample.
-          data: An optional single row of conditioning data, as a [R]-shaped
-            ragged numpy array of multinomial counts,
-            where R = server.ragged_size.
+            size: The number of samples to draw.
+            counts: A [V]-shaped numpy array of requested counts of
+                multinomials to sample.
+            data: An optional single row of conditioning data, as a [R]-shaped
+                ragged numpy array of multinomial counts,
+                where R = server.ragged_size.
 
         Returns:
-          An [N, R]-shaped numpy array of sampled multinomial data.
+            An [N, R]-shaped numpy array of sampled multinomial data.
         """
         logger.debug('sampling data')
         V, E, M, R = self._VEMR
@@ -279,11 +280,11 @@ class TreeCatServer(ServerBase):
                                - server.logprob(evidence)
 
         Args:
-          data: A [N, R]-shaped ragged nummpy array of multinomial count data,
-            where N is the number of rows, and R is server.ragged_size.
+            data: A [N,R]-shaped ragged nummpy array of multinomial count data,
+                where N is the number of rows, and R = server.ragged_size.
 
         Returns:
-          An [N]-shaped numpy array of log probabilities.
+            An [N]-shaped numpy array of log probabilities.
         """
         logger.debug('computing logprob')
         V, E, M, R = self._VEMR
@@ -326,12 +327,12 @@ class TreeCatServer(ServerBase):
         """Compute observed marginals conditioned on data.
 
         Args:
-          data: An [N, R]-shaped numpy array of row of conditioning data, as a
-            ragged nummpy array of multinomial counts,
-            where R = server.ragged_size.
+            data: An [N, R]-shaped numpy array of row of conditioning data, as
+                a ragged nummpy array of multinomial counts,
+                where R = server.ragged_size.
 
         Returns:
-          An real-valued array of the same shape as data.
+            An real-valued array of the same shape as data.
         """
         logger.debug('computing marginals')
         V, E, M, R = self._VEMR
@@ -390,7 +391,7 @@ class TreeCatServer(ServerBase):
         [1, M], where M is model_num_clusters.
 
         Returns:
-          A [V]-shaped numpy array of perplexity.
+            A [V]-shaped numpy array of perplexity.
         """
         V, E, M, R = self._VEMR
         observed_entropy = np.empty(V, dtype=np.float32)
@@ -408,7 +409,7 @@ class TreeCatServer(ServerBase):
         [1, M], where M is model_num_clusters.
 
         Returns:
-          A [V]-shaped numpy array of perplexity.
+            A [V]-shaped numpy array of perplexity.
         """
         V, E, M, R = self._VEMR
         latent_entropy = np.array(
@@ -426,7 +427,7 @@ class TreeCatServer(ServerBase):
           rho(X,Y) = sqrt(1 - exp(-2 I(X;Y)))
 
         Returns:
-          A [V, V]-shaped numpy array of feature-feature correlations.
+            A [V, V]-shaped numpy array of feature-feature correlations.
         """
         logger.debug('computing latent correlation')
         V, E, M, R = self._VEMR
@@ -518,7 +519,7 @@ class EnsembleServer(ServerBase):
         categorical variable or 2 for an ordinal variable.
 
         Returns:
-          A [V]-shaped numpy array of perplexity.
+            A [V]-shaped numpy array of perplexity.
         """
         result = self._ensemble[0].observed_perplexity()
         for server in self._ensemble[1:]:
@@ -534,7 +535,7 @@ class EnsembleServer(ServerBase):
         [1, M], where M is model_num_clusters.
 
         Returns:
-          A [V]-shaped numpy array of perplexity.
+            A [V]-shaped numpy array of perplexity.
         """
         result = self._ensemble[0].latent_perplexity()
         for server in self._ensemble[1:]:
@@ -551,7 +552,7 @@ class EnsembleServer(ServerBase):
           rho(X,Y) = sqrt(1 - exp(-2 I(X;Y)))
 
         Returns:
-          A [V, V]-shaped numpy array of feature-feature correlations.
+            A [V, V]-shaped numpy array of feature-feature correlations.
         """
         result = self._ensemble[0].latent_correlation()
         for server in self._ensemble[1:]:
@@ -610,7 +611,7 @@ class DataServer(object):
         categorical variable or 2 for an ordinal variable.
 
         Returns:
-          A [V]-shaped numpy array of perplexity.
+            A [V]-shaped numpy array of perplexity.
         """
         # TODO(fritzo) Fix ordinal variables by accounting for self._counts.
         # See https://math.stackexchange.com/questions/244455
@@ -624,7 +625,7 @@ class DataServer(object):
         [1, M], where M is model_num_clusters.
 
         Returns:
-          A [V]-shaped numpy array of perplexity.
+            A [V]-shaped numpy array of perplexity.
         """
         return self._server.latent_perplexity()
 
@@ -637,7 +638,7 @@ class DataServer(object):
           rho(X,Y) = sqrt(1 - exp(-2 I(X;Y)))
 
         Returns:
-          A [V, V]-shaped numpy array of feature-feature correlations.
+            A [V, V]-shaped numpy array of feature-feature correlations.
         """
         return self._server.latent_correlation()
 
@@ -648,13 +649,13 @@ class DataServer(object):
         otherwise compute unconditional log probability.
 
         Args:
-          data: A list of rows of data, where each row is a sparse dict mapping
-            feature name to feature value.
-          evidence: An optional row of conditioning data, as a sparse dict
-            mapping feature name to feature value.
+            data: A list of rows of data, where each row is a sparse dict
+                mapping feature name to feature value.
+            evidence: An optional row of conditioning data, as a sparse dict
+                mapping feature name to feature value.
 
         Returns:
-          An [len(rows)]-shaped numpy array of log probabilities.
+            An [len(rows)]-shaped numpy array of log probabilities.
         """
         data = import_rows(self._schema, rows)
         if evidence is None:
@@ -668,12 +669,12 @@ class DataServer(object):
         """Draw N samples from the posterior distribution.
 
         Args:
-          N: The number of samples to draw.
-          evidence: An optional single row of conditioning data, as a sparse
-            dict mapping feature name to feature value.
+            N: The number of samples to draw.
+            evidence: An optional single row of conditioning data, as a sparse
+                dict mapping feature name to feature value.
 
         Returns:
-          An [N, R]-shaped numpy array of sampled multinomial data.
+            An [N, R]-shaped numpy array of sampled multinomial data.
         """
         if evidence is None:
             data = None
@@ -686,11 +687,11 @@ class DataServer(object):
         """Compute an L1-loss-minimizing row of data conditioned on evidence.
 
         Args:
-          evidence: A single row of conditioning data, as a sparse dict mapping
-            feature name to feature value.
+            evidence: A single row of conditioning data, as a sparse dict
+                mapping feature name to feature value.
 
         Returns:
-          A row of data as a full dict mapping feature name to feature value.
+            A row of data as a full dict mapping feature name to feature value.
         """
         ragged_evidence = import_rows(self._schema, evidence)
         data = self._server.median(self._counts, ragged_evidence)
@@ -700,11 +701,11 @@ class DataServer(object):
         """Compute a maximum a posteriori row of data conditioned on evidence.
 
         Args:
-          evidence: A single row of conditioning data, as a sparse dict mapping
-            feature name to feature value.
+            evidence: A single row of conditioning data, as a sparse dict
+                mapping feature name to feature value.
 
         Returns:
-          A row of data as a full dict mapping feature name to feature value.
+            A row of data as a full dict mapping feature name to feature value.
         """
         ragged_evidence = import_rows(self._schema, evidence)
         data = self._server.mode(self._counts, ragged_evidence)
@@ -715,13 +716,13 @@ def serve_model(dataset, model):
     """Create a server object from the given dataset and model.
 
     Args:
-      dataset: Either a filename pointing to a dataset loadable by load_dataset
-        or an already loaded dataset.
-      model: Either the path to a TreeCat model or ensemble, or an already
-        loaded model or ensemble.
+        dataset: Either a filename pointing to a dataset loadable by
+            load_dataset or an already loaded dataset.
+        model: Either the path to a TreeCat model or ensemble, or an already
+            loaded model or ensemble.
 
     Returns:
-      A DataServer object.
+        A DataServer object.
     """
     if isinstance(dataset, str):
         dataset = pickle_load(dataset)
