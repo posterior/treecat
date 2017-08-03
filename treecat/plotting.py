@@ -9,6 +9,9 @@ from collections import Counter
 
 import numpy as np
 import scipy.linalg
+from matplotlib import pyplot
+from matplotlib.patches import PathPatch
+from matplotlib.path import Path
 
 from treecat.structure import order_vertices
 
@@ -106,9 +109,6 @@ def plot_chord(begin, end, spacing, color, alpha=None):
         apha: A float or None.
     """
     # Adapted from https://matplotlib.org/users/path_tutorial.html
-    from matplotlib import pyplot
-    from matplotlib.path import Path
-    from matplotlib.patches import PathPatch
     codes = [Path.MOVETO, Path.CURVE4, Path.CURVE4, Path.CURVE4]
     xy = np.array([begin, begin, end, end])
     dist = ((begin - end)**2).sum()**0.5
@@ -137,8 +137,6 @@ def plot_circular(server,
     Requires:
         matplotlib.
     """
-    from matplotlib import pyplot
-
     # Extract ordered parameters to draw.
     edges = server.estimate_tree()
     order, order_inv = order_vertices(edges)

@@ -5,6 +5,7 @@ from __future__ import print_function
 import os
 from warnings import warn
 
+import matplotlib
 import pytest
 
 from treecat.format import guess_schema
@@ -16,6 +17,10 @@ from treecat.testutil import TINY_CONFIG
 from treecat.testutil import tempdir
 from treecat.training import train_ensemble
 from treecat.training import train_model
+
+# The Agg backend is required for headless testing.
+matplotlib.use('Agg')
+from treecat.plotting import plot_circular  # noqa: E402 isort:skip
 
 
 @pytest.mark.parametrize('model_type', ['single', 'ensemble'])
@@ -77,11 +82,4 @@ def test_e2e(model_type):
         server.sample_tree(10)
 
         print('Plotting latent structure')
-        try:
-            import matplotlib
-            matplotlib.use('Agg')  # Required for headless operation.
-            from treecat.plotting import plot_circular
-            plot_circular(server)
-        except ImportError:
-            warn('matplotlib not available')
-            pass
+        plot_circular(server)

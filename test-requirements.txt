@@ -1,5 +1,6 @@
 flake8
 goftests
+matplotlib
 numba
 numpy
 parsable

@@ -272,6 +272,7 @@ def make_propagation_program(grid, root=None):
 # The memory layout is:
 # [ size | item[1] | item[2] | ... | item[size] | unused | ... | unused ]
 
+
 @jit(nopython=True, cache=True)
 def jit_set_add(jit_set, item):
     """Add an item to a jit_set.
