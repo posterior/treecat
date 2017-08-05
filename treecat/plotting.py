@@ -8,14 +8,54 @@ import re
 from collections import Counter
 
 import numpy as np
+import scipy.cluster
 import scipy.linalg
+import scipy.spatial
 from matplotlib import pyplot
 from matplotlib.patches import PathPatch
 from matplotlib.path import Path
 
+from treecat.structure import estimate_tree
+from treecat.structure import make_complete_graph
 from treecat.structure import order_vertices
 
 SVGPAN = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'svgpan.js')
+
+
+def plot_feature_overlap(df, cmap='binary', method='cluster'):
+    """Plot feature-feature presence overlap of a pandas dataframe.
+
+    Args:
+        df: A pandas dataframe.
+        cmap: A matplotlib colormap.
+        method: Method of clustering, one of 'cluster' or 'tree'.
+    """
+    V = len(df.columns)
+    present = (df == df).as_matrix().astype(np.float32)
+    overlap = np.dot(present.T, present)
+    assert overlap.shape == (V, V)
+
+    # Sort features to make blocks contiguous.
+    if method == 'tree':
+        # TODO(fritzo) Fix this to not look awful.
+        grid = make_complete_graph(V)
+        weights = np.empty(grid.shape[1], dtype=np.float32)
+        for k, v1, v2 in grid.T:
+            weights[k] = overlap[v1, v2]
+        edges = estimate_tree(grid, weights)
+        order, order_inv = order_vertices(edges)
+    elif method == 'cluster':
+        distance = scipy.spatial.distance.pdist(overlap)
+        clustering = scipy.cluster.hierarchy.complete(distance)
+        order_inv = scipy.cluster.hierarchy.leaves_list(clustering)
+    else:
+        raise ValueError(method)
+    overlap = overlap[order_inv, :]
+    overlap = overlap[:, order_inv]
+    assert overlap.shape == (V, V)
+
+    pyplot.imshow(overlap**0.5, cmap=cmap)
+    pyplot.axis('off')
 
 
 def layout_tree(correlation):
