@@ -5,6 +5,7 @@ from __future__ import print_function
 import os
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from treecat.format import export_rows
@@ -12,6 +13,7 @@ from treecat.format import guess_schema
 from treecat.format import import_rows
 from treecat.format import load_data
 from treecat.format import load_schema
+from treecat.format import pd_outer_join
 from treecat.format import pickle_dump
 from treecat.format import pickle_load
 from treecat.testutil import TESTDATA
@@ -40,6 +42,31 @@ def test_pickle(data, ext):
         pickle_dump(data, filename)
         actual = pickle_load(filename)
         assert_equal(actual, data)
+
+
+def test_pd_outer_join():
+    dfs = [
+        pd.DataFrame({
+            'id': [0, 1, 2, 3],
+            'a': ['foo', 'bar', 'baz', np.nan],
+            'b': ['panda', 'zebra', np.nan, np.nan],
+        }),
+        pd.DataFrame({
+            'id': [1, 2, 3, 4],
+            'b': ['mouse', np.nan, 'tiger', 'egret'],
+            'c': ['toe', 'finger', 'nose', np.nan],
+        }),
+    ]
+    expected = pd.DataFrame({
+        'id': [0, 1, 2, 3, 4],
+        'a': ['foo', 'bar', 'baz', np.nan, np.nan],
+        'b': ['panda', 'zebra', np.nan, 'tiger', 'egret'],
+        'c': [np.nan, 'toe', 'finger', 'nose', np.nan],
+    }).set_index('id')
+    actual = pd_outer_join(dfs, on='id')
+    print(expected)
+    print(actual)
+    assert expected.equals(actual)
 
 
 def test_guess_schema():

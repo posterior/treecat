@@ -31,6 +31,7 @@ setup(
         'jsonpickle',
         'matplotlib',
         'numpy',
+        'pandas',
         'parsable',
         'scipy',
         'six',

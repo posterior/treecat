@@ -3,6 +3,7 @@ goftests
 matplotlib
 numba
 numpy
+pandas
 parsable
 pytest
 scipy

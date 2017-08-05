@@ -450,6 +450,33 @@ def export_rows(schema, data):
     return rows
 
 
+def pd_outer_join(dfs, on):
+    """Inner-join an iterable of pandas dataframes on a given column.
+
+    Args:
+        dfs: A pandas dataframe.
+        on: A column name or list of column names.
+
+    Returns:
+        A pandas dataframe whose columns are the union of columns in dfs, and
+        whose rows are the union of rows joined on 'on'.
+    """
+    result = dfs[0].set_index(on)
+    for i, df in enumerate(dfs[1:]):
+        assert not any(col.endswith('_JOIN_') for col in result.columns)
+        result = result.join(df.set_index(on), how='outer', rsuffix='_JOIN_')
+        for right in result.columns:
+            if right.endswith('_JOIN_'):
+                left = right[:-6]
+                if left in df.columns:
+                    result[left].fillna(result[right], inplace=True)
+                    del result[right]
+                else:
+                    result.rename(columns={right: left})
+    result = result.sort_index(axis=1)
+    return result
+
+
 @parsable
 def import_data(data_csvs_in,
                 types_csv_in,
