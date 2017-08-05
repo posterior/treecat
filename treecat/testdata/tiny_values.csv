@@ -1,10 +1,10 @@
 name,value,count
-genre,drama,3
-genre,family,2
-genre,fantasy,2
 decade,1950s,3
 decade,2010s,3
 decade,1970s,2
+genre,drama,3
+genre,family,2
+genre,fantasy,2
 rating,4,4
 rating,3,2
 rating,5,2

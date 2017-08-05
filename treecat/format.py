@@ -133,28 +133,37 @@ def guess_feature_type(count, values):
 
 
 @parsable
-def guess_schema(data_csv_in, types_csv_out, values_csv_out, encoding='utf-8'):
+def guess_schema(data_csvs_in, types_csv_out, values_csv_out,
+                 encoding='utf-8'):
     """Create a best-guess types and values for a given dataset.
 
     Common encodings include: utf-8, cp1252.
     """
-    print('Guessing schema of {}'.format(data_csv_in))
+    print('Guessing schema')
 
     # Collect statistics.
     totals = Counter()
     values = defaultdict(Counter)
-    with csv_reader(data_csv_in, encoding) as reader:
-        feature_names = list(next(reader))
-        for row in reader:
-            for name, value in zip(feature_names, row):
-                value = normalize_string(value)
-                if not value:
-                    continue
-                totals[name] += 1
-                values[name][value] += 1
+    feature_names = set()
+    sources = defaultdict(list)
+    for data_csv_in in data_csvs_in.split(','):
+        print('reading {}'.format(data_csv_in))
+        with csv_reader(data_csv_in, encoding) as reader:
+            header = list(next(reader))
+            feature_names |= set(header)
+            for name in feature_names:
+                sources[name].append(os.path.basename(data_csv_in))
+            for row in reader:
+                for name, value in zip(header, row):
+                    value = normalize_string(value)
+                    if not value:
+                        continue
+                    totals[name] += 1
+                    values[name][value] += 1
     uniques = defaultdict(lambda: 0)
     for name, counts in values.items():
         uniques[name] = len(counts)
+    feature_names = sorted(feature_names)
 
     # Exclude singleton values, because they provide no statistical value
     # and they often leak identifying info.
@@ -179,10 +188,23 @@ def guess_schema(data_csv_in, types_csv_out, values_csv_out, encoding='utf-8'):
 
     # Write types.
     with csv_writer(types_csv_out) as writer:
-        writer.writerow(['name', 'type', 'total', 'unique', 'singletons'])
+        writer.writerow([
+            'name',
+            'type',
+            'total',
+            'unique',
+            'singletons',
+            'source',
+        ])
         for name, typ in zip(feature_names, feature_types):
-            writer.writerow(
-                [name, typ, totals[name], uniques[name], singletons[name]])
+            writer.writerow([
+                name,
+                typ,
+                totals[name],
+                uniques[name],
+                singletons[name],
+                ','.join(sources[name]),
+            ])
 
     # Write values.
     with csv_writer(values_csv_out) as writer:
@@ -289,7 +311,6 @@ def load_data(schema, data_csv_in, encoding='utf-8'):
     # Load data in binary format.
     rows = []
     cells = 0
-    column_counts = Counter()
     with csv_reader(data_csv_in, encoding) as reader:
         header = list(next(reader))
         metas = [None] * len(header)
@@ -326,13 +347,9 @@ def load_data(schema, data_csv_in, encoding='utf-8'):
                 else:
                     raise ValueError(typename)
                 cells += 1
-                column_counts[name] += 1
             rows.append(internal_row)
     print('Loaded {} cells in {} rows, {:0.1f}% observed'.format(
         cells, len(rows), 100.0 * cells / len(rows) / len(feature_types)))
-    for name in feature_types.keys():
-        if column_counts[name] == 0:
-            print('WARNING: No values found for feature {}'.format(name))
     return np.stack(rows)
 
 
@@ -434,18 +451,27 @@ def export_rows(schema, data):
 
 
 @parsable
-def import_data(data_csv_in,
+def import_data(data_csvs_in,
                 types_csv_in,
                 values_csv_in,
                 dataset_out,
                 encoding='utf-8'):
-    """Import a data.csv file into internal treecat format.
+    """Import a comma-delimited list of csv files into internal treecat format.
 
     Common encodings include: utf-8, cp1252.
     """
     schema = load_schema(types_csv_in, values_csv_in, encoding)
-    data = load_data(schema, data_csv_in, encoding)
+    data = np.concatenate([
+        load_data(schema, data_csv_in, encoding)
+        for data_csv_in in data_csvs_in.split(',')
+    ])
     print('Imported data shape: [{}, {}]'.format(data.shape[0], data.shape[1]))
+    ragged_index = schema['ragged_index']
+    for v, name in enumerate(schema['feature_names']):
+        beg, end = ragged_index[v:v + 2]
+        count = np.count_nonzero(data[:, beg:end].max(1))
+        if count == 0:
+            print('WARNING: No values found for feature {}'.format(name))
     dataset = {'schema': schema, 'data': data}
     pickle_dump(dataset, dataset_out)
 

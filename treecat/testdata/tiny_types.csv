@@ -1,5 +1,5 @@
-name,type,total,unique,singletons
-title,,11,11,11
-genre,categorical,11,7,4
-decade,categorical,11,6,3
-rating,ordinal,10,5,2
+name,type,total,unique,singletons,source
+decade,categorical,11,6,3,tiny_data.csv
+genre,categorical,11,7,4,tiny_data.csv
+rating,ordinal,10,5,2,tiny_data.csv
+title,,11,11,11,tiny_data.csv
