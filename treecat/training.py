@@ -74,7 +74,7 @@ def compute_edge_logits(M, grid, assignments, gammaln_table, vert_logits):
     return edge_logits
 
 
-def get_annealing_schedule(num_rows, epochs, sample_tree_rate):
+def make_annealing_schedule(num_rows, epochs, sample_tree_rate):
     """Iterator for subsample annealing, yielding (action, arg) pairs.
 
     Actions are one of: 'add_row', 'remove_row', or 'sample_tree'.
@@ -416,8 +416,8 @@ class TreeCatTrainer(object):
 
         # Initialize using subsample annealing.
         assert len(self._assigned_rows) == 0
-        schedule = get_annealing_schedule(num_rows, init_epochs,
-                                          sample_tree_rate)
+        schedule = make_annealing_schedule(num_rows, init_epochs,
+                                           sample_tree_rate)
         for action, row_id in schedule:
             if action == 'add_row':
                 self.add_row(row_id)

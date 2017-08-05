@@ -16,7 +16,7 @@ from treecat.structure import print_tree
 from treecat.structure import triangular_to_square
 from treecat.testutil import numpy_seterr
 from treecat.training import TreeCatTrainer
-from treecat.training import get_annealing_schedule
+from treecat.training import make_annealing_schedule
 from treecat.training import train_ensemble
 from treecat.training import train_model
 from treecat.util import np_printoptions
@@ -25,12 +25,12 @@ from treecat.util import set_random_seed
 numpy_seterr()
 
 
-def test_get_annealing_schedule():
+def test_make_annealing_schedule():
     set_random_seed(0)
     num_rows = 10
     init_epochs = 10
     sample_tree_rate = 3
-    schedule = get_annealing_schedule(num_rows, init_epochs, sample_tree_rate)
+    schedule = make_annealing_schedule(num_rows, init_epochs, sample_tree_rate)
     assigned_rows = 0
     for step, (action, row_id) in enumerate(schedule):
         assert step < 1000
