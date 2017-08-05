@@ -17,6 +17,7 @@ from contextlib import contextmanager
 import jsonpickle
 import jsonpickle.ext.numpy
 import numpy as np
+import pandas as pd
 from parsable import parsable
 
 from six.moves import cPickle as pickle
@@ -97,6 +98,52 @@ def csv_reader(filename, encoding='utf-8'):
 def csv_writer(filename):
     with open(filename, 'w') as f:
         yield csv.writer(f)
+
+
+def read_csv(filename, encoding='utf-8'):
+    return pd.read_csv(filename, dtype=object, encoding=encoding)
+
+
+def pd_outer_join(dfs, on):
+    """Outer-join an iterable of pandas dataframes on a given column.
+
+    Args:
+        dfs: A pandas dataframe.
+        on: A column name or list of column names.
+
+    Returns:
+        A pandas dataframe whose columns are the union of columns in dfs, and
+        whose rows are the union of rows joined on 'on'.
+    """
+    result = dfs[0].set_index(on)
+    for i, df in enumerate(dfs[1:]):
+        assert not any(col.endswith('_JOIN_') for col in result.columns)
+        result = result.join(df.set_index(on), how='outer', rsuffix='_JOIN_')
+        for right in result.columns:
+            if right.endswith('_JOIN_'):
+                left = right[:-6]
+                if left in df.columns:
+                    result[left].fillna(result[right], inplace=True)
+                    del result[right]
+                else:
+                    result.rename(columns={right: left})
+    result = result.sort_index(axis=1)
+    return result
+
+
+@parsable
+def join_csvs(column,
+              csvs_in,
+              csv_out,
+              encoding_in='utf-8',
+              encoding_out='utf-8'):
+    """Outer join a comma-delimited list of csvs on a given column.
+
+    Common encodings include: utf-8, cp1252.
+    """
+    dfs = [read_csv(csv_in, encoding_in) for csv_in in csvs_in.split(',')]
+    df = pd_outer_join(dfs, column)
+    df.to_csv(csv_out, encoding=encoding_out)
 
 
 def normalize_string(string):
@@ -448,33 +495,6 @@ def export_rows(schema, data):
                 raise ValueError(typename)
             external_row[name] = value
     return rows
-
-
-def pd_outer_join(dfs, on):
-    """Inner-join an iterable of pandas dataframes on a given column.
-
-    Args:
-        dfs: A pandas dataframe.
-        on: A column name or list of column names.
-
-    Returns:
-        A pandas dataframe whose columns are the union of columns in dfs, and
-        whose rows are the union of rows joined on 'on'.
-    """
-    result = dfs[0].set_index(on)
-    for i, df in enumerate(dfs[1:]):
-        assert not any(col.endswith('_JOIN_') for col in result.columns)
-        result = result.join(df.set_index(on), how='outer', rsuffix='_JOIN_')
-        for right in result.columns:
-            if right.endswith('_JOIN_'):
-                left = right[:-6]
-                if left in df.columns:
-                    result[left].fillna(result[right], inplace=True)
-                    del result[right]
-                else:
-                    result.rename(columns={right: left})
-    result = result.sort_index(axis=1)
-    return result
 
 
 @parsable
