@@ -46,6 +46,25 @@ def correlation(probs):
     return np.sqrt(1.0 - np.exp(-2.0 * mutual_information))
 
 
+def multinomial_entropy(probs, count):
+    """Compute entropy of multinomial distribution with given probs and count.
+
+    Args:
+        probs: A 1-dimensional array of normalized probabilities.
+        count: The number of draws in a multinomial distribution.
+
+    Returns:
+        A number in [0, count * len(probs)] representing entropy.
+    """
+    assert count > 0
+    multi_probs = probs
+    for _ in range(count - 1):
+        if len(probs) > 2:
+            raise NotImplementedError
+        multi_probs = np.convolve(multi_probs, probs)
+    return entropy(multi_probs)
+
+
 class ServerBase(object):
     """Base class for TreeCat and Ensemble servers."""
 
@@ -383,22 +402,30 @@ class TreeCatServer(ServerBase):
 
         return result
 
-    def observed_perplexity(self):
+    def observed_perplexity(self, counts):
         """Compute perplexity = exp(entropy) of observed variables.
 
         Perplexity is an information theoretic measure of the number of
         clusters or latent classes. Perplexity is a real number in the range
         [1, M], where M is model_num_clusters.
 
+        Args:
+            counts: A [V]-shaped array of multinomial counts.
+
         Returns:
             A [V]-shaped numpy array of perplexity.
         """
         V, E, M, R = self._VEMR
+        if counts is not None:
+            counts = np.ones(V, dtype=np.int8)
+        assert counts.shape == (V, )
+        assert counts.dtype == np.int8
+        assert np.all(counts > 0)
         observed_entropy = np.empty(V, dtype=np.float32)
         for v in range(V):
             beg, end = self._ragged_index[v:v + 2]
-            observed_entropy[v] = entropy(
-                np.dot(self._feat_cond[beg:end, :], self._vert_probs[v, :]))
+            probs = np.dot(self._feat_cond[beg:end, :], self._vert_probs[v, :])
+            observed_entropy[v] = multinomial_entropy(probs, counts[v])
         return np.exp(observed_entropy)
 
     def latent_perplexity(self):
@@ -510,7 +537,7 @@ class EnsembleServer(ServerBase):
         assert logprobs.shape == (data.shape[0], )
         return logprobs
 
-    def observed_perplexity(self):
+    def observed_perplexity(self, counts):
         """Compute perplexity = exp(entropy) of observed variables.
 
         Perplexity is an information theoretic measure of the number of
@@ -518,12 +545,15 @@ class EnsembleServer(ServerBase):
         [1, dim[v]], where dim[v] is the number of categories in an observed
         categorical variable or 2 for an ordinal variable.
 
+        Args:
+            counts: A [V]-shaped array of multinomial counts.
+
         Returns:
             A [V]-shaped numpy array of perplexity.
         """
-        result = self._ensemble[0].observed_perplexity()
+        result = self._ensemble[0].observed_perplexity(counts)
         for server in self._ensemble[1:]:
-            result += server.observed_perplexity()
+            result += server.observed_perplexity(counts)
         result /= len(self._ensemble)
         return result
 
@@ -613,9 +643,7 @@ class DataServer(object):
         Returns:
             A [V]-shaped numpy array of perplexity.
         """
-        # TODO(fritzo) Fix ordinal variables by accounting for self._counts.
-        # See https://math.stackexchange.com/questions/244455
-        return self._server.observed_perplexity()
+        return self._server.observed_perplexity(self._counts)
 
     def latent_perplexity(self):
         """Compute perplexity = exp(entropy) of latent variables.

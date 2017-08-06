@@ -283,6 +283,34 @@ def validate_gof(N, V, C, M, server, conditional):
 
 @pytest.mark.parametrize('N,V,C,M', [
     (10, 1, 2, 2),
+    (10, 2, 3, 3),
+    (10, 3, 4, 4),
+    (10, 4, 5, 5),
+    (10, 4, 6, 6),
+    (10, 4, 7, 7),
+    (10, 4, 8, 8),
+])
+def test_observed_perplexity(N, V, C, M):
+    set_random_seed(make_seed(N, V, C, M))
+    model = generate_fake_model(N, V, C, M)
+    config = TINY_CONFIG.copy()
+    config['model_num_clusters'] = M
+    model['config'] = config
+    server = TreeCatServer(model)
+
+    for count in [1, 2, 3]:
+        if count > 1 and C > 2:
+            continue  # NotImplementedError.
+        counts = 1
+        perplexity = server.observed_perplexity(counts)
+        print(perplexity)
+        assert perplexity.shape == (V, )
+        assert np.all(1 <= perplexity)
+        assert np.all(perplexity <= count * C)
+
+
+@pytest.mark.parametrize('N,V,C,M', [
+    (10, 1, 2, 2),
     (10, 2, 2, 3),
     (10, 3, 2, 4),
     (10, 4, 2, 5),
