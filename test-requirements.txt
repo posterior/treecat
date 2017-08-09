@@ -1,3 +1,5 @@
+cython
+eigency
 flake8
 goftests
 matplotlib

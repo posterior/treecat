@@ -1,7 +1,22 @@
 import sys
 
+import numpy as np
 from parsable import parsable
 from setuptools import setup
+from setuptools.extension import Extension
+
+import eigency
+from Cython.Build import cythonize
+
+extensions = [
+    Extension(
+        'treecat.cTreecat',
+        sources=['treecat/cTreecat.pyx', 'treecat/treecat.cpp'],
+        extra_compile_args=['-std=c++11', '-O3', '-march=native'],
+        include_dirs=(['.', np.get_include()] + eigency.get_includes()),
+        extra_link_args=['-lm'],
+        language='c++'),
+]
 
 try:
     import pypandoc
@@ -26,8 +41,11 @@ setup(
     url='https://github.com/posterior/treecat',
     packages=['treecat'],
     package_data={'treecat': 'testdata/*.csv'},
+    ext_modules=cythonize(extensions),
     entry_points=parsable.find_entry_points('treecat'),
     install_requires=[
+        'cython',
+        'eigency',
         'jsonpickle',
         'matplotlib',
         'numpy',

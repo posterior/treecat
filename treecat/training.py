@@ -482,7 +482,14 @@ def train_model(ragged_index, data, config):
             assignments: An [N, V] numpy array of latent cluster ids for each
                 cell in the dataset.
     """
-    return TreeCatTrainer(ragged_index, data, config).train()
+    engine = config.get('engine', 'numpy')
+    if engine == 'numpy':
+        Trainer = TreeCatTrainer
+    elif engine == 'cython':
+        from treecat.cy_engine import CythonTrainer as Trainer
+    else:
+        raise ValueError('Unknown engine: {}'.format(engine))
+    return Trainer(ragged_index, data, config).train()
 
 
 def _train_model(task):

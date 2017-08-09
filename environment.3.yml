@@ -3,6 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - python=3.5
+  - cython
   - flake8
   - goftests
   - isort
@@ -18,5 +19,6 @@ dependencies:
   - snakeviz
   - yapf
   - pip:
+    - eigency
     - jsonpickle
     - parsable
