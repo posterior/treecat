@@ -102,8 +102,10 @@ pip install -e .
     We'll call our dataset `dataset.pkz` (a gzipped pickle file).
 
     ```sh
-    $ treecat import-data data.csv types.csv values.csv dataset.pkz
+    $ treecat import-data data.csv types.csv values.csv '' dataset.pkz
     ```
+
+    (the empty argument '' is an optional structural prior that we ignore).
 
 4.  Train an ensemble model on your dataset.
     This typically takes ~15minutes for a 1M cell dataset.

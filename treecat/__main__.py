@@ -24,8 +24,9 @@ def train(dataset_in, ensemble_out, **options):
     dataset = pickle_load(dataset_in)
     ragged_index = dataset['schema']['ragged_index']
     data = dataset['data']
+    tree_prior = dataset['schema']['tree_prior']
     config = make_config(**options)
-    ensemble = train_ensemble(ragged_index, data, config)
+    ensemble = train_ensemble(ragged_index, data, tree_prior, config)
     pickle_dump(ensemble, ensemble_out)
 
 

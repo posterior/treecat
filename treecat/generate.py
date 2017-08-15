@@ -30,18 +30,22 @@ def generate_dataset(num_rows, num_cols, num_cats=4, rate=1.0):
         A pair (ragged_index, data).
     """
     set_random_seed(0)
-    ragged_index = np.arange(0, num_cats * (num_cols + 1), num_cats, np.int32)
-    data = np.zeros((num_rows, num_cols * num_cats), np.int8)
-    for v in range(num_cols):
+    N = num_rows
+    V = num_cols
+    K = V * (V - 1) // 2
+    ragged_index = np.arange(0, num_cats * (V + 1), num_cats, np.int32)
+    data = np.zeros((N, V * num_cats), np.int8)
+    for v in range(V):
         beg, end = ragged_index[v:v + 2]
         column = data[:, beg:end]
         probs = np.random.dirichlet(np.zeros(num_cats) + 0.5)
-        for n in range(num_rows):
+        for n in range(N):
             count = np.random.poisson(rate)
             column[n, :] = np.random.multinomial(count, probs)
     dataset = {
         'schema': {
             'ragged_index': ragged_index,
+            'tree_prior': np.zeros(K, np.float32),
         },
         'data': data,
     }
@@ -217,6 +221,8 @@ def generate_model_file(num_rows, num_cols, num_cats=4, rate=1.0):
     """
     path = os.path.join(DATA, '{}-{}-{}-{:0.1f}.model.pkz'.format(
         num_rows, num_cols, num_cats, rate))
+    V = num_cols
+    K = V * (V - 1) // 2
     if os.path.exists(path):
         return path
     print('Generating {}'.format(path))
@@ -224,9 +230,11 @@ def generate_model_file(num_rows, num_cols, num_cats=4, rate=1.0):
         os.makedirs(DATA)
     dataset_path = generate_dataset_file(num_rows, num_cols, num_cats, rate)
     dataset = pickle_load(dataset_path)
-    schema = dataset['schema']
+    ragged_index = dataset['schema']['ragged_index']
+    data = dataset['data']
     config = make_config(learning_init_epochs=5)
-    model = train_model(schema['ragged_index'], dataset['data'], config)
+    tree_prior = np.zeros(K, dtype=np.float32)
+    model = train_model(ragged_index, data, tree_prior, config)
     pickle_dump(model, path)
     return path
 
