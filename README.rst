@@ -1,12 +1,10 @@
 .. figure:: https://cdn.rawgit.com/posterior/treecat/master/doc/cartoon.png
-   :alt: A Bayesian latent tree model
-
-   A Bayesian latent tree model
+   :alt: 
 
 TreeCat
 =======
 
-|Build Status| |Latest Version| |DOI| |Docs|
+|Docs| |Build Status| |Latest Version| |DOI|
 
 Intended Use
 ------------
@@ -328,11 +326,11 @@ License
 Copyright (c) 2017 Fritz Obermeyer. TreeCat is licensed under the
 `Apache 2.0 License </LICENSE>`__.
 
+.. |Docs| image:: https://readthedocs.org/projects/treecat/badge/?version=latest
+   :target: http://treecat.readthedocs.io/en/latest/?badge=latest
 .. |Build Status| image:: https://travis-ci.org/posterior/treecat.svg?branch=master
    :target: https://travis-ci.org/posterior/treecat
 .. |Latest Version| image:: https://badge.fury.io/py/pytreecat.svg
    :target: https://pypi.python.org/pypi/pytreecat
 .. |DOI| image:: https://zenodo.org/badge/93913649.svg
    :target: https://zenodo.org/badge/latestdoi/93913649
-.. |Docs| image:: https://readthedocs.org/projects/treecat/badge/?version=latest
-   :target: http://treecat.readthedocs.io/en/latest/?badge=latest
