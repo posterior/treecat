@@ -5,6 +5,7 @@
 [![Build Status](https://travis-ci.org/posterior/treecat.svg?branch=master)](https://travis-ci.org/posterior/treecat)
 [![Latest Version](https://badge.fury.io/py/pytreecat.svg)](https://pypi.python.org/pypi/pytreecat)
 [![DOI](https://zenodo.org/badge/93913649.svg)](https://zenodo.org/badge/latestdoi/93913649)
+[![Docs](https://readthedocs.org/projects/treecat/badge/?version=latest)](http://treecat.readthedocs.io/en/latest/?badge=latest)
 
 ## Intended Use
 
