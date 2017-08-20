@@ -1,4 +1,4 @@
-.. figure:: doc/cartoon.png
+.. figure:: https://cdn.rawgit.com/posterior/treecat/master/doc/cartoon.png
    :alt: A Bayesian latent tree model
 
    A Bayesian latent tree model

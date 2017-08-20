@@ -1,4 +1,4 @@
-![A Bayesian latent tree model](doc/cartoon.png)
+![A Bayesian latent tree model](https://cdn.rawgit.com/posterior/treecat/master/doc/cartoon.png)
 
 # TreeCat
 
