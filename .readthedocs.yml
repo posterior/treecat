@@ -1,5 +1,5 @@
 formats:
-  - html
+  - pdf
 
 conda:
   file: environment.3.yml
