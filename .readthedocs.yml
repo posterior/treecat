@@ -1,0 +1,8 @@
+formats:
+  - html
+
+conda:
+  file: environment.3.yml
+
+python:
+  version: 3.5
