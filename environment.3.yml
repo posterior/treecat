@@ -3,6 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - python=3.5
+  - Spyinx
   - flake8
   - goftests
   - isort
@@ -20,3 +21,4 @@ dependencies:
   - pip:
     - jsonpickle
     - parsable
+    - sphinx_rtd_theme

@@ -104,3 +104,6 @@ ENV/
 
 # Custom directories:
 /data/
+
+# Generated documentation
+README.rst
