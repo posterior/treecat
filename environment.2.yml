@@ -3,7 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - python=2.7
-  - Spyinx
+  - Sphinx
   - flake8
   - goftests
   - isort
