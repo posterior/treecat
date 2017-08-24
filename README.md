@@ -1,7 +1,8 @@
-![A Bayesian latent tree model](doc/cartoon.png)
+![](https://cdn.rawgit.com/posterior/treecat/master/doc/cartoon.png)
 
 # TreeCat
 
+[![Docs](https://readthedocs.org/projects/treecat/badge/?version=latest)](http://treecat.readthedocs.io/en/latest/?badge=latest)
 [![Build Status](https://travis-ci.org/posterior/treecat.svg?branch=master)](https://travis-ci.org/posterior/treecat)
 [![Latest Version](https://badge.fury.io/py/pytreecat.svg)](https://pypi.python.org/pypi/pytreecat)
 [![DOI](https://zenodo.org/badge/93913649.svg)](https://zenodo.org/badge/latestdoi/93913649)
@@ -102,8 +103,10 @@ pip install -e .
     We'll call our dataset `dataset.pkz` (a gzipped pickle file).
 
     ```sh
-    $ treecat import-data data.csv types.csv values.csv dataset.pkz
+    $ treecat import-data data.csv types.csv values.csv '' dataset.pkz
     ```
+
+    (the empty argument '' is an optional structural prior that we ignore).
 
 4.  Train an ensemble model on your dataset.
     This typically takes ~15minutes for a 1M cell dataset.

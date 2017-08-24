@@ -127,12 +127,14 @@ def validate_model(ragged_index, data, model, config):
     (6, 6, 6, 6),
 ])
 def test_train_model(N, V, C, M):
+    K = V * (V - 1) // 2
     config = make_config()
     config['model_num_clusters'] = M
     dataset = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
     ragged_index = dataset['schema']['ragged_index']
     data = dataset['data']
-    model = train_model(ragged_index, data, config)
+    tree_prior = np.exp(np.random.random(K), dtype=np.float32)
+    model = train_model(ragged_index, data, tree_prior, config)
     validate_model(ragged_index, data, model, config)
 
 
@@ -145,12 +147,14 @@ def test_train_model(N, V, C, M):
     (6, 6, 6, 6),
 ])
 def test_train_ensemble(N, V, C, M):
+    K = V * (V - 1) // 2
     config = make_config()
     config['model_num_clusters'] = M
     dataset = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
     ragged_index = dataset['schema']['ragged_index']
     data = dataset['data']
-    ensemble = train_ensemble(ragged_index, data, config)
+    tree_prior = np.exp(np.random.random(K), dtype=np.float32)
+    ensemble = train_ensemble(ragged_index, data, tree_prior, config)
 
     assert len(ensemble) == config['model_ensemble_size']
     for sub_seed, model in enumerate(ensemble):
@@ -182,12 +186,14 @@ def hash_assignments(assignments):
     (4, 1, 2, 2),
 ])
 def test_assignment_sampler_gof(N, V, C, M):
+    K = V * (V - 1) // 2
     config = make_config()
     config['model_num_clusters'] = M
     dataset = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
     ragged_index = dataset['schema']['ragged_index']
     data = dataset['data']
-    trainer = TreeCatTrainer(ragged_index, data, config)
+    tree_prior = np.exp(np.random.random(K), dtype=np.float32)
+    trainer = TreeCatTrainer(ragged_index, data, tree_prior, config)
     print('Data:')
     print(data)
 
@@ -239,12 +245,14 @@ def test_recover_structure(V, C):
     set_random_seed(V + C * 10)
     N = 200
     M = 2 * C
+    K = V * (V - 1) // 2
+    tree_prior = np.zeros(K, np.float32)
     tree = generate_tree(num_cols=V)
     dataset = generate_clean_dataset(tree, num_rows=N, num_cats=C)
     ragged_index = dataset['schema']['ragged_index']
     data = dataset['data']
     config = make_config(model_num_clusters=M)
-    model = train_model(ragged_index, data, config)
+    model = train_model(ragged_index, data, tree_prior, config)
 
     # Compute three types of edges.
     expected_edges = tree.get_edges()

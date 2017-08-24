@@ -28,12 +28,19 @@ numpy_seterr()
 
 @pytest.fixture(scope='module')
 def model():
-    return train_model(TINY_RAGGED_INDEX, TINY_DATA, TINY_CONFIG)
+    V = TINY_RAGGED_INDEX.shape[0] - 1
+    K = V * (V - 1) // 2
+    tree_prior = np.zeros(K, np.float32)
+    return train_model(TINY_RAGGED_INDEX, TINY_DATA, tree_prior, TINY_CONFIG)
 
 
 @pytest.fixture(scope='module')
 def ensemble():
-    return train_ensemble(TINY_RAGGED_INDEX, TINY_DATA, TINY_CONFIG)
+    V = TINY_RAGGED_INDEX.shape[0] - 1
+    K = V * (V - 1) // 2
+    tree_prior = np.zeros(K, np.float32)
+    return train_ensemble(TINY_RAGGED_INDEX, TINY_DATA, tree_prior,
+                          TINY_CONFIG)
 
 
 def validate_sample_shape(ragged_index, data, server):

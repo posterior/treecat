@@ -23,6 +23,7 @@ from parsable import parsable
 from six.moves import cPickle as pickle
 from six.moves import range
 from six.moves import zip
+from treecat.structure import find_complete_edge
 
 logger = logging.getLogger(__name__)
 parsable = parsable.Parsable()
@@ -261,8 +262,9 @@ def guess_schema(data_csvs_in, types_csv_out, values_csv_out,
                 writer.writerow([name, str(value), str(count)])
 
 
-def load_schema(types_csv_in, values_csv_in, encoding='utf-8'):
-    print('Loading schema from {} and {}'.format(types_csv_in, values_csv_in))
+def load_schema(types_csv_in, values_csv_in, groups_csv_in, encoding='utf-8'):
+    print('Loading schema from {}, {}, {}'.format(types_csv_in, values_csv_in,
+                                                  groups_csv_in))
 
     # Load types.
     feature_names = []
@@ -309,6 +311,30 @@ def load_schema(types_csv_in, values_csv_in, encoding='utf-8'):
     if not feature_names:
         raise ValueError('Found no features')
 
+    # Load optional groups.
+    # These are arranged as blocks from sources to targets with constant logit.
+    # The logits, sources, and targets can be specified in any order.
+    group_logits = defaultdict(lambda: 0)
+    group_sources = defaultdict(set)
+    group_targets = defaultdict(set)
+    if groups_csv_in:
+        with csv_reader(groups_csv_in, encoding) as reader:
+            header = next(reader)
+            assert header[0].lower() == 'group'
+            assert header[1].lower() == 'logit'
+            assert header[2].lower() == 'source'
+            assert header[3].lower() == 'target'
+            for row in reader:
+                if len(row) < 4:
+                    continue
+                group, logit, source, target = row[:3]
+                if logit:
+                    group_logits[group] = float(logit)
+                if source:
+                    group_sources[group].add(source)
+                if target:
+                    group_targets[group].add(target)
+
     # Create value indices.
     categorical_index = {}
     ordinal_ranges = {}
@@ -335,6 +361,18 @@ def load_schema(types_csv_in, values_csv_in, encoding='utf-8'):
             dim = 2
         ragged_index[pos + 1] = ragged_index[pos] + dim
 
+    # Create a tree prior.
+    V = len(feature_names)
+    K = V * (V - 1) // 2
+    tree_prior = np.zeros(K, np.float32)
+    for group, logit in group_logits.items():
+        for source in group_sources[group]:
+            v1 = feature_index[source]
+            for target in group_targets[group]:
+                v2 = feature_index[target]
+                k = find_complete_edge(v1, v2)
+                tree_prior[k] = logit
+
     return {
         'feature_names': feature_names,
         'feature_index': feature_index,
@@ -343,6 +381,7 @@ def load_schema(types_csv_in, values_csv_in, encoding='utf-8'):
         'categorical_index': categorical_index,
         'ordinal_ranges': ordinal_ranges,
         'ragged_index': ragged_index,
+        'tree_prior': tree_prior,
     }
 
 
@@ -501,15 +540,16 @@ def export_rows(schema, data):
 def import_data(data_csvs_in,
                 types_csv_in,
                 values_csv_in,
+                groups_csv_in,
                 dataset_out,
                 encoding='utf-8'):
     """Import a comma-delimited list of csv files into internal treecat format.
 
     Common encodings include: utf-8, cp1252.
     """
-    schema = load_schema(types_csv_in, values_csv_in, encoding)
+    schema = load_schema(types_csv_in, values_csv_in, groups_csv_in, encoding)
     data = np.concatenate([
-        load_data(schema, data_csv_in, encoding)
+        load_data(schema, data_csv_in, groups_csv_in, encoding)
         for data_csv_in in data_csvs_in.split(',')
     ])
     print('Imported data shape: [{}, {}]'.format(data.shape[0], data.shape[1]))

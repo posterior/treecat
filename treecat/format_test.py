@@ -23,6 +23,7 @@ from treecat.testutil import tempdir
 DATA_CSV = os.path.join(TESTDATA, 'tiny_data.csv')
 TYPES_CSV = os.path.join(TESTDATA, 'tiny_types.csv')
 VALUES_CSV = os.path.join(TESTDATA, 'tiny_values.csv')
+GROUPS_CSV = os.path.join(TESTDATA, 'tiny_groups.csv')
 
 EXAMPLE_DATA = [
     u'foo',
@@ -83,16 +84,16 @@ def test_guess_schema():
 
 
 def test_load_schema():
-    load_schema(TYPES_CSV, VALUES_CSV)
+    load_schema(TYPES_CSV, VALUES_CSV, GROUPS_CSV)
 
 
 def test_load_data():
-    schema = load_schema(TYPES_CSV, VALUES_CSV)
+    schema = load_schema(TYPES_CSV, VALUES_CSV, GROUPS_CSV)
     load_data(schema, DATA_CSV)
 
 
 def test_export_import_rows():
-    schema = load_schema(TYPES_CSV, VALUES_CSV)
+    schema = load_schema(TYPES_CSV, VALUES_CSV, GROUPS_CSV)
     data = load_data(schema, DATA_CSV)
     print(schema['feature_index'])
     print(data)

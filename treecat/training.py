@@ -206,7 +206,7 @@ def jit_remove_row(
 class TreeCatTrainer(object):
     """Class for training a TreeCat model."""
 
-    def __init__(self, ragged_index, data, config):
+    def __init__(self, ragged_index, data, tree_prior, config):
         """Initialize a model in an unassigned state.
 
         Args:
@@ -214,6 +214,8 @@ class TreeCatTrainer(object):
                 data array.
             data: An [N, _]-shaped numpy array of ragged data, where the vth
                 column is stored in data[:, ragged_index[v]:ragged_index[v+1]].
+            tree_prior: A [K]-shaped numpy array of prior edge log odds, where
+                K is the number of edges in the complete graph on V vertices.
             config: A global config dict.
         """
         logger.info('TreeCatTrainer of %d x %d data', data[0].shape[0],
@@ -223,10 +225,15 @@ class TreeCatTrainer(object):
         config = config.copy()
         V = len(ragged_index) - 1  # Number of features, i.e. vertices.
         N = data.shape[0]  # Number of rows.
+        K = V * (V - 1) // 2  # Number of edges in complete graph.
         assert V <= 32768, 'Invalid # features > 32768: {}'.format(V)
         assert len(data.shape) == 2
         assert data.shape[1] == ragged_index[-1]
+        assert data.dtype == np.int8
+        assert tree_prior.shape == (K, )
+        assert tree_prior.dtype == np.float32
         self._data = data
+        self._tree_prior = tree_prior
         self._config = config
         self._ragged_index = ragged_index
         self._assigned_rows = set()
@@ -336,8 +343,10 @@ class TreeCatTrainer(object):
         else:
             assignments = self._assignments[sorted(self._assigned_rows), :]
         assignments = np.array(assignments, order='F')
-        return compute_edge_logits(M, self._tree.complete_grid, assignments,
-                                   self._gammaln_table, vert_logits)
+        result = compute_edge_logits(M, self._tree.complete_grid, assignments,
+                                     self._gammaln_table, vert_logits)
+        result += self._tree_prior
+        return result
 
     @profile
     def sample_tree(self):
@@ -460,7 +469,7 @@ class TreeCatTrainer(object):
         }
 
 
-def train_model(ragged_index, data, config):
+def train_model(ragged_index, data, tree_prior, config):
     """Train a TreeCat model using subsample-annealed MCMC.
 
     Let N be the number of data rows and V be the number of features.
@@ -470,8 +479,8 @@ def train_model(ragged_index, data, config):
             data array.
         data: An [N, _]-shaped numpy array of ragged data, where the vth
             column is stored in data[:, ragged_index[v]:ragged_index[v+1]].
-        data: A list of numpy arrays, where each array is an N x _ column of
-            counts of multinomial data.
+        tree_prior: A [K]-shaped numpy array of prior edge log odds, where
+            K is the number of edges in the complete graph on V vertices.
         config: A global config dict.
 
     Returns:
@@ -482,15 +491,15 @@ def train_model(ragged_index, data, config):
             assignments: An [N, V] numpy array of latent cluster ids for each
                 cell in the dataset.
     """
-    return TreeCatTrainer(ragged_index, data, config).train()
+    return TreeCatTrainer(ragged_index, data, tree_prior, config).train()
 
 
 def _train_model(task):
-    ragged_index, data, config = task
-    return train_model(ragged_index, data, config)
+    ragged_index, data, tree_prior, config = task
+    return train_model(ragged_index, data, tree_prior, config)
 
 
-def train_ensemble(ragged_index, data, config):
+def train_ensemble(ragged_index, data, tree_prior, config):
     """Train a TreeCat ensemble model using subsample-annealed MCMC.
 
     The ensemble size is controlled by config['model_ensemble_size'].
@@ -508,8 +517,7 @@ def train_ensemble(ragged_index, data, config):
     Returns:
         A trained model as a dictionary with keys:
             tree: A TreeStructure instance with the learned latent structure.
-            suffstats: Sufficient statistics of features, vertices, and
-                edges.
+            suffstats: Sufficient statistics of features, vertices, and edges.
             assignments: An [N, V] numpy array of latent cluster ids for each
                 cell in the dataset.
     """
@@ -517,5 +525,5 @@ def train_ensemble(ragged_index, data, config):
     for sub_seed in range(config['model_ensemble_size']):
         sub_config = config.copy()
         sub_config['seed'] += sub_seed
-        tasks.append((ragged_index, data, sub_config))
+        tasks.append((ragged_index, data, tree_prior, sub_config))
     return parallel_map(_train_model, tasks)

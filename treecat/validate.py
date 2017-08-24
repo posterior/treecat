@@ -121,13 +121,14 @@ def train_task(dataset_path, model_path, config_str):
     dataset = pickle_load(dataset_path)
     ragged_index = dataset['schema']['ragged_index']
     data = dataset['data']
+    tree_prior = dataset['schema']['tree_prior']
     num_rows = data.shape[0]
     mask = split_data(ragged_index, num_rows, num_parts, partid)
     training_data = data
     training_data[mask] = 0
 
     # Train a model.
-    model = train_model(ragged_index, training_data, config)
+    model = train_model(ragged_index, training_data, tree_prior, config)
     model['profiling_stats'] = get_profiling_stats()
     pickle_dump(model, model_path)
 

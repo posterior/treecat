@@ -35,8 +35,10 @@ def test_e2e(model_type):
         guess_schema(data_csv, types_csv, values_csv)
 
         print('Load schema')
-        schema = load_schema(types_csv, values_csv)
+        groups_csv = os.path.join(TESTDATA, 'tiny_groups.csv')
+        schema = load_schema(types_csv, values_csv, groups_csv)
         ragged_index = schema['ragged_index']
+        tree_prior = schema['tree_prior']
 
         print('Load data')
         data = load_data(schema, data_csv)
@@ -44,9 +46,9 @@ def test_e2e(model_type):
 
         print('Train model')
         if model_type == 'single':
-            model = train_model(ragged_index, data, config)
+            model = train_model(ragged_index, data, tree_prior, config)
         elif model_type == 'ensemble':
-            model = train_ensemble(ragged_index, data, config)
+            model = train_ensemble(ragged_index, data, tree_prior, config)
         else:
             raise ValueError(model_type)
 
