@@ -14,6 +14,12 @@ lint: FORCE
 test: lint FORCE
 	cd treecat ; py.test -vrw
 
+README.rst: README.md
+	pandoc README.md -o README.rst
+
+docs: README.rst FORCE
+	$(MAKE) -C docs html
+
 clean:
 	treecat.generate clean
 

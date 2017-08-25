@@ -3,6 +3,7 @@ channels:
   - conda-forge
 dependencies:
   - python=3.5
+  - Sphinx
   - cython
   - flake8
   - goftests
@@ -22,3 +23,4 @@ dependencies:
     - eigency
     - jsonpickle
     - parsable
+    - sphinx_rtd_theme

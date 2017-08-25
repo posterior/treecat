@@ -41,7 +41,7 @@ def echo(arg):
     return _echo(arg.encode('utf-8')).decode('utf-8')
 
 
-def train_model(data, mask, config):
+def train_model(ragged_index, data, tree_prior, config):
     cdef Config _config
     cdef Model _model
     # TODO convert config
