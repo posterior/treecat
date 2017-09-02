@@ -7,34 +7,39 @@ import numpy as np
 from treecat.util import jit
 
 
-@jit
-def jit_add_categorical_data(ragged_index, data, n, v, value):
-    """Update multinomial sufficient statistics."""
-    data[n, ragged_index[v] + value] += 1
+class Schema(object):
+    """Schema describing data types of multivariate heterogeneous data."""
 
+    dtypes = ('multinomial', 'normal')
+    dtype_index = {dtypes.index(dtype) for dtype in dtypes}
 
-@jit
-def jit_add_real_data(data, n, v, value):
-    """Update real sufficient statistics."""
-    # Adapted from https://www.johndcook.com/blog/standard_deviation
-    ss = data[n, v, 1:4]
-    if ss[0] == 0:
-        ss[0] = 1.0
-        ss[1] = value
-        ss[2] = 0.0
-    else:
-        ss[0] += 1.0
-        old_diff = value - ss[1]
-        ss[1] += old_diff / ss[0]
-        new_diff = value - ss[1]
-        ss[2] += old_diff * new_diff
+    def __init__(self):
+        self._multinomial_features = []  # list(string).
+        self._multinomial_values = {}  # dict(string, list(string)).
+        self._multinomial_value_index = {}  # dict(string, dict(string, int)).
+        self._normal_features = []  # list(string).
+
+    def add_multinomial_feature(self, name):
+        assert name not in self._multinomial_features
+        self._multinomial_features.append(name)
+
+    def add_multinomial_value(self, name, value):
+        values = self._multinomial_values[name]
+        value_index = self._multinomial_value_index[name]
+        if value not in value_index:
+            value_index[value] = len(values)
+            values.append(value)
+
+    def add_normal_feature(self, name):
+        assert name not in self._normal_features
+        self._normal_features.append(name)
 
 
 class Table(object):
     """Table of row-oriented heterogeneous repeated data."""
 
     def __init__(self, schema, rows):
-        self._schema = dict(schema)
+        self._schema = dict(schema)  # TODO Use a Schema object.
         N = len(rows)
 
         # Collect categorical features and values.
@@ -88,6 +93,10 @@ class Table(object):
         self._real_data = data
 
     @property
+    def schema(self):
+        return self._schema
+
+    @property
     def categorical_ragged_index(self):
         return self._categorical_ragged_index
 
@@ -98,3 +107,42 @@ class Table(object):
     @property
     def real_data(self):
         return self._real_data
+
+    def __add__(self, other):
+        """Combine observations of two row-aligned datasets.
+
+        This adds data in the sense of repeated observation of each row.
+
+        See also `Table.cat()` for combining different rows
+        and `Table.join` for combining different columns.
+
+        Args:
+            other (Table): Another table with the same schema and aligned rows.
+
+        Returns:
+            Table: A table with the same schema and same number of rows.
+        """
+        raise NotImplementedError
+
+
+@jit
+def jit_add_categorical_data(ragged_index, data, n, v, value):
+    """Update multinomial sufficient statistics."""
+    data[n, ragged_index[v] + value] += 1
+
+
+@jit
+def jit_add_real_data(data, n, v, value):
+    """Update real sufficient statistics."""
+    # Adapted from https://www.johndcook.com/blog/standard_deviation
+    ss = data[n, v, 0:3]
+    if ss[0] == 0:
+        ss[0] = 1.0
+        ss[1] = value
+        ss[2] = 0.0
+    else:
+        ss[0] += 1.0
+        old_diff = value - ss[1]
+        ss[1] += old_diff / ss[0]
+        new_diff = value - ss[1]
+        ss[2] += old_diff * new_diff
