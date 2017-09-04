@@ -632,18 +632,18 @@ class TreeGaussTrainer(TreeTrainer):
         data = np.asarray(data, np.float32)
         assert len(data.shape) == 2
         N, V = data.shape
-        M = config['model_latent_dim']
+        D = config['model_latent_dim']
         E = V - 1  # Number of edges in the tree.
         TreeTrainer.__init__(self, N, V, tree_prior, config)
         self._data = data
-        self._latent = np.zeros([N, V, M], np.float32)
+        self._latent = np.zeros([N, V, D], np.float32)
 
         # This is symmetric positive definite.
-        self._vert_ss = np.zeros([V, M, M], np.float32)
+        self._vert_ss = np.zeros([V, D, D], np.float32)
         # This is arbitrary (not necessarily symmetric).
-        self._edge_ss = np.zeros([E, M, M], np.float32)
+        self._edge_ss = np.zeros([E, D, D], np.float32)
         # This represents (count, mean, covariance).
-        self._feat_ss = np.zeros([V, M, 1 + 1 + M], np.float32)
+        self._feat_ss = np.zeros([V, D, 1 + 1 + D], np.float32)
 
     def add_row(self, row_id):
         logger.debug('TreeGaussTrainer.add_row %d', row_id)

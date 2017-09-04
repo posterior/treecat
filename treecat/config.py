@@ -6,6 +6,7 @@ from __future__ import print_function
 DEFAULT_CONFIG = {
     'seed': 0,
     'model_num_clusters': 32,
+    'model_latent_dim': 0,
     'model_ensemble_size': 8,
     'learning_init_epochs': 100,
     'learning_full_epochs': 1,
