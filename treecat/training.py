@@ -53,27 +53,6 @@ def logprob_dc(counts, prior, axis=None):
     return gammaln(np.add(counts, prior, dtype=np.float32)).sum(axis)
 
 
-@profile
-@jit(nopython=True, cache=True)
-def compute_edge_logits(M, grid, assignments, gammaln_table, vert_logits):
-    K = grid.shape[1]
-    N, V = assignments.shape
-    edge_logits = np.zeros(K, np.float32)
-    for k in range(K):
-        v1, v2 = grid[1:3, k]
-        assign1 = assignments[:, v1]
-        assign2 = assignments[:, v2]
-        counts = np.zeros((M, M), np.int32)
-        for n in range(N):
-            counts[assign1[n], assign2[n]] += 1
-        edge_logit = np.float32(0)
-        for m1 in range(M):
-            for m2 in range(M):
-                edge_logit += gammaln_table[counts[m1, m2]]
-        edge_logits[k] = edge_logit - vert_logits[v1] - vert_logits[v2]
-    return edge_logits
-
-
 def make_annealing_schedule(num_rows, epochs, sample_tree_rate):
     """Iterator for subsample annealing, yielding (action, arg) pairs.
 
@@ -294,7 +273,7 @@ class TreeTrainer(object):
 
 @profile
 @jit(nopython=True, cache=True)
-def jit_add_row(
+def treecat_add_row(
         ragged_index,
         data_row,
         tree_grid,
@@ -360,7 +339,7 @@ def jit_add_row(
 
 @profile
 @jit(nopython=True, cache=True)
-def jit_remove_row(
+def treecat_remove_row(
         ragged_index,
         data_row,
         tree_grid,
@@ -382,6 +361,28 @@ def jit_remove_row(
         beg, end = ragged_index[v:v + 2]
         feat_ss[beg:end, m] -= data_row[beg:end]
         meas_ss[v, m] -= data_row[beg:end].sum()
+
+
+@profile
+@jit(nopython=True, cache=True)
+def treecat_compute_edge_logits(M, grid, assignments, gammaln_table,
+                                vert_logits):
+    K = grid.shape[1]
+    N, V = assignments.shape
+    edge_logits = np.zeros(K, np.float32)
+    for k in range(K):
+        v1, v2 = grid[1:3, k]
+        assign1 = assignments[:, v1]
+        assign2 = assignments[:, v2]
+        counts = np.zeros((M, M), np.int32)
+        for n in range(N):
+            counts[assign1[n], assign2[n]] += 1
+        edge_logit = np.float32(0)
+        for m1 in range(M):
+            for m2 in range(M):
+                edge_logit += gammaln_table[counts[m1, m2]]
+        edge_logits[k] = edge_logit - vert_logits[v1] - vert_logits[v2]
+    return edge_logits
 
 
 class TreeCatTrainer(TreeTrainer):
@@ -459,7 +460,7 @@ class TreeCatTrainer(TreeTrainer):
         np.add(self._feat_ss, self._feat_prior, out=self._feat_probs)
         np.add(self._meas_ss, self._meas_prior, out=self._meas_probs)
 
-        jit_add_row(
+        treecat_add_row(
             self._ragged_index,
             self._data[row_id, :],
             self._tree.tree_grid,
@@ -480,7 +481,7 @@ class TreeCatTrainer(TreeTrainer):
         assert row_id in self._added_rows, row_id
         self._added_rows.remove(row_id)
 
-        jit_remove_row(
+        treecat_remove_row(
             self._ragged_index,
             self._data[row_id, :],
             self._tree.tree_grid,
@@ -512,8 +513,9 @@ class TreeCatTrainer(TreeTrainer):
         else:
             assignments = self._assignments[sorted(self._added_rows), :]
         assignments = np.array(assignments, order='F')
-        result = compute_edge_logits(M, self._tree.complete_grid, assignments,
-                                     self._gammaln_table, vert_logits)
+        result = treecat_compute_edge_logits(M, self._tree.complete_grid,
+                                             assignments, self._gammaln_table,
+                                             vert_logits)
         result += self._tree_prior
         return result
 
