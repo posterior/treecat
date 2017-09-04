@@ -590,7 +590,8 @@ def treegauss_add_row(
         vert_ss,
         edge_ss,
         feat_ss, ):
-    TODO('Sample via dynamic programming')
+    # Sample latent state using dynamic programming.
+    TODO('https://github.com/posterior/treecat/issues/26')
 
     # Update sufficient statistics.
     for v in range(latent_row.shape[0]):
@@ -701,7 +702,7 @@ class TreeGaussTrainer(TreeTrainer):
 
         This is used for sampling and estimating the latent tree.
         """
-        TODO('Compute edge logits')
+        TODO('https://github.com/posterior/treecat/issues/26')
 
     def logprob(self):
         """Compute non-normalized log probability of data and latent state.
@@ -709,7 +710,7 @@ class TreeGaussTrainer(TreeTrainer):
         This is used for testing goodness of fit of the latent state kernel.
         """
         assert len(self._added_rows) == self._num_rows
-        TODO('Compute logprob')
+        TODO('https://github.com/posterior/treecat/issues/26')
 
     def train(self):
         """Train a TreeGauss model using subsample-annealed MCMC.
@@ -739,24 +740,24 @@ class TreeMogTrainer(TreeTrainer):
     """Class for training a tree mixture-of-Gaussians model."""
 
     def __init__(self, data, tree_prior, config):
-        TODO()
+        TODO('https://github.com/posterior/treecat/issues/27')
 
     def add_row(self, row_id):
         """Add a given row to the current subsample."""
-        TODO()
+        TODO('https://github.com/posterior/treecat/issues/27')
 
     def remove_row(self, row_id):
         """Remove a given row from the current subsample."""
-        TODO()
+        TODO('https://github.com/posterior/treecat/issues/27')
 
     def compute_edge_logits(self):
         """Compute edge log probabilities on the complete graph."""
-        TODO()
+        TODO('https://github.com/posterior/treecat/issues/27')
 
     def logprob(self):
         """Compute non-normalized log probability of data and latent state."""
         assert len(self._added_rows) == self._num_rows
-        TODO()
+        TODO('https://github.com/posterior/treecat/issues/27')
 
 
 def train_model(ragged_index, data, tree_prior, config):
