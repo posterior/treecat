@@ -1,4 +1,4 @@
-![](https://cdn.rawgit.com/posterior/treecat/master/doc/cartoon.png)
+![](https://cdn.rawgit.com/posterior/treecat/master/doc/logo.png)
 
 # TreeCat
 

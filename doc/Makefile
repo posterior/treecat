@@ -1,3 +1,3 @@
-cartoon.png: cartoon.py
-	python cartoon.py
-	convert -trim cartoon.png cartoon.png
+logo.png: logo.py
+	python logo.py
+	convert -trim logo.png logo.png

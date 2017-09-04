@@ -1,4 +1,4 @@
-.. figure:: https://cdn.rawgit.com/posterior/treecat/master/doc/cartoon.png
+.. figure:: https://cdn.rawgit.com/posterior/treecat/master/doc/logo.png
    :alt: 
 
 TreeCat
