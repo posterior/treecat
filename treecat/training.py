@@ -24,6 +24,7 @@ from treecat.util import SERIES
 from treecat.util import TODO
 from treecat.util import jit
 from treecat.util import parallel_map
+from treecat.util import prange
 from treecat.util import profile
 from treecat.util import sample_from_probs
 from treecat.util import set_random_seed
@@ -64,14 +65,6 @@ def make_annealing_schedule(num_rows, epochs, sample_tree_rate):
     assignment state (no rows are assigned). It then interleaves 'add_row' and
     'remove_row' actions so as to gradually increase the number of assigned
     rows. The increase rate is linear.
-
-    This also interleaves occasional 'sample_tree' actions that indicate good
-    times to sample latent variables other than assignments (often only the
-    latent tree, but possibly other hyperparameters).
-
-    Unlike Loom's annealing schedule, this scheudle allows 'sample_tree'
-    actions to happen arbitrarily often. Hence sufficient statistics must be
-    maintained losslessly, rather than computed from scratch for each batch.
 
     Args:
         num_rows (int): Number of rows in dataset.
@@ -381,10 +374,37 @@ def treecat_remove_row(
         meas_ss[v, m] -= data_row[beg:end].sum()
 
 
-@profile
 @jit(nopython=True, cache=True)
-def treecat_compute_edge_logits(M, grid, assignments, gammaln_table,
-                                vert_logits):
+def treecat_compute_edge_logit(M, gammaln_table, assign1, assign2):
+    counts = np.zeros((M, M), np.int32)
+    for n in range(assign1.shape[0]):
+        counts[assign1[n], assign2[n]] += 1
+    result = np.float32(0)
+    for m1 in range(M):
+        for m2 in range(M):
+            result += gammaln_table[counts[m1, m2]]
+    return result
+
+
+@jit(nopython=True, parallel=True)
+def treecat_compute_edge_logits_par(M, grid, gammaln_table, assignments,
+                                    vert_logits):
+    K = grid.shape[1]
+    N, V = assignments.shape
+    edge_logits = np.zeros(K, np.float32)
+    for k in prange(K):
+        v1, v2 = grid[1:3, k]
+        assign1 = assignments[:, v1]
+        assign2 = assignments[:, v2]
+        edge_logit = treecat_compute_edge_logit(M, gammaln_table, assign1,
+                                                assign2)
+        edge_logits[k] = edge_logit - vert_logits[v1] - vert_logits[v2]
+    return edge_logits
+
+
+@jit(nopython=True, cache=True)
+def treecat_compute_edge_logits_seq(M, grid, gammaln_table, assignments,
+                                    vert_logits):
     K = grid.shape[1]
     N, V = assignments.shape
     edge_logits = np.zeros(K, np.float32)
@@ -392,15 +412,21 @@ def treecat_compute_edge_logits(M, grid, assignments, gammaln_table,
         v1, v2 = grid[1:3, k]
         assign1 = assignments[:, v1]
         assign2 = assignments[:, v2]
-        counts = np.zeros((M, M), np.int32)
-        for n in range(N):
-            counts[assign1[n], assign2[n]] += 1
-        edge_logit = np.float32(0)
-        for m1 in range(M):
-            for m2 in range(M):
-                edge_logit += gammaln_table[counts[m1, m2]]
+        edge_logit = treecat_compute_edge_logit(M, gammaln_table, assign1,
+                                                assign2)
         edge_logits[k] = edge_logit - vert_logits[v1] - vert_logits[v2]
     return edge_logits
+
+
+@profile
+def treecat_compute_edge_logits(M, grid, gammaln_table, assignments,
+                                vert_logits, parallel):
+    if parallel:
+        return treecat_compute_edge_logits_par(M, grid, gammaln_table,
+                                               assignments, vert_logits)
+    else:
+        return treecat_compute_edge_logits_seq(M, grid, gammaln_table,
+                                               assignments, vert_logits)
 
 
 class TreeCatTrainer(TreeTrainer):
@@ -531,9 +557,10 @@ class TreeCatTrainer(TreeTrainer):
         else:
             assignments = self._assignments[sorted(self._added_rows), :]
         assignments = np.array(assignments, order='F')
+        parallel = self._config['learning_parallel']
         result = treecat_compute_edge_logits(M, self._tree.complete_grid,
-                                             assignments, self._gammaln_table,
-                                             vert_logits)
+                                             self._gammaln_table, assignments,
+                                             vert_logits, parallel)
         result += self._tree_prior
         return result
 

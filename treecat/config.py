@@ -12,6 +12,7 @@ DEFAULT_CONFIG = {
     'learning_full_epochs': 1,
     'learning_estimate_tree': True,
     'learning_sample_tree_rate': 3,
+    'learning_parallel': False,
 }
 
 
