@@ -30,6 +30,10 @@ logging.basicConfig(format=LOG_FORMAT, level=LOG_LEVEL, filename=LOG_FILENAME)
 logger = logging.getLogger(__name__)
 
 
+def TODO(message=''):
+    raise NotImplementedError('TODO {}'.format(message))
+
+
 def no_jit(*args, **kwargs):
     if not kwargs and len(args) == 1 and callable(args[0]):
         return args[0]

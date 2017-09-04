@@ -18,6 +18,7 @@ from treecat.structure import estimate_tree
 from treecat.structure import make_propagation_program
 from treecat.structure import sample_tree
 from treecat.util import SERIES
+from treecat.util import TODO
 from treecat.util import jit
 from treecat.util import parallel_map
 from treecat.util import profile
@@ -128,7 +129,7 @@ class TreeTrainer(object):
     """
 
     def __init__(self, N, V, tree_prior, config):
-        """Initialize a model in an unassigned state.
+        """Initialize a model with an empty subsample.
 
         Args:
             N (int): Number of rows in the dataset.
@@ -389,7 +390,7 @@ class TreeCatTrainer(TreeTrainer):
     """Class for training a TreeCat model."""
 
     def __init__(self, ragged_index, data, tree_prior, config):
-        """Initialize a model in an unassigned state.
+        """Initialize a model with an empty subsample.
 
         Args:
             ragged_index: A [V+1]-shaped numpy array of indices into the ragged
@@ -560,6 +561,159 @@ class TreeCatTrainer(TreeTrainer):
             'edge_ss': self._edge_ss,
             'feat_ss': self._feat_ss,
             'meas_ss': self._meas_ss,
+        }
+        return model
+
+
+def treegauss_add_row(
+        data_row,
+        tree_grid,
+        program,
+        latent_row,
+        vert_ss,
+        edge_ss,
+        feat_ss, ):
+    TODO('Sample via dynamic programming')
+
+    # Update sufficient statistics.
+    for v in range(latent_row.shape[0]):
+        z = latent_row[v, :]
+        vert_ss[v, :, :] += np.outer(z, z)
+    for e in range(tree_grid.shape[1]):
+        z1 = latent_row[tree_grid[1, e], :]
+        z2 = latent_row[tree_grid[2, e], :]
+        edge_ss[e, :, :] += np.outer(z1, z2)
+    for v, x in enumerate(data_row):
+        if np.isnan(x):
+            continue
+        z = latent_row[v, :]
+        feat_ss[v] += 1
+        feat_ss[v, 1] += x
+        feat_ss[v, 2:] += x * z  # TODO Use central covariance.
+
+
+def treegauss_remove_row(
+        data_row,
+        tree_grid,
+        latent_row,
+        vert_ss,
+        edge_ss,
+        feat_ss, ):
+    # Update sufficient statistics.
+    for v in range(latent_row.shape[0]):
+        z = latent_row[v, :]
+        vert_ss[v, :, :] -= np.outer(z, z)
+    for e in range(tree_grid.shape[1]):
+        z1 = latent_row[tree_grid[1, e], :]
+        z2 = latent_row[tree_grid[2, e], :]
+        edge_ss[e, :, :] -= np.outer(z1, z2)
+    for v, x in enumerate(data_row):
+        if np.isnan(x):
+            continue
+        z = latent_row[v, :]
+        feat_ss[v] -= 1
+        feat_ss[v, 1] -= x
+        feat_ss[v, 2:] -= x * z  # TODO Use central covariance.
+
+
+class TreeGaussTrainer(TreeTrainer):
+    """Class for training a TreeGauss model."""
+
+    def __init__(self, data, tree_prior, config):
+        """Initialize a model with an empty subsample.
+
+        Args:
+            data: An [N, V]-shaped numpy array of real-valued data.
+            tree_prior: A [K]-shaped numpy array of prior edge log odds, where
+                K is the number of edges in the complete graph on V vertices.
+            config: A global config dict.
+        """
+        assert isinstance(data, np.ndarray)
+        data = np.asarray(data, np.float32)
+        assert len(data.shape) == 2
+        N, V = data.shape
+        M = config['model_latent_dim']
+        E = V - 1  # Number of edges in the tree.
+        TreeTrainer.__init__(self, N, V, tree_prior, config)
+        self._data = data
+        self._latent = np.zeros([N, V, M], np.float32)
+
+        # This is symmetric positive definite.
+        self._vert_ss = np.zeros([V, M, M], np.float32)
+        # This is arbitrary (not necessarily symmetric).
+        self._edge_ss = np.zeros([E, M, M], np.float32)
+        # This represents (count, mean, covariance).
+        self._feat_ss = np.zeros([V, M, 1 + 1 + M], np.float32)
+
+    def add_row(self, row_id):
+        logger.debug('TreeGaussTrainer.add_row %d', row_id)
+        assert row_id not in self._added_rows, row_id
+        self._added_rows.add(row_id)
+
+        treegauss_add_row(
+            self._data[row_id, :],
+            self._tree.tree_grid,
+            self._program,
+            self._latent[row_id, :, :],
+            self._vert_ss,
+            self._edge_ss,
+            self._feat_ss, )
+
+    def remove_row(self, row_id):
+        logger.debug('TreeGaussTrainer.remove_row %d', row_id)
+        assert row_id in self._added_rows, row_id
+        self._added_rows.remove(row_id)
+
+        treecat_remove_row(
+            self._data[row_id, :],
+            self._tree.tree_grid,
+            self._latent[row_id, :, :],
+            self._vert_ss,
+            self._edge_ss,
+            self._feat_s, )
+
+    def set_edges(self, edges):
+        TreeTrainer.set_edges(self, edges)
+        latent = self._latent[sorted(self._added_rows), :, :]
+        for e, v1, v2 in self._tree.tree_grid.T:
+            self._edge_ss[e, :, :] = np.dot(latent[:, v1, :].T,
+                                            latent[:, v2, :])
+
+    def compute_edge_logits(self):
+        """Compute non-normalized logprob of all V(V-1)/2 candidate edges.
+
+        This is used for sampling and estimating the latent tree.
+        """
+        TODO('Compute edge logits')
+
+    def logprob(self):
+        """Compute non-normalized log probability of data and latent state.
+
+        This is used for testing goodness of fit of the latent state kernel.
+        """
+        assert len(self._added_rows) == self._num_rows
+        TODO('Compute logprob')
+
+    def train(self):
+        """Train a TreeGauss model using subsample-annealed MCMC.
+
+        Returns:
+            A trained model as a dictionary with keys:
+                config: A global config dict.
+                tree: A TreeStructure instance with the learned latent
+                    structure.
+                edge_logits: A [K]-shaped array of all edge logits.
+                suffstats: Sufficient statistics of features and vertices.
+                latent: An [N, V, M]-shaped numpy array of latent states, where
+                    N is the number of data rows, V is the number of features,
+                    and M is the dimension of each latent variable.
+        """
+        model = TreeTrainer.train(self)
+        model['latent'] = self._latent
+        model['suffstats'] = {
+            'vert_ss': self._vert_ss,
+            'edge_ss': self._edge_ss,
+            'feat_ss': self._feat_ss,
         }
         return model
 
