@@ -4,9 +4,12 @@ from __future__ import print_function
 
 import itertools
 import logging
+from abc import ABCMeta
+from abc import abstractmethod
 
 import numpy as np
 from scipy.special import gammaln
+from six import add_metaclass
 
 from six.moves import range
 from treecat.structure import OP_IN
@@ -118,6 +121,7 @@ def make_annealing_schedule(num_rows, epochs, sample_tree_rate):
             next_batch = num_assigned
 
 
+@add_metaclass(ABCMeta)
 class TreeTrainer(object):
     """Abstract base class for training a tree model various latent state.
 
@@ -154,29 +158,42 @@ class TreeTrainer(object):
         self._program = make_propagation_program(self._tree.tree_grid)
         self._added_rows = set()
 
+    @abstractmethod
     def add_row(self, row_id):
-        raise NotImplementedError
+        """Add a given row to the current subsample."""
 
+    @abstractmethod
     def remove_row(self, row_id):
-        raise NotImplementedError
+        """Remove a given row from the current subsample."""
 
+    @abstractmethod
     def compute_edge_logits(self):
-        raise NotImplementedError
+        """Compute edge log probabilities on the complete graph."""
 
+    @abstractmethod
     def logprob(self):
         """Compute non-normalized log probability of data and latent state.
 
         This is used for testing goodness of fit of the latent state kernel.
         This should only be called after training, i.e. after all rows have
-        been added..
+        been added.
         """
         assert len(self._added_rows) == self._num_rows
-        raise NotImplementedError
 
     def get_edges(self):
+        """Get a list of the edges in the current tree.
+
+        Returns:
+            An E-long list of (vertex,vertex) pairs.
+        """
         return [tuple(edge) for edge in self._tree.tree_grid[1:3, :].T]
 
     def set_edges(self, edges):
+        """Set edges of the latent structure and update statistics.
+
+        Args:
+            edges: An E-long list of (vertex,vertex) pairs.
+        """
         self._tree.set_edges(edges)
         self._program = make_propagation_program(self._tree.tree_grid)
 
@@ -718,6 +735,30 @@ class TreeGaussTrainer(TreeTrainer):
         return model
 
 
+class TreeMogTrainer(TreeTrainer):
+    """Class for training a tree mixture-of-Gaussians model."""
+
+    def __init__(self, data, tree_prior, config):
+        TODO()
+
+    def add_row(self, row_id):
+        """Add a given row to the current subsample."""
+        TODO()
+
+    def remove_row(self, row_id):
+        """Remove a given row from the current subsample."""
+        TODO()
+
+    def compute_edge_logits(self):
+        """Compute edge log probabilities on the complete graph."""
+        TODO()
+
+    def logprob(self):
+        """Compute non-normalized log probability of data and latent state."""
+        assert len(self._added_rows) == self._num_rows
+        TODO()
+
+
 def train_model(ragged_index, data, tree_prior, config):
     """Train a TreeCat model using subsample-annealed MCMC.
 
@@ -734,13 +775,24 @@ def train_model(ragged_index, data, tree_prior, config):
 
     Returns:
         A trained model as a dictionary with keys:
+            config: A global config dict.
             tree: A TreeStructure instance with the learned latent structure.
-            suffstats: Sufficient statistics of features, vertices, and
-                edges.
+            edge_logits: A [K]-shaped array of all edge logits.
+            suffstats: Sufficient statistics of features, vertices, and edges.
             assignments: An [N, V] numpy array of latent cluster ids for each
                 cell in the dataset.
     """
-    return TreeCatTrainer(ragged_index, data, tree_prior, config).train()
+    M = config['model_num_clusters']
+    D = config['model_latent_dim']
+    assert M >= 1
+    assert D >= 0
+    if D == 0:
+        Trainer = TreeCatTrainer
+    elif M == 1:
+        Trainer = TreeGaussTrainer
+    else:
+        Trainer = TreeMogTrainer
+    return Trainer(ragged_index, data, tree_prior, config).train()
 
 
 def _train_model(task):
