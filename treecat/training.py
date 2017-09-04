@@ -77,10 +77,37 @@ def compute_edge_logits(M, grid, assignments, gammaln_table, vert_logits):
 def make_annealing_schedule(num_rows, epochs, sample_tree_rate):
     """Iterator for subsample annealing, yielding (action, arg) pairs.
 
-    Actions are one of: 'add_row', 'remove_row', or 'sample_tree'.
-    The add and remove actions each provide a row_id arg.
+    This generates a subsample annealing schedule starting from an empty
+    assignment state (no rows are assigned). It then interleaves 'add_row' and
+    'remove_row' actions so as to gradually increase the number of assigned
+    rows. The increase rate is linear.
+
+    This also interleaves occasional 'sample_tree' actions that indicate good
+    times to sample latent variables other than assignments (often only the
+    latent tree, but possibly other hyperparameters).
+
+    Unlike Loom's annealing schedule, this scheudle allows 'sample_tree'
+    actions to happen arbitrarily often. Hence sufficient statistics must be
+    maintained losslessly, rather than computed from scratch for each batch.
+
+    Args:
+        num_rows (int): Number of rows in dataset.
+            The annealing schedule terminates when all rows are assigned.
+        epochs (float): Number of epochs in the schedule (i.e. the number of
+            times each datapoint is assigned). The fastest schedule is
+            `epochs=1` which simply sequentially assigns all datapoints. More
+            epochs takes more time.
+        sample_tree_rate (float): The rate at which 'sample_tree' actions are
+            generated. At `sample_tree_rate=1`, trees are sampled after each
+            complete flushing of the subsample.
+
+    Yields: (action, arg) pairs.
+        Actions are one of: 'add_row', 'remove_row', or 'sample_tree'.
+        When `action` is 'add_row' or 'remove_row', `arg` is a row_id in
+        `range(num_rows)`. When `action` is 'sample_tree' arg is undefined.
     """
-    assert sample_tree_rate >= 1
+    assert epochs >= 1.0
+    assert sample_tree_rate >= 1.0
     # Randomly shuffle rows.
     row_ids = list(range(num_rows))
     np.random.shuffle(row_ids)
@@ -331,7 +358,7 @@ class TreeCatTrainer(object):
         self._program = make_propagation_program(self._tree.tree_grid)
 
     @profile
-    def get_edge_logits(self):
+    def compute_edge_logits(self):
         """Compute non-normalized logprob of all V(V-1)/2 candidate edges.
 
         This is used for sampling and estimating the latent tree.
@@ -361,7 +388,7 @@ class TreeCatTrainer(object):
                     len(self._assigned_rows))
         SERIES.sample_tree_num_rows.append(len(self._assigned_rows))
         complete_grid = self._tree.complete_grid
-        edge_logits = self.get_edge_logits()
+        edge_logits = self.compute_edge_logits()
         assert edge_logits.shape[0] == complete_grid.shape[1]
         assert edge_logits.dtype == np.float32
         edges = self.get_edges()
@@ -379,7 +406,7 @@ class TreeCatTrainer(object):
         logger.info('TreeCatTrainer.estimate_tree given %d rows',
                     len(self._assigned_rows))
         complete_grid = self._tree.complete_grid
-        edge_logits = self.get_edge_logits()
+        edge_logits = self.compute_edge_logits()
         edges = estimate_tree(complete_grid, edge_logits)
         return edges, edge_logits
 
@@ -404,7 +431,6 @@ class TreeCatTrainer(object):
     @profile
     def train(self):
         """Train a TreeCat model using subsample-annealed MCMC.
-
 
         Returns:
             A trained model as a dictionary with keys:
