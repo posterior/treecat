@@ -53,6 +53,8 @@ pip install -e .
 
 ## Quick Start
 
+[comment]: # (When modifying this, also update readme_test.test_quickstart)
+
 1.  Format your data as a [`data.csv`](treecat/testdata/tiny_data.csv)
     file with a header row.
     It's fine to include extra columns that won't be used.

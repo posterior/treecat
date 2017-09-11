@@ -50,6 +50,17 @@ def tempdir():
         shutil.rmtree(dirname)
 
 
+@contextlib.contextmanager
+def in_tempdir():
+    old = os.getcwd()
+    with tempdir() as new:
+        os.chdir(new)
+        try:
+            yield
+        finally:
+            os.chdir(old)
+
+
 def make_seed(*args):
     """Create a random seed by fingerprinting args."""
     digest = fingerprint(args)
