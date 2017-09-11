@@ -549,7 +549,7 @@ def import_data(data_csvs_in,
     """
     schema = load_schema(types_csv_in, values_csv_in, groups_csv_in, encoding)
     data = np.concatenate([
-        load_data(schema, data_csv_in, groups_csv_in, encoding)
+        load_data(schema, data_csv_in, encoding)
         for data_csv_in in data_csvs_in.split(',')
     ])
     print('Imported data shape: [{}, {}]'.format(data.shape[0], data.shape[1]))

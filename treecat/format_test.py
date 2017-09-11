@@ -10,6 +10,7 @@ import pytest
 
 from treecat.format import export_rows
 from treecat.format import guess_schema
+from treecat.format import import_data
 from treecat.format import import_rows
 from treecat.format import load_data
 from treecat.format import load_schema
@@ -90,6 +91,14 @@ def test_load_schema():
 def test_load_data():
     schema = load_schema(TYPES_CSV, VALUES_CSV, GROUPS_CSV)
     load_data(schema, DATA_CSV)
+
+
+def test_import_data():
+    with tempdir() as dirname:
+        dataset_out = os.path.join(dirname, 'dataset.pkz')
+        assert not os.path.exists(dataset_out)
+        import_data(DATA_CSV, TYPES_CSV, VALUES_CSV, GROUPS_CSV, dataset_out)
+        assert os.path.exists(dataset_out)
 
 
 def test_export_import_rows():
