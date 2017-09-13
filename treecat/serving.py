@@ -786,10 +786,10 @@ def serve_model(dataset, model):
     """Create a server object from the given dataset and model.
 
     Args:
-        dataset: Either a filename pointing to a dataset loadable by
-            load_dataset or an already loaded dataset.
-        model: Either the path to a TreeCat model or ensemble, or an already
-            loaded model or ensemble.
+        dataset: Either the filename of a pickled dataset or an already loaded
+            dataset.
+        model: Either the filename of a pickled TreeCat model or ensemble, or
+            an already loaded model or ensemble.
 
     Returns:
         A DataServer object.

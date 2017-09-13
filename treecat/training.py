@@ -839,8 +839,8 @@ def train_ensemble(ragged_index, data, tree_prior, config):
             data array.
         data: An [N, _]-shaped numpy array of ragged data, where the vth
             column is stored in data[:, ragged_index[v]:ragged_index[v+1]].
-        data: A list of numpy arrays, where each array is an N x _ column of
-            counts of multinomial data.
+        tree_prior: A [K]-shaped numpy array of prior edge log odds, where
+            K is the number of edges in the complete graph on V vertices.
         config: A global config dict.
 
     Returns:
