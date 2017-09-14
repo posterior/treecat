@@ -30,6 +30,10 @@ logging.basicConfig(format=LOG_FORMAT, level=LOG_LEVEL, filename=LOG_FILENAME)
 logger = logging.getLogger(__name__)
 
 
+def TODO(message=''):
+    raise NotImplementedError('TODO {}'.format(message))
+
+
 def no_jit(*args, **kwargs):
     if not kwargs and len(args) == 1 and callable(args[0]):
         return args[0]
@@ -37,11 +41,17 @@ def no_jit(*args, **kwargs):
 
 
 jit = no_jit
+prange = range
 if TREECAT_JIT:
     try:
         from numba import jit
+        try:
+            from numba import prange
+        except ImportError:
+            warn('numba.prange not available')
     except ImportError:
         warn('numba.jit not available')
+assert prange  # Pacify flake8.
 
 
 @jit(nopython=True, cache=True)

@@ -403,9 +403,11 @@ def load_data(schema, data_csv_in, encoding='utf-8'):
         for i, name in enumerate(header):
             if name in feature_types:
                 metas[i] = (  #
-                    name, feature_types[name],
+                    name,
+                    feature_types[name],
                     ragged_index[feature_index[name]],
-                    categorical_index.get(name), ordinal_ranges.get(name), )
+                    categorical_index.get(name),
+                    ordinal_ranges.get(name), )
         for external_row in reader:
             internal_row = prototype_row.copy()
             for value, meta in zip(external_row, metas):
@@ -549,7 +551,7 @@ def import_data(data_csvs_in,
     """
     schema = load_schema(types_csv_in, values_csv_in, groups_csv_in, encoding)
     data = np.concatenate([
-        load_data(schema, data_csv_in, groups_csv_in, encoding)
+        load_data(schema, data_csv_in, encoding)
         for data_csv_in in data_csvs_in.split(',')
     ])
     print('Imported data shape: [{}, {}]'.format(data.shape[0], data.shape[1]))

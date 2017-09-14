@@ -57,4 +57,4 @@ plt.xticks([])
 plt.yticks([])
 plt.tight_layout(pad=0)
 
-plt.savefig('cartoon.png', transparent=True)
+plt.savefig('logo.png', transparent=True)

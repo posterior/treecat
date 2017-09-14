@@ -3,10 +3,13 @@ from __future__ import division
 from __future__ import print_function
 
 import logging
+from abc import ABCMeta
+from abc import abstractmethod
 
 import numpy as np
 from scipy.misc import logsumexp
 from scipy.stats import entropy
+from six import add_metaclass
 
 from six.moves import range
 from six.moves import zip
@@ -22,6 +25,7 @@ from treecat.structure import TreeStructure
 from treecat.structure import estimate_tree
 from treecat.structure import make_propagation_program
 from treecat.structure import sample_tree
+from treecat.util import TODO
 from treecat.util import guess_counts
 from treecat.util import profile
 from treecat.util import quantize_from_probs2
@@ -60,11 +64,13 @@ def multinomial_entropy(probs, count):
     multi_probs = probs
     for _ in range(count - 1):
         if len(probs) > 2:
-            raise NotImplementedError
+            raise NotImplementedError(
+                'Only categorical and binomial are supported')
         multi_probs = np.convolve(multi_probs, probs)
     return entropy(multi_probs)
 
 
+@add_metaclass(ABCMeta)
 class ServerBase(object):
     """Base class for TreeCat and Ensemble servers."""
 
@@ -84,8 +90,30 @@ class ServerBase(object):
         """Make an empty data row."""
         return self._zero_row.copy()
 
+    @property
+    @abstractmethod
+    def edge_logits(self):
+        """Get edge log probabilities on the complete graph."""
+
+    @abstractmethod
+    def estimate_tree(self):
+        """Return the maximum a posteriori estimated tree structure."""
+
+    @abstractmethod
+    def sample_tree(self, num_samples):
+        """Return a num_samples-long list of trees, each a list of pairs."""
+
+    @abstractmethod
+    def sample(self, N, counts, data=None):
+        """Draw N samples from the posterior distribution."""
+
+    @abstractmethod
+    def logprob(self, data):
+        """Compute non-normalized log probabilies of many rows of data."""
+
+    @abstractmethod
     def marginals(self, data):
-        raise NotImplementedError
+        """Compute observed marginals conditioned on data."""
 
     def median(self, counts, data):
         """Compute L1-loss-minimizing quantized marginals conditioned on data.
@@ -118,19 +146,21 @@ class ServerBase(object):
 
         return result
 
+    @abstractmethod
     def mode(self, counts, data):
-        """Compute a maximum a posteriori data value conditioned on data.
+        """Compute a maximum a posteriori data value conditioned on data."""
 
-        Args:
-            counts: A [V]-shaped numpy array of quantization resolutions.
-            data: An [N, R]-shaped numpy array of row of conditioning data, as
-                a ragged nummpy array of multinomial counts,
-                where R = server.ragged_size.
+    @abstractmethod
+    def observed_perplexity(self, counts):
+        """Compute perplexity = exp(entropy) of observed variables."""
 
-        Returns:
-            An array of the same shape as data, but with specified counts.
-        """
-        raise NotImplementedError
+    @abstractmethod
+    def latent_perplexity(self):
+        """Compute perplexity = exp(entropy) of latent variables."""
+
+    @abstractmethod
+    def latent_correlation(self):
+        """Compute correlation matrix among latent features."""
 
 
 class TreeCatServer(ServerBase):
@@ -402,6 +432,10 @@ class TreeCatServer(ServerBase):
 
         return result
 
+    def mode(self, counts, data):
+        """Compute a maximum a posteriori data value conditioned on data."""
+        TODO('https://github.com/posterior/treecat/issues/3')
+
     def observed_perplexity(self, counts):
         """Compute perplexity = exp(entropy) of observed variables.
 
@@ -536,6 +570,14 @@ class EnsembleServer(ServerBase):
         logprobs -= np.log(len(self._ensemble))
         assert logprobs.shape == (data.shape[0], )
         return logprobs
+
+    def marginals(self, data):
+        """Compute observed marginals conditioned on data."""
+        TODO('https://github.com/posterior/treecat/issues/2')
+
+    def mode(self, counts, data):
+        """Compute a maximum a posteriori data value conditioned on data."""
+        TODO('https://github.com/posterior/treecat/issues/3')
 
     def observed_perplexity(self, counts):
         """Compute perplexity = exp(entropy) of observed variables.
@@ -744,10 +786,10 @@ def serve_model(dataset, model):
     """Create a server object from the given dataset and model.
 
     Args:
-        dataset: Either a filename pointing to a dataset loadable by
-            load_dataset or an already loaded dataset.
-        model: Either the path to a TreeCat model or ensemble, or an already
-            loaded model or ensemble.
+        dataset: Either the filename of a pickled dataset or an already loaded
+            dataset.
+        model: Either the filename of a pickled TreeCat model or ensemble, or
+            an already loaded model or ensemble.
 
     Returns:
         A DataServer object.

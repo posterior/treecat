@@ -11,7 +11,9 @@ from parsable import parsable
 
 from six.moves import range
 from six.moves import zip
+from treecat.config import deserialize_config
 from treecat.config import make_config
+from treecat.config import serialize_config
 from treecat.format import csv_reader
 from treecat.format import pickle_dump
 from treecat.format import pickle_load
@@ -26,24 +28,6 @@ from treecat.util import profile
 from treecat.util import set_random_seed
 
 parsable = parsable.Parsable()
-
-
-def serialize_config(config):
-    """Serialize a config dict to a short string for use in filenames."""
-    keys = sorted(config.keys())
-    assert keys == sorted(make_config().keys())
-    return '-'.join(str(int(config[key])) for key in keys)
-
-
-def deserialize_config(config_str):
-    """Deserialize a config dict form a short string."""
-    config = make_config()
-    keys = sorted(config.keys())
-    values = config_str.split('-')
-    assert len(keys) == len(values)
-    for key, value_str in zip(keys, values):
-        config[key] = int(value_str)
-    return config
 
 
 def split_data(ragged_index, num_rows, num_parts, partid):

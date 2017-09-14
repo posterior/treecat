@@ -118,6 +118,7 @@ def validate_model(ragged_index, data, model, config):
         assert np.all(meas_ss[v, :] == counts)
 
 
+@pytest.mark.parametrize('parallel', [True, False])
 @pytest.mark.parametrize('N,V,C,M', [
     (1, 1, 1, 1),
     (2, 2, 2, 2),
@@ -126,10 +127,9 @@ def validate_model(ragged_index, data, model, config):
     (5, 5, 5, 5),
     (6, 6, 6, 6),
 ])
-def test_train_model(N, V, C, M):
+def test_train_model(N, V, C, M, parallel):
     K = V * (V - 1) // 2
-    config = make_config()
-    config['model_num_clusters'] = M
+    config = make_config(model_num_clusters=M, learning_parallel=parallel)
     dataset = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
     ragged_index = dataset['schema']['ragged_index']
     data = dataset['data']
@@ -147,9 +147,8 @@ def test_train_model(N, V, C, M):
     (6, 6, 6, 6),
 ])
 def test_train_ensemble(N, V, C, M):
+    config = make_config(model_num_clusters=M)
     K = V * (V - 1) // 2
-    config = make_config()
-    config['model_num_clusters'] = M
     dataset = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
     ragged_index = dataset['schema']['ragged_index']
     data = dataset['data']
@@ -186,9 +185,8 @@ def hash_assignments(assignments):
     (4, 1, 2, 2),
 ])
 def test_assignment_sampler_gof(N, V, C, M):
+    config = make_config(model_num_clusters=M)
     K = V * (V - 1) // 2
-    config = make_config()
-    config['model_num_clusters'] = M
     dataset = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
     ragged_index = dataset['schema']['ragged_index']
     data = dataset['data']

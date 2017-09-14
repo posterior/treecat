@@ -1,4 +1,4 @@
-![](https://cdn.rawgit.com/posterior/treecat/master/doc/cartoon.png)
+![](https://cdn.rawgit.com/posterior/treecat/master/doc/logo.png)
 
 # TreeCat
 
@@ -52,6 +52,8 @@ pip install -e .
 ```
 
 ## Quick Start
+
+[comment]: # (When modifying this, also update readme_test.test_quickstart)
 
 1.  Format your data as a [`data.csv`](treecat/testdata/tiny_data.csv)
     file with a header row.
@@ -202,6 +204,11 @@ with the notable difference that TreeCat fixes exactly one latent node per obser
 TreeCat is historically a descendent of Mansinghka et al.'s CrossCat, a model in which latent nodes ("views" or "kinds") are completely independent.
 TreeCat addresses the same kind of high-dimensional categorical distribution
 that Dunson and Xing's mixture-of-product-multinomial models [3] addresses.
+While TreeCat currently supports only categorical and ordinal feature types,
+it is straight-forward to generalize to other feature types with conjugate
+priors such as real (normal-inverse-chi-squared), integer (gamma-Poisson), and
+angular (von-Mises).
+This generalization places it in the class of models high-dimensional heterogeneous data with Valera et al. [4].
 
 Let `V` be a set of vertices (one vertex per feature).<br />
 Let `C[v]` be the dimension of the `v`th feature.<br />
@@ -262,6 +269,8 @@ The virtual machine for training is jit-compiled using numba.
    [CrossCat: A Fully Bayesian Nonparametric Method for Analyzing Heterogeneous, High Dimensional Data](https://arxiv.org/pdf/1512.01272)
 3. David B. Dunson, Chuanhua Xing (2012) <br />
    [Nonparametric Bayes Modeling of Multivariate Categorical Data](https://dx.doi.org/10.1198%2Fjasa.2009.tm08439)
+4. Isabel Valera, Melanie F Pradier, Zoubin Ghahramani (2017) <br />
+   [General Latent Feature Modeling for Data Exploration Tasks](https://arxiv.org/pdf/1707.08352).
 
 ## License
 
