@@ -284,6 +284,29 @@ class TreeTrainer(object):
         }
 
 
+@jit(nopython=True, cache=True)
+def treecat_add_cell(
+        feature_type,
+        ragged_index,
+        data_row,
+        message,
+        feat_probs,
+        meas_probs,
+        v, ):
+    if feature_type == TY_MULTINOMIAL:
+        beg, end = ragged_index[v:v + 2]
+        feat_block = feat_probs[beg:end, :]
+        meas_block = meas_probs[v, :]
+        for c, count in enumerate(data_row[beg:end]):
+            for _ in range(count):
+                message *= feat_block[c, :]
+                message /= meas_block
+                feat_block[c, :] += np.float32(1)
+                meas_block += np.float32(1)
+    else:
+        raise NotImplementedError
+
+
 @profile
 @jit(nopython=True, cache=True)
 def treecat_add_row(
@@ -308,16 +331,14 @@ def treecat_add_row(
         message = messages[v, :]
         if op == OP_UP:
             # Propagate upward from observed to latent.
-            if feature_types[v] == TY_MULTINOMIAL:
-                beg, end = ragged_index[v:v + 2]
-                feat_block = feat_probs[beg:end, :]
-                meas_block = meas_probs[v, :]
-                for c, count in enumerate(data_row[beg:end]):
-                    for _ in range(count):
-                        message *= feat_block[c, :]
-                        message /= meas_block
-                        feat_block[c, :] += np.float32(1)
-                        meas_block += np.float32(1)
+            treecat_add_cell(
+                feature_types[v],
+                ragged_index,
+                data_row,
+                message,
+                feat_probs,
+                meas_probs,
+                v, )
         elif op == OP_IN:
             # Propagate latent state inward from children to v.
             trans = edge_probs[e, :, :]
@@ -347,10 +368,13 @@ def treecat_add_row(
         edge_ss[e, m1, m2] += 1
         edge_probs[e, m1, m2] += 1
     for v, m in enumerate(assignments):
-        if feature_types[v] == TY_MULTINOMIAL:
+        feature_type = feature_types[v]
+        if feature_type == TY_MULTINOMIAL:
             beg, end = ragged_index[v:v + 2]
             feat_ss[beg:end, m] += data_row[beg:end]
             meas_ss[v, m] += data_row[beg:end].sum()
+        else:
+            raise NotImplementedError
 
 
 @profile
@@ -375,10 +399,13 @@ def treecat_remove_row(
         edge_ss[e, m1, m2] -= 1
         edge_probs[e, m1, m2] -= 1
     for v, m in enumerate(assignments):
-        if feature_types[v] == TY_MULTINOMIAL:
+        feature_type = feature_types[v]
+        if feature_type == TY_MULTINOMIAL:
             beg, end = ragged_index[v:v + 2]
             feat_ss[beg:end, m] -= data_row[beg:end]
             meas_ss[v, m] -= data_row[beg:end].sum()
+        else:
+            raise NotImplementedError
 
 
 @jit(nopython=True, cache=True)
