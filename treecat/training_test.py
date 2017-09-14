@@ -245,8 +245,7 @@ def test_recover_structure(V, C):
     K = V * (V - 1) // 2
     tree_prior = np.zeros(K, np.float32)
     tree = generate_tree(num_cols=V)
-    dataset = generate_clean_dataset(tree, num_rows=N, num_cats=C)
-    table = dataset['table']
+    table = generate_clean_dataset(tree, num_rows=N, num_cats=C)['table']
     config = make_config(model_num_clusters=M)
     model = train_model(table, tree_prior, config)
 
@@ -258,7 +257,6 @@ def test_recover_structure(V, C):
     # Print debugging information.
     feature_names = [str(v) for v in range(V)]
     root = '0'
-    table = dataset['table']
     readable_data = np.zeros([N, V], np.int8)
     for v in range(V):
         beg, end = table.ragged_index[v:v + 2]

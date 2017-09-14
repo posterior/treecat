@@ -101,8 +101,7 @@ def generate_clean_dataset(tree, num_rows, num_cats):
             This will also be used for the number of latent classes.
 
     Returns:
-        A dict with keys 'schema' and 'data'. The schema will only have a
-        'ragged' index field.
+        A dict with key 'table' and value a Table object.
     """
     assert isinstance(tree, TreeStructure)
     V = tree.num_vertices
@@ -149,13 +148,7 @@ def generate_clean_dataset(tree, num_rows, num_cats):
     data.flags.writeable = False
     feature_types = [TY_MULTINOMIAL] * V
     table = Table(feature_types, ragged_index, data)
-    dataset = {
-        'schema': {
-            'ragged_index': ragged_index,
-        },
-        'table': table,
-    }
-    return dataset
+    return {'table': table}
 
 
 def generate_fake_model(num_rows,
