@@ -21,6 +21,7 @@ from treecat.structure import estimate_tree
 from treecat.structure import make_propagation_program
 from treecat.structure import sample_tree
 from treecat.tables import TY_MULTINOMIAL
+from treecat.tables import Table
 from treecat.util import SERIES
 from treecat.util import TODO
 from treecat.util import jit
@@ -452,24 +453,20 @@ class TreeCatTrainer(TreeTrainer):
         """
         logger.info('TreeCatTrainer of %d x %d data', data[0].shape[0],
                     len(data))
+        V = len(ragged_index) - 1  # Number of features, i.e. vertices.
+        feature_types = np.empty(V, dtype=np.int8)
+        feature_types[:] = TY_MULTINOMIAL  # TODO Allow other types.
         ragged_index = np.asarray(ragged_index, np.int32)
-        ragged_index.flags.writeable = False
         data = np.asarray(data, np.int8)
-        data.flags.writeable = False
         assert len(data.shape) == 2
         assert data.shape[1] == ragged_index[-1]
         assert data.dtype == np.int8
-        V = len(ragged_index) - 1  # Number of features, i.e. vertices.
+        table = Table(feature_types, ragged_index, data)
         N = data.shape[0]  # Number of rows.
         TreeTrainer.__init__(self, N, V, tree_prior, config)
         assert self._num_rows == N
         assert len(self._added_rows) == 0
-        feature_types = np.empty(V, dtype=np.int8)
-        feature_types[:] = TY_MULTINOMIAL  # TODO Allow other types.
-        feature_types.flags.writeable = False
-        self._feature_types = feature_types
-        self._ragged_index = ragged_index
-        self._data = data
+        self._table = table
         self._assignments = np.zeros([N, V], dtype=np.int8)
 
         # These are useful dimensions to import into locals().
@@ -493,7 +490,7 @@ class TreeCatTrainer(TreeTrainer):
         # Sufficient statistics are maintained always.
         self._vert_ss = np.zeros([V, M], np.int32)
         self._edge_ss = np.zeros([E, M, M], np.int32)
-        self._feat_ss = np.zeros([self._ragged_index[-1], M], np.int32)
+        self._feat_ss = np.zeros([ragged_index[-1], M], np.int32)
         self._meas_ss = np.zeros([V, M], np.int32)
 
         # Temporaries.
@@ -517,9 +514,9 @@ class TreeCatTrainer(TreeTrainer):
         np.add(self._meas_ss, self._meas_prior, out=self._meas_probs)
 
         treecat_add_row(
-            self._feature_types,
-            self._ragged_index,
-            self._data[row_id, :],
+            self._table.feature_types,
+            self._table.ragged_index,
+            self._table.data[row_id, :],
             self._tree.tree_grid,
             self._program,
             self._assignments[row_id, :],
@@ -539,9 +536,9 @@ class TreeCatTrainer(TreeTrainer):
         self._added_rows.remove(row_id)
 
         treecat_remove_row(
-            self._feature_types,
-            self._ragged_index,
-            self._data[row_id, :],
+            self._table.feature_types,
+            self._table.ragged_index,
+            self._table.data[row_id, :],
             self._tree.tree_grid,
             self._assignments[row_id, :],
             self._vert_ss,
@@ -591,7 +588,7 @@ class TreeCatTrainer(TreeTrainer):
             logprob += (logprob_dc(self._edge_ss[e, :, :], self._edge_prior) -
                         vertex_logits[v1] - vertex_logits[v2])
         for v in range(V):
-            beg, end = self._ragged_index[v:v + 2]
+            beg, end = self._table.ragged_index[v:v + 2]
             logprob += logprob_dc(self._feat_ss[beg:end, :], self._feat_prior)
             logprob -= logprob_dc(self._meas_ss[v, :], self._meas_prior[v])
         return logprob
@@ -614,7 +611,7 @@ class TreeCatTrainer(TreeTrainer):
         model = TreeTrainer.train(self)
         model['assignments'] = self._assignments
         model['suffstats'] = {
-            'ragged_index': self._ragged_index,
+            'ragged_index': self._table.ragged_index,
             'vert_ss': self._vert_ss,
             'edge_ss': self._edge_ss,
             'feat_ss': self._feat_ss,
