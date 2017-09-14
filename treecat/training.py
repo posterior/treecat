@@ -439,30 +439,20 @@ def treecat_compute_edge_logits(M, grid, gammaln_table, assignments,
 class TreeCatTrainer(TreeTrainer):
     """Class for training a TreeCat model."""
 
-    def __init__(self, ragged_index, data, tree_prior, config):
+    def __init__(self, table, tree_prior, config):
         """Initialize a model with an empty subsample.
 
         Args:
-            ragged_index: A [V+1]-shaped numpy array of indices into the ragged
-                data array.
-            data: An [N, _]-shaped numpy array of ragged data, where the vth
-                column is stored in data[:, ragged_index[v]:ragged_index[v+1]].
+            table: A Table instance holding N rows of V features of data.
             tree_prior: A [K]-shaped numpy array of prior edge log odds, where
                 K is the number of edges in the complete graph on V vertices.
             config: A global config dict.
         """
-        logger.info('TreeCatTrainer of %d x %d data', data[0].shape[0],
-                    len(data))
-        V = len(ragged_index) - 1  # Number of features, i.e. vertices.
-        feature_types = np.empty(V, dtype=np.int8)
-        feature_types[:] = TY_MULTINOMIAL  # TODO Allow other types.
-        ragged_index = np.asarray(ragged_index, np.int32)
-        data = np.asarray(data, np.int8)
-        assert len(data.shape) == 2
-        assert data.shape[1] == ragged_index[-1]
-        assert data.dtype == np.int8
-        table = Table(feature_types, ragged_index, data)
-        N = data.shape[0]  # Number of rows.
+        logger.info('TreeCatTrainer of %d x %d data', table.num_rows,
+                    table.num_cols)
+        assert isinstance(table, Table)
+        N = table.num_rows  # Number of rows.
+        V = table.num_cols  # Number of features, i.e. vertices.
         TreeTrainer.__init__(self, N, V, tree_prior, config)
         assert self._num_rows == N
         assert len(self._added_rows) == 0
@@ -481,7 +471,8 @@ class TreeCatTrainer(TreeTrainer):
         self._edge_prior = 0.5 / M
         self._feat_prior = 0.5 / M
         self._meas_prior = self._feat_prior * np.array(
-            [(ragged_index[v + 1] - ragged_index[v]) for v in range(V)],
+            [(table.ragged_index[v + 1] - table.ragged_index[v])
+             for v in range(V)],
             dtype=np.float32).reshape((V, 1))
         self._gammaln_table = gammaln(
             np.arange(1 + N, dtype=np.float32) + self._edge_prior)
@@ -490,7 +481,7 @@ class TreeCatTrainer(TreeTrainer):
         # Sufficient statistics are maintained always.
         self._vert_ss = np.zeros([V, M], np.int32)
         self._edge_ss = np.zeros([E, M, M], np.int32)
-        self._feat_ss = np.zeros([ragged_index[-1], M], np.int32)
+        self._feat_ss = np.zeros([table.ragged_index[-1], M], np.int32)
         self._meas_ss = np.zeros([V, M], np.int32)
 
         # Temporaries.
@@ -831,7 +822,10 @@ def train_model(ragged_index, data, tree_prior, config):
         Trainer = TreeGaussTrainer
     else:
         Trainer = TreeMogTrainer
-    return Trainer(ragged_index, data, tree_prior, config).train()
+    V = len(ragged_index) - 1
+    feature_types = [TY_MULTINOMIAL] * V
+    table = Table(feature_types, ragged_index, data)
+    return Trainer(table, tree_prior, config).train()
 
 
 def _train_model(task):

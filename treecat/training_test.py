@@ -14,6 +14,8 @@ from treecat.structure import TreeStructure
 from treecat.structure import estimate_tree
 from treecat.structure import print_tree
 from treecat.structure import triangular_to_square
+from treecat.tables import TY_MULTINOMIAL
+from treecat.tables import Table
 from treecat.testutil import numpy_seterr
 from treecat.training import TreeCatTrainer
 from treecat.training import make_annealing_schedule
@@ -187,11 +189,13 @@ def hash_assignments(assignments):
 def test_assignment_sampler_gof(N, V, C, M):
     config = make_config(model_num_clusters=M)
     K = V * (V - 1) // 2
+    feature_types = [TY_MULTINOMIAL] * V
     dataset = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
     ragged_index = dataset['schema']['ragged_index']
     data = dataset['data']
+    table = Table(feature_types, ragged_index, data)
     tree_prior = np.exp(np.random.random(K), dtype=np.float32)
-    trainer = TreeCatTrainer(ragged_index, data, tree_prior, config)
+    trainer = TreeCatTrainer(table, tree_prior, config)
     print('Data:')
     print(data)
 

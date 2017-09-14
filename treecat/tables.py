@@ -13,6 +13,15 @@ class Table(object):
     """Internal representation of read-only row-oriented heterogeneous data."""
 
     def __init__(self, feature_types, ragged_index, data):
+        """Create a read-only table of heterogeneous data.
+
+        Args:
+            feature_types: A [V]-shaped numpy array of datatype ids.
+            ragged_index: A [V+1]-shaped numpy array of indices into the ragged
+                data array.
+            data: An [N, _]-shaped numpy array of ragged data, where the vth
+                column is stored in data[:, ragged_index[v]:ragged_index[v+1]].
+        """
         feature_types = np.asarray(feature_types, dtype=np.int8)
         feature_types.flags.writeable = False
         assert len(feature_types.shape) == 1
@@ -42,3 +51,11 @@ class Table(object):
     @property
     def data(self):
         return self._data
+
+    @property
+    def num_rows(self):
+        return self._data.shape[0]
+
+    @property
+    def num_cols(self):
+        return self._feature_types.shape[0]
