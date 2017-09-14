@@ -43,7 +43,7 @@ def count_pairs(assignments, v1, v2, M):
         M: The number of possible assignment bins.
 
     Returns:
-        And M x M array of counts.
+        An M x M array of counts.
     """
     assert v1 != v2
     pairs = assignments[:, v1].astype(np.int32) * M + assignments[:, v2]
@@ -55,7 +55,7 @@ def logprob_dc(counts, prior, axis=None):
 
     See https://en.wikipedia.org/wiki/Dirichlet-multinomial_distribution
     """
-    # Not that this excludes the factorial(counts) term, since we explicitly
+    # Note that this excludes the factorial(counts) term, since we explicitly
     # track permutations in assignments.
     return gammaln(np.add(counts, prior, dtype=np.float32)).sum(axis)
 

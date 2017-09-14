@@ -146,11 +146,10 @@ def test_server_marginals(N, V, C, M):
     server = TreeCatServer(model)
 
     # Evaluate on random data.
-    data = generate_dataset(N, V, C)['data']
-    marginals = server.marginals(data)
-    ragged_index = model['suffstats']['ragged_index']
+    table = generate_dataset(N, V, C)['table']
+    marginals = server.marginals(table.data)
     for v in range(V):
-        beg, end = ragged_index[v:v + 2]
+        beg, end = table.ragged_index[v:v + 2]
         totals = marginals[:, beg:end].sum(axis=1)
         assert np.allclose(totals, 1.0)
 
@@ -172,13 +171,12 @@ def test_server_median(N, V, C, M):
 
     # Evaluate on random data.
     counts = np.random.randint(10, size=[V], dtype=np.int8)
-    data = generate_dataset(N, V, C)['data']
-    median = server.median(counts, data)
-    assert median.shape == data.shape
+    table = generate_dataset(N, V, C)['table']
+    median = server.median(counts, table.data)
+    assert median.shape == table.data.shape
     assert median.dtype == np.int8
-    ragged_index = model['suffstats']['ragged_index']
     for v in range(V):
-        beg, end = ragged_index[v:v + 2]
+        beg, end = table.ragged_index[v:v + 2]
         totals = median[:, beg:end].sum(axis=1)
         assert np.all(totals == counts[v])
 

@@ -169,10 +169,10 @@ def process_eval_task(task):
     partid = config['seed']
     assert 0 <= partid < num_parts
     dataset = pickle_load(dataset_path)
-    ragged_index = dataset['schema']['ragged_index']
-    data = dataset['data']
-    num_rows = data.shape[0]
-    mask = split_data(ragged_index, num_rows, num_parts, partid)
+    table = dataset['table']
+    ragged_index = table.ragged_index
+    data = table.data
+    mask = split_data(ragged_index, table.num_rows, num_parts, partid)
     training_data = data.copy()
     training_data[mask] = 0
     validation_data = data.copy()

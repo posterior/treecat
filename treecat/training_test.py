@@ -192,7 +192,7 @@ def test_assignment_sampler_gof(N, V, C, M):
     tree_prior = np.exp(np.random.random(K), dtype=np.float32)
     trainer = TreeCatTrainer(table, tree_prior, config)
     print('Data:')
-    print(dataset['data'])
+    print(dataset['table'].data)
 
     # Add all rows.
     set_random_seed(1)
@@ -258,12 +258,11 @@ def test_recover_structure(V, C):
     # Print debugging information.
     feature_names = [str(v) for v in range(V)]
     root = '0'
-    ragged_index = dataset['schema']['ragged_index']
-    data = dataset['data']
+    table = dataset['table']
     readable_data = np.zeros([N, V], np.int8)
     for v in range(V):
-        beg, end = ragged_index[v:v + 2]
-        readable_data[:, v] = data[:, beg:end].argmax(axis=1)
+        beg, end = table.ragged_index[v:v + 2]
+        readable_data[:, v] = table.data[:, beg:end].argmax(axis=1)
     with np_printoptions(precision=2, threshold=100, edgeitems=5):
         print('Expected:')
         print(print_tree(expected_edges, feature_names, root))

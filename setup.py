@@ -19,7 +19,7 @@ setup(
     name='pytreecat',
     version=version,
     description=(
-        'A Bayesian latent tree model of multivariate multinomial data'),
+        'A Bayesian latent tree model of high-dimensional heterogeneous data'),
     long_description=long_description,
     author='Fritz Obermeyer',
     author_email='fritz.obermeyer@gmail.com',

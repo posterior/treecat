@@ -638,8 +638,9 @@ class DataServer(object):
 
     def __init__(self, dataset, ensemble):
         self._schema = dataset['schema']
-        self._data = dataset['data']
-        self._counts = guess_counts(self._schema['ragged_index'], self._data)
+        table = dataset['table']
+        self._data = table.data
+        self._counts = guess_counts(table.ragged_index, table.data)
         if len(ensemble) == 1:
             self._server = TreeCatServer(ensemble[0])
         else:

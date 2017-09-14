@@ -29,7 +29,7 @@ def generate_dataset(num_rows, num_cols, num_cats=4, rate=1.0):
     """Generate a random dataset.
 
     Returns:
-        A pair (ragged_index, data).
+        A dataset dict with fields 'schema' and 'table'.
     """
     set_random_seed(0)
     N = num_rows
@@ -170,8 +170,7 @@ def generate_fake_model(num_rows,
     assignments = assignments.astype(np.int32)
     if dataset is None:
         dataset = generate_dataset(num_rows, num_cols, num_cats)
-    ragged_index = dataset['schema']['ragged_index']
-    data = dataset['data']
+    table = dataset['table']
     N = num_rows
     V = num_cols
     E = V - 1
@@ -188,8 +187,8 @@ def generate_fake_model(num_rows,
         pairs = assignments[:, v1].astype(np.int32) * M + assignments[:, v2]
         edge_ss[e, :, :] = np.bincount(pairs, minlength=M * M).reshape((M, M))
     for v in range(V):
-        beg, end = ragged_index[v:v + 2]
-        data_block = data[:, beg:end]
+        beg, end = table.ragged_index[v:v + 2]
+        data_block = table.data[:, beg:end]
         feat_ss_block = feat_ss[beg:end, :]
         for n in range(N):
             feat_ss_block[:, assignments[n, v]] += data_block[n, :]
@@ -200,7 +199,7 @@ def generate_fake_model(num_rows,
         'assignments': assignments,
         'edge_logits': edge_logits,
         'suffstats': {
-            'ragged_index': ragged_index,
+            'ragged_index': table.ragged_index,
             'vert_ss': vert_ss,
             'edge_ss': edge_ss,
             'feat_ss': feat_ss,
