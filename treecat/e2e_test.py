@@ -12,6 +12,8 @@ from treecat.format import guess_schema
 from treecat.format import load_data
 from treecat.format import load_schema
 from treecat.serving import serve_model
+from treecat.tables import TY_MULTINOMIAL
+from treecat.tables import Table
 from treecat.testutil import TESTDATA
 from treecat.testutil import TINY_CONFIG
 from treecat.testutil import tempdir
@@ -42,13 +44,19 @@ def test_e2e(model_type):
 
         print('Load data')
         data = load_data(schema, data_csv)
-        dataset = {'schema': schema, 'data': data}
+        feature_types = [TY_MULTINOMIAL] * len(schema['feature_names'])
+        table = Table(feature_types, ragged_index, data)
+        dataset = {
+            'schema': schema,
+            'data': data,  # DEPRECATED
+            'table': table,
+        }
 
         print('Train model')
         if model_type == 'single':
-            model = train_model(ragged_index, data, tree_prior, config)
+            model = train_model(table, tree_prior, config)
         elif model_type == 'ensemble':
-            model = train_ensemble(ragged_index, data, tree_prior, config)
+            model = train_ensemble(table, tree_prior, config)
         else:
             raise ValueError(model_type)
 

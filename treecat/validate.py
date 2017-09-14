@@ -19,6 +19,7 @@ from treecat.format import pickle_dump
 from treecat.format import pickle_load
 from treecat.profile import check_call_env
 from treecat.serving import TreeCatServer
+from treecat.tables import Table
 from treecat.training import train_model
 from treecat.util import count_observations
 from treecat.util import get_profiling_stats
@@ -97,22 +98,22 @@ def train_task(dataset_path, model_path, config_str):
     """INTERNAL Train a single model."""
     print('Train {}'.format(os.path.basename(model_path)))
     config = deserialize_config(config_str)
+    dataset = pickle_load(dataset_path)
+    tree_prior = dataset['schema']['tree_prior']
 
     # Split data for crossvalidation.
     num_parts = config['model_ensemble_size']
     partid = config['seed']
     assert 0 <= partid < num_parts
-    dataset = pickle_load(dataset_path)
-    ragged_index = dataset['schema']['ragged_index']
-    data = dataset['data']
-    tree_prior = dataset['schema']['tree_prior']
-    num_rows = data.shape[0]
-    mask = split_data(ragged_index, num_rows, num_parts, partid)
-    training_data = data
+    table = dataset['table']
+    ragged_index = table.ragged_index
+    mask = split_data(ragged_index, table.num_rows, num_parts, partid)
+    training_data = table.data.copy()
     training_data[mask] = 0
+    training_table = Table(table.feature_types, ragged_index, training_data)
 
     # Train a model.
-    model = train_model(ragged_index, training_data, tree_prior, config)
+    model = train_model(training_table, tree_prior, config)
     model['profiling_stats'] = get_profiling_stats()
     pickle_dump(model, model_path)
 

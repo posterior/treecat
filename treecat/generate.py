@@ -14,6 +14,8 @@ from treecat.format import pickle_load
 from treecat.serving import TreeCatServer
 from treecat.structure import TreeStructure
 from treecat.structure import sample_tree
+from treecat.tables import TY_MULTINOMIAL
+from treecat.tables import Table
 from treecat.training import train_model
 from treecat.util import set_random_seed
 
@@ -44,12 +46,15 @@ def generate_dataset(num_rows, num_cols, num_cats=4, rate=1.0):
             count = np.random.poisson(rate)
             column[n, :] = np.random.multinomial(count, probs)
     data.flags.writeable = False
+    feature_types = [TY_MULTINOMIAL] * V
+    table = Table(feature_types, ragged_index, data)
     dataset = {
         'schema': {
             'ragged_index': ragged_index,
             'tree_prior': np.zeros(K, np.float32),
         },
-        'data': data,
+        'data': data,  # DEPRECATED
+        'table': table,
     }
     return dataset
 
@@ -143,11 +148,14 @@ def generate_clean_dataset(tree, num_rows, num_cats):
     server = TreeCatServer(model)
     data = server.sample(num_rows, counts=np.ones(V, np.int8))
     data.flags.writeable = False
+    feature_types = [TY_MULTINOMIAL] * V
+    table = Table(feature_types, ragged_index, data)
     dataset = {
         'schema': {
             'ragged_index': ragged_index,
         },
-        'data': data,
+        'data': data,  # DEPRECATED
+        'table': table,
     }
     return dataset
 
@@ -234,11 +242,10 @@ def generate_model_file(num_rows, num_cols, num_cats=4, rate=1.0):
         os.makedirs(DATA)
     dataset_path = generate_dataset_file(num_rows, num_cols, num_cats, rate)
     dataset = pickle_load(dataset_path)
-    ragged_index = dataset['schema']['ragged_index']
-    data = dataset['data']
-    config = make_config(learning_init_epochs=5)
+    table = dataset['table']
     tree_prior = np.zeros(K, dtype=np.float32)
-    model = train_model(ragged_index, data, tree_prior, config)
+    config = make_config(learning_init_epochs=5)
+    model = train_model(table, tree_prior, config)
     pickle_dump(model, path)
     return path
 

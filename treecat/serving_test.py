@@ -14,8 +14,7 @@ from treecat.generate import generate_fake_model
 from treecat.serving import EnsembleServer
 from treecat.serving import TreeCatServer
 from treecat.testutil import TINY_CONFIG
-from treecat.testutil import TINY_DATA
-from treecat.testutil import TINY_RAGGED_INDEX
+from treecat.testutil import TINY_TABLE
 from treecat.testutil import make_seed
 from treecat.testutil import numpy_seterr
 from treecat.testutil import xfail_param
@@ -28,67 +27,62 @@ numpy_seterr()
 
 @pytest.fixture(scope='module')
 def model():
-    V = TINY_RAGGED_INDEX.shape[0] - 1
+    V = TINY_TABLE.num_cols
     K = V * (V - 1) // 2
     tree_prior = np.zeros(K, np.float32)
-    return train_model(TINY_RAGGED_INDEX, TINY_DATA, tree_prior, TINY_CONFIG)
+    return train_model(TINY_TABLE, tree_prior, TINY_CONFIG)
 
 
 @pytest.fixture(scope='module')
 def ensemble():
-    V = TINY_RAGGED_INDEX.shape[0] - 1
+    V = TINY_TABLE.num_cols
     K = V * (V - 1) // 2
     tree_prior = np.zeros(K, np.float32)
-    return train_ensemble(TINY_RAGGED_INDEX, TINY_DATA, tree_prior,
-                          TINY_CONFIG)
+    return train_ensemble(TINY_TABLE, tree_prior, TINY_CONFIG)
 
 
-def validate_sample_shape(ragged_index, data, server):
+def validate_sample_shape(table, server):
     # Sample many different counts patterns.
-    V = len(ragged_index) - 1
-    N = data.shape[0]
+    V = table.num_cols
+    N = table.num_rows
     factors = [[0, 1, 2]] * V
     for counts in itertools.product(*factors):
         counts = np.array(counts, dtype=np.int8)
         for n in range(N):
-            row = data[n, :]
+            row = table.data[n, :]
             samples = server.sample(N, counts, row)
             assert samples.shape == (N, row.shape[0])
             assert samples.dtype == row.dtype
             for v in range(V):
-                beg, end = ragged_index[v:v + 2]
+                beg, end = table.ragged_index[v:v + 2]
                 assert np.all(samples[:, beg:end].sum(axis=1) == counts[v])
 
 
 def test_server_sample_shape(model):
-    ragged_index = TINY_RAGGED_INDEX
-    data = TINY_DATA
     server = TreeCatServer(model)
-    validate_sample_shape(ragged_index, data, server)
+    validate_sample_shape(TINY_TABLE, server)
 
 
 def test_ensemble_sample_shape(ensemble):
-    ragged_index = TINY_RAGGED_INDEX
-    data = TINY_DATA
     server = EnsembleServer(ensemble)
-    validate_sample_shape(ragged_index, data, server)
+    validate_sample_shape(TINY_TABLE, server)
 
 
 def test_server_logprob_shape(model):
-    data = TINY_DATA
+    table = TINY_TABLE
     server = TreeCatServer(model)
-    logprobs = server.logprob(data)
-    N = data.shape[0]
+    logprobs = server.logprob(table.data)
+    N = table.num_rows
     assert logprobs.dtype == np.float32
     assert logprobs.shape == (N, )
     assert np.isfinite(logprobs).all()
 
 
 def test_ensemble_logprob_shape(ensemble):
-    data = TINY_DATA
+    table = TINY_TABLE
     server = EnsembleServer(ensemble)
-    logprobs = server.logprob(data)
-    N = data.shape[0]
+    logprobs = server.logprob(table.data)
+    N = table.num_rows
     assert logprobs.dtype == np.float32
     assert logprobs.shape == (N, )
     assert np.isfinite(logprobs).all()

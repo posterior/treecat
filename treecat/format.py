@@ -24,6 +24,8 @@ from six.moves import cPickle as pickle
 from six.moves import range
 from six.moves import zip
 from treecat.structure import find_complete_edge
+from treecat.tables import TY_MULTINOMIAL
+from treecat.tables import Table
 
 logger = logging.getLogger(__name__)
 parsable = parsable.Parsable()
@@ -566,7 +568,13 @@ def import_data(data_csvs_in,
         count = np.count_nonzero(data[:, beg:end].max(1))
         if count == 0:
             print('WARNING: No values found for feature {}'.format(name))
-    dataset = {'schema': schema, 'data': data}
+    feature_types = [TY_MULTINOMIAL] * len(schema['feature_names'])
+    table = Table(feature_types, ragged_index, data)
+    dataset = {
+        'schema': schema,
+        'data': data,  # DEPRECATED
+        'table': table,
+    }
     pickle_dump(dataset, dataset_out)
 
 

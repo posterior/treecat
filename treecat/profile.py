@@ -60,12 +60,12 @@ def train_files(dataset_path, config_path):
     """INTERNAL Train from pickled dataset, config."""
     from treecat.training import train_ensemble
     dataset = pickle_load(dataset_path)
-    ragged_index = dataset['schema']['ragged_index']
-    V = ragged_index.shape[0] - 1
+    table = dataset['table']
+    V = table.num_cols
     K = V * (V - 1) // 2
     tree_prior = np.zeros(K, dtype=np.float32)
     config = pickle_load(config_path)
-    train_ensemble(ragged_index, dataset['data'], tree_prior, config)
+    train_ensemble(table, tree_prior, config)
 
 
 @parsable

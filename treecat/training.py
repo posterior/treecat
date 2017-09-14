@@ -789,16 +789,13 @@ class TreeMogTrainer(TreeTrainer):
         TODO('https://github.com/posterior/treecat/issues/27')
 
 
-def train_model(ragged_index, data, tree_prior, config):
+def train_model(table, tree_prior, config):
     """Train a TreeCat model using subsample-annealed MCMC.
 
     Let N be the number of data rows and V be the number of features.
 
     Args:
-        ragged_index: A [V+1]-shaped numpy array of indices into the ragged
-            data array.
-        data: An [N, _]-shaped numpy array of ragged data, where the vth
-            column is stored in data[:, ragged_index[v]:ragged_index[v+1]].
+        table: A Table instance holding N rows of V features of data.
         tree_prior: A [K]-shaped numpy array of prior edge log odds, where
             K is the number of edges in the complete graph on V vertices.
         config: A global config dict.
@@ -812,6 +809,7 @@ def train_model(ragged_index, data, tree_prior, config):
             assignments: An [N, V] numpy array of latent cluster ids for each
                 cell in the dataset.
     """
+    assert isinstance(table, Table)
     M = config['model_num_clusters']
     D = config['model_latent_dim']
     assert M >= 1
@@ -822,28 +820,22 @@ def train_model(ragged_index, data, tree_prior, config):
         Trainer = TreeGaussTrainer
     else:
         Trainer = TreeMogTrainer
-    V = len(ragged_index) - 1
-    feature_types = [TY_MULTINOMIAL] * V
-    table = Table(feature_types, ragged_index, data)
     return Trainer(table, tree_prior, config).train()
 
 
 def _train_model(task):
-    ragged_index, data, tree_prior, config = task
-    return train_model(ragged_index, data, tree_prior, config)
+    table, tree_prior, config = task
+    return train_model(table, tree_prior, config)
 
 
-def train_ensemble(ragged_index, data, tree_prior, config):
+def train_ensemble(table, tree_prior, config):
     """Train a TreeCat ensemble model using subsample-annealed MCMC.
 
     The ensemble size is controlled by config['model_ensemble_size'].
     Let N be the number of data rows and V be the number of features.
 
     Args:
-        ragged_index: A [V+1]-shaped numpy array of indices into the ragged
-            data array.
-        data: An [N, _]-shaped numpy array of ragged data, where the vth
-            column is stored in data[:, ragged_index[v]:ragged_index[v+1]].
+        table: A Table instance holding N rows of V features of data.
         tree_prior: A [K]-shaped numpy array of prior edge log odds, where
             K is the number of edges in the complete graph on V vertices.
         config: A global config dict.
@@ -859,5 +851,5 @@ def train_ensemble(ragged_index, data, tree_prior, config):
     for sub_seed in range(config['model_ensemble_size']):
         sub_config = config.copy()
         sub_config['seed'] += sub_seed
-        tasks.append((ragged_index, data, tree_prior, sub_config))
+        tasks.append((table, tree_prior, sub_config))
     return parallel_map(_train_model, tasks)

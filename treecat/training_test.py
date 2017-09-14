@@ -14,8 +14,6 @@ from treecat.structure import TreeStructure
 from treecat.structure import estimate_tree
 from treecat.structure import print_tree
 from treecat.structure import triangular_to_square
-from treecat.tables import TY_MULTINOMIAL
-from treecat.tables import Table
 from treecat.testutil import numpy_seterr
 from treecat.training import TreeCatTrainer
 from treecat.training import make_annealing_schedule
@@ -48,7 +46,9 @@ def test_make_annealing_schedule():
     assert assigned_rows == num_rows
 
 
-def validate_model(ragged_index, data, model, config):
+def validate_model(table, model, config):
+    ragged_index = table.ragged_index
+    data = table.data
     assert model['config'] == config
     assert isinstance(model['tree'], TreeStructure)
     assert np.all(model['suffstats']['ragged_index'] == ragged_index)
@@ -133,11 +133,10 @@ def test_train_model(N, V, C, M, parallel):
     K = V * (V - 1) // 2
     config = make_config(model_num_clusters=M, learning_parallel=parallel)
     dataset = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
-    ragged_index = dataset['schema']['ragged_index']
-    data = dataset['data']
+    table = dataset['table']
     tree_prior = np.exp(np.random.random(K), dtype=np.float32)
-    model = train_model(ragged_index, data, tree_prior, config)
-    validate_model(ragged_index, data, model, config)
+    model = train_model(table, tree_prior, config)
+    validate_model(table, model, config)
 
 
 @pytest.mark.parametrize('N,V,C,M', [
@@ -152,16 +151,15 @@ def test_train_ensemble(N, V, C, M):
     config = make_config(model_num_clusters=M)
     K = V * (V - 1) // 2
     dataset = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
-    ragged_index = dataset['schema']['ragged_index']
-    data = dataset['data']
+    table = dataset['table']
     tree_prior = np.exp(np.random.random(K), dtype=np.float32)
-    ensemble = train_ensemble(ragged_index, data, tree_prior, config)
+    ensemble = train_ensemble(table, tree_prior, config)
 
     assert len(ensemble) == config['model_ensemble_size']
     for sub_seed, model in enumerate(ensemble):
         sub_config = config.copy()
         sub_config['seed'] += sub_seed
-        validate_model(ragged_index, data, model, sub_config)
+        validate_model(table, model, sub_config)
 
 
 def hash_assignments(assignments):
@@ -189,15 +187,12 @@ def hash_assignments(assignments):
 def test_assignment_sampler_gof(N, V, C, M):
     config = make_config(model_num_clusters=M)
     K = V * (V - 1) // 2
-    feature_types = [TY_MULTINOMIAL] * V
     dataset = generate_dataset(num_rows=N, num_cols=V, num_cats=C)
-    ragged_index = dataset['schema']['ragged_index']
-    data = dataset['data']
-    table = Table(feature_types, ragged_index, data)
+    table = dataset['table']
     tree_prior = np.exp(np.random.random(K), dtype=np.float32)
     trainer = TreeCatTrainer(table, tree_prior, config)
     print('Data:')
-    print(data)
+    print(dataset['data'])
 
     # Add all rows.
     set_random_seed(1)
@@ -251,10 +246,9 @@ def test_recover_structure(V, C):
     tree_prior = np.zeros(K, np.float32)
     tree = generate_tree(num_cols=V)
     dataset = generate_clean_dataset(tree, num_rows=N, num_cats=C)
-    ragged_index = dataset['schema']['ragged_index']
-    data = dataset['data']
+    table = dataset['table']
     config = make_config(model_num_clusters=M)
-    model = train_model(ragged_index, data, tree_prior, config)
+    model = train_model(table, tree_prior, config)
 
     # Compute three types of edges.
     expected_edges = tree.get_edges()
@@ -264,6 +258,8 @@ def test_recover_structure(V, C):
     # Print debugging information.
     feature_names = [str(v) for v in range(V)]
     root = '0'
+    ragged_index = dataset['schema']['ragged_index']
+    data = dataset['data']
     readable_data = np.zeros([N, V], np.int8)
     for v in range(V):
         beg, end = ragged_index[v:v + 2]

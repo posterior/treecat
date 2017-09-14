@@ -12,6 +12,8 @@ import pytest
 
 from treecat.config import make_config
 from treecat.format import fingerprint
+from treecat.tables import TY_MULTINOMIAL
+from treecat.tables import Table
 
 TESTDATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'testdata')
 
@@ -19,6 +21,9 @@ TINY_CONFIG = make_config(
     learning_init_epochs=2,  #
     model_num_clusters=7,  #
     model_ensemble_size=3)
+
+TINY_FEATURE_TYPES = np.array([TY_MULTINOMIAL] * 5, dtype=np.int8)
+TINY_FEATURE_TYPES.flags.writeable = False
 
 TINY_RAGGED_INDEX = np.array([0, 2, 4, 7, 10, 13], dtype=np.int32)
 TINY_RAGGED_INDEX.flags.writeable = False
@@ -34,6 +39,8 @@ TINY_DATA = np.array(
     ],
     dtype=np.int8)
 TINY_DATA.flags.writeable = False
+
+TINY_TABLE = Table(TINY_FEATURE_TYPES, TINY_RAGGED_INDEX, TINY_DATA)
 
 
 def xfail_param(*args, **kwargs):
