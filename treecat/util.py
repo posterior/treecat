@@ -141,6 +141,7 @@ def make_ragged_index(columns):
     ragged_index[0] = 0
     for v, column in enumerate(columns):
         ragged_index[v + 1] = ragged_index[v] + column.shape[-1]
+    ragged_index.flags.writeable = False
     return ragged_index
 
 

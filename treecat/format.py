@@ -360,6 +360,7 @@ def load_schema(types_csv_in, values_csv_in, groups_csv_in, encoding='utf-8'):
         elif typename == ORDINAL:
             dim = 2
         ragged_index[pos + 1] = ragged_index[pos] + dim
+    ragged_index.flags.writeable = False
 
     # Create a tree prior.
     V = len(feature_names)
@@ -372,6 +373,7 @@ def load_schema(types_csv_in, values_csv_in, groups_csv_in, encoding='utf-8'):
                 v2 = feature_index[target]
                 k = find_complete_edge(v1, v2)
                 tree_prior[k] = logit
+    tree_prior.flags.writeable = False
 
     return {
         'feature_names': feature_names,
@@ -438,7 +440,9 @@ def load_data(schema, data_csv_in, encoding='utf-8'):
             rows.append(internal_row)
     print('Loaded {} cells in {} rows, {:0.1f}% observed'.format(
         cells, len(rows), 100.0 * cells / len(rows) / len(feature_types)))
-    return np.stack(rows)
+    data = np.stack(rows)
+    data.flags.writeable = False
+    return data
 
 
 def import_rows(schema, rows):
@@ -554,6 +558,7 @@ def import_data(data_csvs_in,
         load_data(schema, data_csv_in, encoding)
         for data_csv_in in data_csvs_in.split(',')
     ])
+    data.flags.writeable = False
     print('Imported data shape: [{}, {}]'.format(data.shape[0], data.shape[1]))
     ragged_index = schema['ragged_index']
     for v, name in enumerate(schema['feature_names']):

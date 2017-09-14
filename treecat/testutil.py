@@ -21,6 +21,8 @@ TINY_CONFIG = make_config(
     model_ensemble_size=3)
 
 TINY_RAGGED_INDEX = np.array([0, 2, 4, 7, 10, 13], dtype=np.int32)
+TINY_RAGGED_INDEX.flags.writeable = False
+
 TINY_DATA = np.array(
     [
         # f1 | f2  |   f3   |   f4   |   f5   |
@@ -31,6 +33,7 @@ TINY_DATA = np.array(
         [0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
     ],
     dtype=np.int8)
+TINY_DATA.flags.writeable = False
 
 
 def xfail_param(*args, **kwargs):

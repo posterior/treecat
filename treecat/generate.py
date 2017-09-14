@@ -34,6 +34,7 @@ def generate_dataset(num_rows, num_cols, num_cats=4, rate=1.0):
     V = num_cols
     K = V * (V - 1) // 2
     ragged_index = np.arange(0, num_cats * (V + 1), num_cats, np.int32)
+    ragged_index.flags.writeable = False
     data = np.zeros((N, V * num_cats), np.int8)
     for v in range(V):
         beg, end = ragged_index[v:v + 2]
@@ -42,6 +43,7 @@ def generate_dataset(num_rows, num_cols, num_cats=4, rate=1.0):
         for n in range(N):
             count = np.random.poisson(rate)
             column[n, :] = np.random.multinomial(count, probs)
+    data.flags.writeable = False
     dataset = {
         'schema': {
             'ragged_index': ragged_index,
@@ -106,6 +108,7 @@ def generate_clean_dataset(tree, num_rows, num_cats):
     M = num_cats
     config = make_config(model_num_clusters=M)
     ragged_index = np.arange(0, C * (V + 1), C, np.int32)
+    ragged_index.flags.writeable = False
 
     # Create sufficient statistics that are ideal for structure learning:
     # Correlation should be high enough that (vertex,vertex) correlation can be
@@ -139,6 +142,7 @@ def generate_clean_dataset(tree, num_rows, num_cats):
     }
     server = TreeCatServer(model)
     data = server.sample(num_rows, counts=np.ones(V, np.int8))
+    data.flags.writeable = False
     dataset = {
         'schema': {
             'ragged_index': ragged_index,
