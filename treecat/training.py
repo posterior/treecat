@@ -20,6 +20,7 @@ from treecat.structure import TreeStructure
 from treecat.structure import estimate_tree
 from treecat.structure import make_propagation_program
 from treecat.structure import sample_tree
+from treecat.tables import TY_MULTINOMIAL
 from treecat.util import SERIES
 from treecat.util import TODO
 from treecat.util import jit
@@ -285,6 +286,7 @@ class TreeTrainer(object):
 @profile
 @jit(nopython=True, cache=True)
 def treecat_add_row(
+        feature_types,
         ragged_index,
         data_row,
         tree_grid,
@@ -305,15 +307,16 @@ def treecat_add_row(
         message = messages[v, :]
         if op == OP_UP:
             # Propagate upward from observed to latent.
-            beg, end = ragged_index[v:v + 2]
-            feat_block = feat_probs[beg:end, :]
-            meas_block = meas_probs[v, :]
-            for c, count in enumerate(data_row[beg:end]):
-                for _ in range(count):
-                    message *= feat_block[c, :]
-                    message /= meas_block
-                    feat_block[c, :] += np.float32(1)
-                    meas_block += np.float32(1)
+            if feature_types[v] == TY_MULTINOMIAL:
+                beg, end = ragged_index[v:v + 2]
+                feat_block = feat_probs[beg:end, :]
+                meas_block = meas_probs[v, :]
+                for c, count in enumerate(data_row[beg:end]):
+                    for _ in range(count):
+                        message *= feat_block[c, :]
+                        message /= meas_block
+                        feat_block[c, :] += np.float32(1)
+                        meas_block += np.float32(1)
         elif op == OP_IN:
             # Propagate latent state inward from children to v.
             trans = edge_probs[e, :, :]
@@ -343,14 +346,16 @@ def treecat_add_row(
         edge_ss[e, m1, m2] += 1
         edge_probs[e, m1, m2] += 1
     for v, m in enumerate(assignments):
-        beg, end = ragged_index[v:v + 2]
-        feat_ss[beg:end, m] += data_row[beg:end]
-        meas_ss[v, m] += data_row[beg:end].sum()
+        if feature_types[v] == TY_MULTINOMIAL:
+            beg, end = ragged_index[v:v + 2]
+            feat_ss[beg:end, m] += data_row[beg:end]
+            meas_ss[v, m] += data_row[beg:end].sum()
 
 
 @profile
 @jit(nopython=True, cache=True)
 def treecat_remove_row(
+        feature_types,
         ragged_index,
         data_row,
         tree_grid,
@@ -369,9 +374,10 @@ def treecat_remove_row(
         edge_ss[e, m1, m2] -= 1
         edge_probs[e, m1, m2] -= 1
     for v, m in enumerate(assignments):
-        beg, end = ragged_index[v:v + 2]
-        feat_ss[beg:end, m] -= data_row[beg:end]
-        meas_ss[v, m] -= data_row[beg:end].sum()
+        if feature_types[v] == TY_MULTINOMIAL:
+            beg, end = ragged_index[v:v + 2]
+            feat_ss[beg:end, m] -= data_row[beg:end]
+            meas_ss[v, m] -= data_row[beg:end].sum()
 
 
 @jit(nopython=True, cache=True)
@@ -447,7 +453,9 @@ class TreeCatTrainer(TreeTrainer):
         logger.info('TreeCatTrainer of %d x %d data', data[0].shape[0],
                     len(data))
         ragged_index = np.asarray(ragged_index, np.int32)
+        ragged_index.flags.writeable = False
         data = np.asarray(data, np.int8)
+        data.flags.writeable = False
         assert len(data.shape) == 2
         assert data.shape[1] == ragged_index[-1]
         assert data.dtype == np.int8
@@ -456,8 +464,12 @@ class TreeCatTrainer(TreeTrainer):
         TreeTrainer.__init__(self, N, V, tree_prior, config)
         assert self._num_rows == N
         assert len(self._added_rows) == 0
-        self._data = data
+        feature_types = np.empty(V, dtype=np.int8)
+        feature_types[:] = TY_MULTINOMIAL  # TODO Allow other types.
+        feature_types.flags.writeable = False
+        self._feature_types = feature_types
         self._ragged_index = ragged_index
+        self._data = data
         self._assignments = np.zeros([N, V], dtype=np.int8)
 
         # These are useful dimensions to import into locals().
@@ -505,6 +517,7 @@ class TreeCatTrainer(TreeTrainer):
         np.add(self._meas_ss, self._meas_prior, out=self._meas_probs)
 
         treecat_add_row(
+            self._feature_types,
             self._ragged_index,
             self._data[row_id, :],
             self._tree.tree_grid,
@@ -526,6 +539,7 @@ class TreeCatTrainer(TreeTrainer):
         self._added_rows.remove(row_id)
 
         treecat_remove_row(
+            self._feature_types,
             self._ragged_index,
             self._data[row_id, :],
             self._tree.tree_grid,
