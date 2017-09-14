@@ -88,10 +88,51 @@ class Table(object):
     def categorical_data(self):
         return self._categorical_data
 
+    @staticmethod
+    def concatenate(tables):
+        """Concatenate a list of Table objects along rows.
+
+        Args:
+            tables: An iterable of Table objects with the same feature types.
+
+        Returns:
+            A Table object with the same feature types and with rows from all
+            input tables.
+        """
+        tables = list(tables)
+        assert tables
+        if len(tables) == 1:
+            return tables[0]
+        feature_types = table[0].feature_types
+        for table in tables[1:]:
+            assert np.all(table.feature_types == feature_types)
+        multinomial_ragged_index = tables[0].ragged_index
+        multinomial_data = np.concatenate([t.data for t in tables])
+        categorical_data = np.concatenate([t.categorical_data for t in tables])
+        return Table(
+            feature_types,
+            multinomial_ragged_index,
+            multinomial_data,
+            categorical_data, )
+
+    def __getitem__(self, index):
+        TODO('Handle both single rows and slices')
+
+    def __eq__(self, other):
+        assert np.all(self.feature_types == other.feature_types)
+        fields = [
+            '_multinomial_ragged_index',
+            '_multinomial_data',
+            '_categorical_data',
+        ]
+        return all(
+            np.all(getattr(self, field) == getattr(other, field))
+            for field in fields)
+
 
 _INTERNALIZE = {
     TY_MULTINOMIAL: TY_MULTINOMIAL,
-    TY_CATEGORICAL: TY_MULTINOMIAL,
+    TY_CATEGORICAL: TY_MULTINOMIAL,  # TODO Change to TY_CATEGORICAL.
     TY_ORDINAL: TY_MULTINOMIAL,
 }
 
@@ -107,5 +148,8 @@ def internalize_table(table):
     """
     feature_types = np.array([_INTERNALIZE[ty]
                               for ty in table.feature_types], np.int8)
+    if np.all(feature_types == table.feature_types):
+        return table
+
     for v, (old, new) in enumerate(zip(table.feature_types, feature_types)):
-        TODO()
+        TODO('convert types')

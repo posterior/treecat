@@ -31,7 +31,7 @@ def generate_dataset(num_rows, num_cols, num_cats=4, rate=1.0):
     Returns:
         A dataset dict with fields 'schema' and 'table'.
     """
-    set_random_seed(0)
+    set_random_seed(0)  # TODO Remove this.
     N = num_rows
     V = num_cols
     K = V * (V - 1) // 2
@@ -74,6 +74,10 @@ def generate_dataset_file(num_rows, num_cols, num_cats=4, rate=1.0):
     dataset = generate_dataset(num_rows, num_cols, num_cats, rate)
     pickle_dump(dataset, path)
     return path
+
+
+def generate_table(feature_types, num_rows):
+    """Generate a random Table of heterogeneous data."""
 
 
 def generate_tree(num_cols):
