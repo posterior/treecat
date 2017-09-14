@@ -634,13 +634,12 @@ class EnsembleServer(ServerBase):
 
 
 class DataServer(object):
-    """A schema-aware server interface for TreeCat and ensembles."""
+    """A schema-aware server interface for TreeCat and ensemble models."""
 
     def __init__(self, dataset, ensemble):
         self._schema = dataset['schema']
-        table = dataset['table']
-        self._data = table.data
-        self._counts = guess_counts(table.ragged_index, table.data)
+        self._table = dataset['table']
+        self._counts = guess_counts(self._table.ragged_index, self._table.data)
         if len(ensemble) == 1:
             self._server = TreeCatServer(ensemble[0])
         else:
@@ -672,7 +671,7 @@ class DataServer(object):
         density = np.empty([V], np.float32)
         for v in range(V):
             beg, end = ragged_index[v:v + 2]
-            density[v] = (self._data[:, beg:end].max(1) != 0).mean()
+            density[v] = (self._table.data[:, beg:end].max(1) != 0).mean()
         return density
 
     def observed_perplexity(self):
