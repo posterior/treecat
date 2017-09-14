@@ -53,7 +53,6 @@ def generate_dataset(num_rows, num_cols, num_cats=4, rate=1.0):
             'ragged_index': ragged_index,
             'tree_prior': np.zeros(K, np.float32),
         },
-        'data': data,  # DEPRECATED
         'table': table,
     }
     return dataset
@@ -154,7 +153,6 @@ def generate_clean_dataset(tree, num_rows, num_cats):
         'schema': {
             'ragged_index': ragged_index,
         },
-        'data': data,  # DEPRECATED
         'table': table,
     }
     return dataset

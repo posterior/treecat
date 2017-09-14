@@ -48,7 +48,6 @@ def test_e2e(model_type):
         table = Table(feature_types, ragged_index, data)
         dataset = {
             'schema': schema,
-            'data': data,  # DEPRECATED
             'table': table,
         }
 

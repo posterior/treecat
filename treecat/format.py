@@ -572,7 +572,6 @@ def import_data(data_csvs_in,
     table = Table(feature_types, ragged_index, data)
     dataset = {
         'schema': schema,
-        'data': data,  # DEPRECATED
         'table': table,
     }
     pickle_dump(dataset, dataset_out)
